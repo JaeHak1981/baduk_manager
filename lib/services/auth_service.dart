@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 
 /// Firebase Authentication 서비스
@@ -19,7 +20,7 @@ class AuthService {
   /// [password] 비밀번호
   ///
   /// Returns: 생성된 UserModel
-  /// Throws: FirebaseAuthException
+  /// Throws: Exception with detailed error message
   Future<UserModel> createDeveloperAccount({
     required String email,
     required String password,
@@ -44,14 +45,30 @@ class AuthService {
         createdAt: DateTime.now(),
       );
 
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .set(userModel.toFirestore());
+      try {
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .set(userModel.toFirestore());
+      } catch (firestoreError) {
+        // Firestore 저장 실패 시 더 자세한 에러 메시지
+        throw Exception(
+          'Firestore 저장 실패: $firestoreError\n\n'
+          'Firebase Console에서 Firestore Database를 활성화해주세요.\n'
+          '1. Build → Firestore Database\n'
+          '2. 데이터베이스 만들기 (테스트 모드)',
+        );
+      }
 
       return userModel;
     } on FirebaseAuthException catch (e) {
+      debugPrint(
+        'FirebaseAuthException during account creation: ${e.code}, ${e.message}',
+      );
       throw _handleAuthException(e);
+    } catch (e) {
+      debugPrint('Unexpected error during account creation: $e');
+      throw Exception('계정 생성 중 오류 발생: $e');
     }
   }
 
@@ -87,7 +104,13 @@ class AuthService {
 
       return UserModel.fromFirestore(userDoc);
     } on FirebaseAuthException catch (e) {
+      debugPrint(
+        'FirebaseAuthException during sign in: ${e.code}, ${e.message}',
+      );
       throw _handleAuthException(e);
+    } catch (e) {
+      debugPrint('Unexpected error during sign in: $e');
+      throw Exception('로그인 중 오류 발생: $e');
     }
   }
 
@@ -111,7 +134,7 @@ class AuthService {
 
       return UserModel.fromFirestore(userDoc);
     } catch (e) {
-      print('사용자 정보 가져오기 실패: $e');
+      debugPrint('사용자 정보 가져오기 실패: $e');
       return null;
     }
   }

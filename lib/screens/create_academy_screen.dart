@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/academy_model.dart';
 import '../providers/academy_provider.dart';
 import '../providers/auth_provider.dart';
 
-/// 기관 등록 화면
+/// 기관 등록/수정 화면
 class CreateAcademyScreen extends StatefulWidget {
-  const CreateAcademyScreen({super.key});
+  final AcademyModel? academy;
+
+  const CreateAcademyScreen({super.key, this.academy});
 
   @override
   State<CreateAcademyScreen> createState() => _CreateAcademyScreenState();
@@ -14,10 +17,21 @@ class CreateAcademyScreen extends StatefulWidget {
 
 class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  late TextEditingController _nameController;
 
-  AcademyType _selectedType = AcademyType.academy;
+  late AcademyType _selectedType;
+  int _selectedSessions = 1;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.academy?.name ?? '');
+    _selectedType = widget.academy?.type ?? AcademyType.academy;
+    _selectedSessions =
+        widget.academy?.totalSessions ??
+        (_selectedType == AcademyType.school ? 4 : 1);
+  }
 
   @override
   void dispose() {
@@ -45,11 +59,24 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
 
     setState(() => _isLoading = true);
 
-    final success = await academyProvider.createAcademy(
-      name: _nameController.text.trim(),
-      type: _selectedType,
-      ownerId: currentUser.uid,
-    );
+    bool success;
+    if (widget.academy != null) {
+      // 수정 모드
+      final updatedAcademy = widget.academy!.copyWith(
+        name: _nameController.text.trim(),
+        type: _selectedType,
+        totalSessions: _selectedSessions,
+      );
+      success = await academyProvider.updateAcademy(updatedAcademy);
+    } else {
+      // 등록 모드
+      success = await academyProvider.createAcademy(
+        name: _nameController.text.trim(),
+        type: _selectedType,
+        ownerId: currentUser.uid,
+        totalSessions: _selectedSessions,
+      );
+    }
 
     setState(() => _isLoading = false);
 
@@ -64,6 +91,17 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
           SnackBar(
             content: Text(academyProvider.errorMessage ?? '기관 등록 실패'),
             backgroundColor: Colors.red,
+            action: academyProvider.errorMessage != null
+                ? SnackBarAction(
+                    label: '복사',
+                    textColor: Colors.white,
+                    onPressed: () {
+                      Clipboard.setData(
+                        ClipboardData(text: academyProvider.errorMessage!),
+                      );
+                    },
+                  )
+                : null,
           ),
         );
       }
@@ -117,11 +155,37 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
                   groupValue: _selectedType,
                   onChanged: (value) {
                     if (value != null) {
-                      setState(() => _selectedType = value);
+                      setState(() {
+                        _selectedType = value;
+                        // 학교면 기본 4부, 아니면 1부로 자동 제안 (사용자가 수정 가능)
+                        _selectedSessions = value == AcademyType.school ? 4 : 1;
+                      });
                     }
                   },
                 );
               }),
+
+              const SizedBox(height: 24),
+
+              // 총 운영 부수
+              Text(
+                '총 운영 부수',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<int>(
+                value: _selectedSessions,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.format_list_numbered),
+                ),
+                items: List.generate(4, (i) => i + 1)
+                    .map((s) => DropdownMenuItem(value: s, child: Text('$s부')))
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedSessions = val!),
+              ),
 
               const SizedBox(height: 24),
 
@@ -163,9 +227,9 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text(
-                          '등록하기',
-                          style: TextStyle(
+                      : Text(
+                          widget.academy != null ? '수정 완료' : '등록하기',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),

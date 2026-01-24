@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'create_developer_screen.dart';
@@ -40,6 +41,15 @@ class _LoginScreenState extends State<LoginScreen> {
         SnackBar(
           content: Text(authProvider.errorMessage!),
           backgroundColor: Colors.red,
+          action: SnackBarAction(
+            label: '복사',
+            textColor: Colors.white,
+            onPressed: () {
+              Clipboard.setData(
+                ClipboardData(text: authProvider.errorMessage!),
+              );
+            },
+          ),
         ),
       );
     }

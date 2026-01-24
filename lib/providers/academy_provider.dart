@@ -24,6 +24,7 @@ class AcademyProvider extends ChangeNotifier {
     required String name,
     required AcademyType type,
     required String ownerId,
+    int totalSessions = 1,
     String? phoneNumber,
     String? address,
   }) async {
@@ -36,6 +37,7 @@ class AcademyProvider extends ChangeNotifier {
         name: name,
         type: type,
         ownerId: ownerId,
+        totalSessions: totalSessions,
         phoneNumber: phoneNumber,
         address: address,
       );

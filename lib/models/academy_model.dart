@@ -41,6 +41,7 @@ class AcademyModel {
   final String ownerId;
   final String? phoneNumber;
   final String? address;
+  final int totalSessions; // 총 운영 부수 (예: 1~4부)
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -51,6 +52,7 @@ class AcademyModel {
     required this.ownerId,
     this.phoneNumber,
     this.address,
+    this.totalSessions = 1,
     required this.createdAt,
     this.updatedAt,
   });
@@ -63,6 +65,7 @@ class AcademyModel {
       'ownerId': ownerId,
       'phoneNumber': phoneNumber,
       'address': address,
+      'totalSessions': totalSessions,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
     };
@@ -73,16 +76,19 @@ class AcademyModel {
     DocumentSnapshot<Map<String, dynamic>> snapshot,
   ) {
     final data = snapshot.data()!;
+    final type = AcademyType.values.firstWhere(
+      (e) => e.name == data['type'],
+      orElse: () => AcademyType.academy,
+    );
     return AcademyModel(
       id: snapshot.id,
       name: data['name'] as String,
-      type: AcademyType.values.firstWhere(
-        (e) => e.name == data['type'],
-        orElse: () => AcademyType.academy,
-      ),
+      type: type,
       ownerId: data['ownerId'] as String,
       phoneNumber: data['phoneNumber'] as String?,
       address: data['address'] as String?,
+      totalSessions:
+          data['totalSessions'] as int? ?? (type == AcademyType.school ? 4 : 1),
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       updatedAt: data['updatedAt'] != null
           ? (data['updatedAt'] as Timestamp).toDate()
@@ -98,6 +104,7 @@ class AcademyModel {
     String? ownerId,
     String? phoneNumber,
     String? address,
+    int? totalSessions,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -108,6 +115,7 @@ class AcademyModel {
       ownerId: ownerId ?? this.ownerId,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       address: address ?? this.address,
+      totalSessions: totalSessions ?? this.totalSessions,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

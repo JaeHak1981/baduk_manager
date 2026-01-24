@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/academy_provider.dart';
 import '../models/user_model.dart';
 import '../models/academy_model.dart';
 import 'academy_management_screen.dart';
+import 'student_list_screen.dart';
+import 'textbook_center_screen.dart';
 
 /// 홈 화면
 class HomePage extends StatefulWidget {
@@ -49,6 +52,28 @@ class _HomePageState extends State<HomePage> {
         title: const Text('바둑 학원 관리 시스템'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.library_books),
+            tooltip: '내 교재 관리',
+            onPressed: () {
+              if (user != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TextbookCenterScreen(
+                      academy: AcademyModel(
+                        id: 'global',
+                        name: '내 교재 관리',
+                        type: AcademyType.academy,
+                        ownerId: user.uid,
+                        createdAt: DateTime.now(),
+                      ),
+                    ),
+                  ),
+                );
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: '기관 관리',
@@ -144,19 +169,65 @@ class _HomePageState extends State<HomePage> {
                 Expanded(
                   child: academyProvider.isLoading
                       ? const Center(child: CircularProgressIndicator())
+                      : academyProvider.errorMessage != null
+                      ? _buildErrorState(academyProvider.errorMessage!)
                       : academyProvider.academies.isEmpty
                       ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: academyProvider.academies.length,
-                          itemBuilder: (context, index) {
-                            final academy = academyProvider.academies[index];
-                            return _AcademySummaryCard(academy: academy);
-                          },
+                      : RefreshIndicator(
+                          onRefresh: () async => _loadInitialData(),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: academyProvider.academies.length,
+                            itemBuilder: (context, index) {
+                              final academy = academyProvider.academies[index];
+                              return _AcademySummaryCard(academy: academy);
+                            },
+                          ),
                         ),
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            const SizedBox(height: 16),
+            SelectableText(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.red),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: _loadInitialData,
+                  child: const Text('다시 시도'),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: message));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('에러 메시지가 복사되었습니다')),
+                    );
+                  },
+                  icon: const Icon(Icons.copy, size: 16),
+                  label: const Text('복사'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -229,9 +300,11 @@ class _AcademySummaryCard extends StatelessWidget {
         subtitle: Text(academy.type.displayName),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
         onTap: () {
-          // TODO: 기관 대시보드로 이동
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${academy.name} 대시보드로 이동합니다 (준비 중)')),
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => StudentListScreen(academy: academy),
+            ),
           );
         },
       ),

@@ -4,12 +4,19 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'providers/academy_provider.dart';
+import 'providers/student_provider.dart';
+import 'providers/progress_provider.dart';
+import 'utils/seed_data.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // 초기 데이터 시딩 (개발용) - 비동기로 실행하여 UI 차단 방지
+  seedTextbooks();
+
   runApp(const MyApp());
 }
 
@@ -22,6 +29,8 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => AcademyProvider()),
+        ChangeNotifierProvider(create: (_) => StudentProvider()),
+        ChangeNotifierProvider(create: (_) => ProgressProvider()),
       ],
       child: MaterialApp(
         title: '바둑 학원 관리',

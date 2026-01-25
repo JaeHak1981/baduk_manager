@@ -63,7 +63,10 @@ class AcademyProvider extends ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
 
-      _academies = await _academyService.getAcademiesByOwner(ownerId);
+      final academies = await _academyService.getAcademiesByOwner(ownerId);
+      // 메모리에서 정렬
+      academies.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _academies = academies;
 
       _isLoading = false;
       notifyListeners();
@@ -81,7 +84,10 @@ class AcademyProvider extends ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
 
-      _academies = await _academyService.getAllAcademies();
+      final academies = await _academyService.getAllAcademies();
+      // 메모리에서 정렬
+      academies.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _academies = academies;
 
       _isLoading = false;
       notifyListeners();
@@ -99,11 +105,11 @@ class AcademyProvider extends ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
 
-      await _academyService.updateAcademy(academy);
+      final updated = await _academyService.updateAcademy(academy);
 
-      final index = _academies.indexWhere((a) => a.id == academy.id);
+      final index = _academies.indexWhere((a) => a.id == updated.id);
       if (index != -1) {
-        _academies[index] = academy;
+        _academies[index] = updated;
       }
 
       _isLoading = false;

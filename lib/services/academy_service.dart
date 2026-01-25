@@ -61,7 +61,6 @@ class AcademyService {
       final querySnapshot = await _firestore
           .collection('academies')
           .where('ownerId', isEqualTo: ownerId)
-          .orderBy('createdAt', descending: true)
           .get();
 
       return querySnapshot.docs
@@ -76,10 +75,7 @@ class AcademyService {
   /// 모든 기관 조회 (개발자용)
   Future<List<AcademyModel>> getAllAcademies() async {
     try {
-      final querySnapshot = await _firestore
-          .collection('academies')
-          .orderBy('createdAt', descending: true)
-          .get();
+      final querySnapshot = await _firestore.collection('academies').get();
 
       return querySnapshot.docs
           .map((doc) => AcademyModel.fromFirestore(doc))
@@ -91,7 +87,7 @@ class AcademyService {
   }
 
   /// 기관 수정
-  Future<void> updateAcademy(AcademyModel academy) async {
+  Future<AcademyModel> updateAcademy(AcademyModel academy) async {
     try {
       final updatedAcademy = academy.copyWith(updatedAt: DateTime.now());
 
@@ -99,6 +95,8 @@ class AcademyService {
           .collection('academies')
           .doc(academy.id)
           .update(updatedAcademy.toFirestore());
+
+      return updatedAcademy;
     } catch (e) {
       debugPrint('Error updating academy: $e');
       throw Exception('기관 수정 실패: $e');

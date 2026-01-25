@@ -9,6 +9,7 @@ import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
 import 'add_student_screen.dart';
 import 'textbook_center_screen.dart';
+import 'attendance_screen.dart';
 // import 'progress_edit_screen.dart'; // Removed
 import 'batch_add_student_dialog.dart';
 import 'student_history_screen.dart'; // 학생 히스토리 화면 import
@@ -332,8 +333,12 @@ class _StudentListScreenState extends State<StudentListScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: OutlinedButton.icon(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('출석부 기능은 준비 중입니다')),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        AttendanceScreen(academy: widget.academy),
+                  ),
                 );
               },
               icon: const Icon(Icons.assignment_turned_in_outlined, size: 18),

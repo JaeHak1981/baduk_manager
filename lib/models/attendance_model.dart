@@ -59,4 +59,24 @@ class AttendanceRecord {
   /// 특정 날짜의 시작 시간으로 변환된 날짜 문자열 (YYYY-MM-DD)
   String get dateString =>
       "${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')}";
+
+  AttendanceRecord copyWith({
+    String? id,
+    String? studentId,
+    String? academyId,
+    String? ownerId,
+    DateTime? timestamp,
+    AttendanceType? type,
+    String? note,
+  }) {
+    return AttendanceRecord(
+      id: id ?? this.id,
+      studentId: studentId ?? this.studentId,
+      academyId: academyId ?? this.academyId,
+      ownerId: ownerId ?? this.ownerId,
+      timestamp: timestamp ?? this.timestamp,
+      type: type ?? this.type,
+      note: note ?? this.note,
+    );
+  }
 }

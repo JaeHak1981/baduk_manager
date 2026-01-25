@@ -58,6 +58,34 @@ class AttendanceService {
         );
   }
 
+  /// 특정 기관의 특정 월 전체 출결 내역 조회
+  Future<List<AttendanceRecord>> getMonthlyAttendance({
+    required String academyId,
+    required int year,
+    required int month,
+  }) async {
+    final startOfMonth = DateTime(year, month, 1);
+    final endOfMonth = DateTime(
+      year,
+      month + 1,
+      1,
+    ).subtract(const Duration(milliseconds: 1));
+
+    final snapshot = await _firestore
+        .collection(_collection)
+        .where('academyId', isEqualTo: academyId)
+        .where(
+          'timestamp',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth),
+        )
+        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(endOfMonth))
+        .get();
+
+    return snapshot.docs
+        .map((doc) => AttendanceRecord.fromFirestore(doc))
+        .toList();
+  }
+
   /// 출결 기록 삭제
   Future<void> deleteAttendance(String id) async {
     await _firestore.collection(_collection).doc(id).delete();

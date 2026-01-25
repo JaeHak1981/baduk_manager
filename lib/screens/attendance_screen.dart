@@ -5,7 +5,7 @@ import '../models/attendance_model.dart';
 import '../providers/attendance_provider.dart';
 import '../providers/student_provider.dart';
 import '../providers/auth_provider.dart';
-// import 'package:intl/intl.dart';
+import '../utils/holiday_helper.dart';
 
 class AttendanceScreen extends StatefulWidget {
   final AcademyModel academy;
@@ -172,7 +172,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         border: Border.all(color: Colors.blue.shade200),
                       ),
                       child: const Text(
-                        '출석(O) 결석(X) 지각(L)',
+                        '파란색: 선택됨',
                         style: TextStyle(fontSize: 11, color: Colors.blue),
                       ),
                     ),
@@ -222,7 +222,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     child: DataTable(
                       columnSpacing: 15,
                       horizontalMargin: 12,
-                      headingRowHeight: 50,
+                      headingRowHeight: 65, // 공휴일 명칭 표시를 위해 높이 확장
                       dataRowMinHeight: 55,
                       dataRowMaxHeight: 55,
                       headingRowColor: WidgetStateProperty.all(
@@ -235,7 +235,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       columns: [
                         const DataColumn(
                           label: SizedBox(
-                            width: 70,
+                            width: 65,
                             child: Text(
                               '이름',
                               style: TextStyle(
@@ -245,34 +245,81 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             ),
                           ),
                         ),
-                        ...lessonDates.map(
-                          (date) => DataColumn(
+                        ...lessonDates.map((date) {
+                          final holidayName = HolidayHelper.getHolidayName(
+                            date,
+                          );
+                          final isHoliday = holidayName != null;
+                          final isSunday = date.weekday == 7;
+                          final textPrimaryColor = (isHoliday || isSunday)
+                              ? Colors.red
+                              : Colors.black;
+
+                          return DataColumn(
                             label: SizedBox(
-                              width: 65, // 요일부터 버튼 영역을 위해 가로폭 확장
+                              width: 75,
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
                                     '${date.day}',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
+                                      color: textPrimaryColor,
                                     ),
                                   ),
                                   Text(
                                     _getWeekdayName(date.weekday),
                                     style: TextStyle(
                                       fontSize: 9,
-                                      color: _getDayColor(date.weekday),
+                                      color: textPrimaryColor,
                                     ),
                                   ),
+                                  if (isHoliday)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        holidayName,
+                                        style: const TextStyle(
+                                          fontSize: 8,
+                                          color: Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
                                 ],
                               ),
+                            ),
+                          );
+                        }),
+                        const DataColumn(
+                          label: SizedBox(
+                            width: 50,
+                            child: Text(
+                              '출석/계',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Colors.blueAccent,
+                              ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ),
                       ],
                       rows: students.map((student) {
+                        int presentCount = 0;
+                        for (var date in lessonDates) {
+                          final key =
+                              "${student.id}_${date.year}_${date.month}_${date.day}";
+                          if (attendanceMap[key]?.type ==
+                              AttendanceType.present) {
+                            presentCount++;
+                          }
+                        }
+
                         return DataRow(
                           cells: [
                             DataCell(
@@ -302,7 +349,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                       AttendanceType.present,
                                       record?.type == AttendanceType.present,
                                     ),
-                                    const SizedBox(width: 4),
+                                    const SizedBox(width: 8),
                                     _buildStatusButton(
                                       context,
                                       attendanceProvider,
@@ -312,20 +359,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                       AttendanceType.absent,
                                       record?.type == AttendanceType.absent,
                                     ),
-                                    const SizedBox(width: 4),
-                                    _buildStatusButton(
-                                      context,
-                                      attendanceProvider,
-                                      student.id,
-                                      ownerId,
-                                      date,
-                                      AttendanceType.late,
-                                      record?.type == AttendanceType.late,
-                                    ),
                                   ],
                                 ),
                               );
                             }),
+                            DataCell(
+                              Center(
+                                child: Text(
+                                  '$presentCount/${lessonDates.length}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
                         );
                       }).toList(),
@@ -349,25 +398,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     AttendanceType type,
     bool isSelected,
   ) {
-    IconData icon;
-    Color activeColor;
+    Color activeColor = Colors.blue.shade700;
+    String label = "";
 
     switch (type) {
       case AttendanceType.present:
-        icon = Icons.circle_outlined;
-        activeColor = Colors.green;
+        label = "O";
         break;
       case AttendanceType.absent:
-        icon = Icons.close;
-        activeColor = Colors.red;
-        break;
-      case AttendanceType.late:
-        icon = Icons.access_time;
-        activeColor = Colors.orange;
+        label = "X";
         break;
       default:
-        icon = Icons.help;
-        activeColor = Colors.grey;
+        return const SizedBox.shrink();
     }
 
     return InkWell(
@@ -377,33 +419,39 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           academyId: widget.academy.id,
           ownerId: ownerId,
           date: date,
-          type: isSelected ? null : type, // 이미 선택되어 있으면 취소
+          type: isSelected ? null : type,
         );
       },
       child: Container(
-        padding: const EdgeInsets.all(4),
+        width: 32,
+        height: 32,
         decoration: BoxDecoration(
           color: isSelected ? activeColor : Colors.white,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: isSelected ? activeColor : Colors.grey.shade300,
-            width: 1,
+            color: isSelected ? activeColor : Colors.grey.shade400,
+            width: 1.5,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: activeColor.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.grey.shade600,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
           ),
         ),
-        child: type == AttendanceType.late && !isSelected
-            ? Text(
-                "L",
-                style: TextStyle(
-                  color: Colors.orange.shade800,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 10,
-                ),
-              )
-            : Icon(
-                icon,
-                size: 16,
-                color: isSelected ? Colors.white : Colors.grey.shade400,
-              ),
       ),
     );
   }
@@ -427,11 +475,5 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       default:
         return '';
     }
-  }
-
-  Color _getDayColor(int weekday) {
-    if (weekday == 6) return Colors.blue;
-    if (weekday == 7) return Colors.red;
-    return Colors.black54;
   }
 }

@@ -98,28 +98,25 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
 
       if (mounted) {
         if (success) {
-          // Navigator를 먼저 캡처해둡니다.
-          final navigator = Navigator.of(context);
-
           // 성공 시 다이얼로그 표시 (사용자 요청 반영: "수정 완료")
-          if (mounted) {
-            await showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (dContext) => AlertDialog(
-                title: const Text('완료'),
-                content: Text(widget.academy != null ? '수정 완료' : '등록 완료'),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(dContext); // 다이얼로그 닫기
-                      navigator.pop(true); // 원래 화면 닫기 (결과 전달)
-                    },
-                    child: const Text('확인'),
-                  ),
-                ],
-              ),
-            );
+          final shouldPop = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Text('완료'),
+              content: Text(widget.academy != null ? '수정 완료' : '등록 완료'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('확인'),
+                ),
+              ],
+            ),
+          );
+
+          // 다이얼로그 결과가 true(확인 클릭)이고 화면이 아직 붙어있다면 화면을 닫음
+          if (mounted && shouldPop == true) {
+            Navigator.pop(context, true);
           }
         } else {
           // Provider에서 설정한 에러 메시지 표시

@@ -281,19 +281,19 @@ class _AcademyCard extends StatelessWidget {
                               '(${academy.lessonDays.map((d) {
                                 switch (d) {
                                   case 1:
-                                    return '월';
+                                    return '월요일';
                                   case 2:
-                                    return '화';
+                                    return '화요일';
                                   case 3:
-                                    return '수';
+                                    return '수요일';
                                   case 4:
-                                    return '목';
+                                    return '목요일';
                                   case 5:
-                                    return '금';
+                                    return '금요일';
                                   case 6:
-                                    return '토';
+                                    return '토요일';
                                   case 7:
-                                    return '일';
+                                    return '일요일';
                                   default:
                                     return '';
                                 }

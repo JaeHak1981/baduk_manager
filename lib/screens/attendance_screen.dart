@@ -408,7 +408,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                 width: 50,
                                 alignment: Alignment.center,
                                 child: Text(
-                                  '$rate%',
+                                  '$presentCount/$validLessonCount',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 12,

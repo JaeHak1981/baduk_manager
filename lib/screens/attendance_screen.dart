@@ -89,7 +89,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ActionChip(
             avatar: const Icon(Icons.bar_chart, size: 16, color: Colors.white),
             label: const Text(
-              '통계',
+              '출석 통계',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,

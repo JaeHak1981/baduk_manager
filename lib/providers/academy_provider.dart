@@ -25,6 +25,7 @@ class AcademyProvider extends ChangeNotifier {
     required AcademyType type,
     required String ownerId,
     int totalSessions = 1,
+    List<int> lessonDays = const [],
     String? phoneNumber,
     String? address,
   }) async {
@@ -38,6 +39,7 @@ class AcademyProvider extends ChangeNotifier {
         type: type,
         ownerId: ownerId,
         totalSessions: totalSessions,
+        lessonDays: lessonDays,
         phoneNumber: phoneNumber,
         address: address,
       );

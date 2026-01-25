@@ -42,6 +42,7 @@ class AcademyModel {
   final String? phoneNumber;
   final String? address;
   final int totalSessions; // 총 운영 부수 (예: 1~4부)
+  final List<int> lessonDays; // 수업 요일 (1:월, ..., 7:일)
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -53,6 +54,7 @@ class AcademyModel {
     this.phoneNumber,
     this.address,
     this.totalSessions = 1,
+    this.lessonDays = const [],
     required this.createdAt,
     this.updatedAt,
   });
@@ -66,6 +68,7 @@ class AcademyModel {
       'phoneNumber': phoneNumber,
       'address': address,
       'totalSessions': totalSessions,
+      'lessonDays': lessonDays,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
     };
@@ -89,6 +92,7 @@ class AcademyModel {
       address: data['address'] as String?,
       totalSessions:
           data['totalSessions'] as int? ?? (type == AcademyType.school ? 4 : 1),
+      lessonDays: List<int>.from(data['lessonDays'] ?? []),
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       updatedAt: data['updatedAt'] != null
           ? (data['updatedAt'] as Timestamp).toDate()
@@ -105,6 +109,7 @@ class AcademyModel {
     String? phoneNumber,
     String? address,
     int? totalSessions,
+    List<int>? lessonDays,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -116,6 +121,7 @@ class AcademyModel {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       address: address ?? this.address,
       totalSessions: totalSessions ?? this.totalSessions,
+      lessonDays: lessonDays ?? this.lessonDays,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

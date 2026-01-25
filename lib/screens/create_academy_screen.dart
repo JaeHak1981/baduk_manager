@@ -21,7 +21,18 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
 
   late AcademyType _selectedType;
   int _selectedSessions = 1;
+  final List<int> _selectedDays = [];
   bool _isLoading = false;
+
+  final List<Map<String, dynamic>> _daysOfWeek = [
+    {'id': 1, 'label': '월'},
+    {'id': 2, 'label': '화'},
+    {'id': 3, 'label': '수'},
+    {'id': 4, 'label': '목'},
+    {'id': 5, 'label': '금'},
+    {'id': 6, 'label': '토'},
+    {'id': 7, 'label': '일'},
+  ];
 
   @override
   void initState() {
@@ -31,6 +42,9 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
     _selectedSessions =
         widget.academy?.totalSessions ??
         (_selectedType == AcademyType.school ? 4 : 1);
+    if (widget.academy != null) {
+      _selectedDays.addAll(widget.academy!.lessonDays);
+    }
   }
 
   @override
@@ -59,6 +73,8 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
 
     setState(() => _isLoading = true);
 
+    _selectedDays.sort(); // 정렬해서 저장
+
     bool success;
     if (widget.academy != null) {
       // 수정 모드
@@ -66,6 +82,7 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
         name: _nameController.text.trim(),
         type: _selectedType,
         totalSessions: _selectedSessions,
+        lessonDays: _selectedDays,
       );
       success = await academyProvider.updateAcademy(updatedAcademy);
     } else {
@@ -75,6 +92,7 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
         type: _selectedType,
         ownerId: currentUser.uid,
         totalSessions: _selectedSessions,
+        lessonDays: _selectedDays,
       );
     }
 
@@ -82,9 +100,13 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
 
     if (mounted) {
       if (success) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('기관이 등록되었습니다')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.academy != null ? '기관 정보가 수정되었습니다' : '기관이 등록되었습니다',
+            ),
+          ),
+        );
         Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -112,7 +134,7 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('기관 등록'),
+        title: Text(widget.academy != null ? '기관 수정' : '기관 등록'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
@@ -164,6 +186,52 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
                   },
                 );
               }),
+
+              const SizedBox(height: 24),
+
+              // 수업 요일 선택
+              Text(
+                '수업 요일 (중복 선택 가능)',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 0,
+                children: _daysOfWeek.map((day) {
+                  final isSelected = _selectedDays.contains(day['id']);
+                  return FilterChip(
+                    label: Text(day['label']),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _selectedDays.add(day['id']);
+                        } else {
+                          _selectedDays.remove(day['id']);
+                        }
+                      });
+                    },
+                    selectedColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withOpacity(0.2),
+                    checkmarkColor: Theme.of(context).colorScheme.primary,
+                  );
+                }).toList(),
+              ),
+              if (_selectedDays.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  '주 ${_selectedDays.length}회 수업',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 24),
 

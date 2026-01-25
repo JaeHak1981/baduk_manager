@@ -12,6 +12,7 @@ class AcademyService {
     required AcademyType type,
     required String ownerId,
     int totalSessions = 1,
+    List<int> lessonDays = const [],
     String? phoneNumber,
     String? address,
   }) async {
@@ -24,6 +25,7 @@ class AcademyService {
         type: type,
         ownerId: ownerId,
         totalSessions: totalSessions,
+        lessonDays: lessonDays,
         phoneNumber: phoneNumber,
         address: address,
         createdAt: DateTime.now(),

@@ -382,8 +382,8 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                 isExpanded: true,
                 value: entry.textbook,
                 hint: const Text(
-                  '없음',
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                  '주문없음',
+                  style: TextStyle(color: Colors.black38, fontSize: 12),
                 ),
                 style: const TextStyle(
                   fontSize: 12,
@@ -393,7 +393,10 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                 items: [
                   const DropdownMenuItem<TextbookModel?>(
                     value: null,
-                    child: Text('없음', style: TextStyle(color: Colors.grey)),
+                    child: Text(
+                      '주문없음',
+                      style: TextStyle(color: Colors.black26),
+                    ),
                   ),
                   ...textbooks.map(
                     (t) => DropdownMenuItem<TextbookModel?>(
@@ -449,7 +452,15 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             flex: 28,
             child: Text(
               currentStatus,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 11,
+                color: currentStatus == '없음'
+                    ? Colors.red.shade300
+                    : Colors.black45,
+                fontWeight: currentStatus == '없음'
+                    ? FontWeight.normal
+                    : FontWeight.w500,
+              ),
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.end,
             ),

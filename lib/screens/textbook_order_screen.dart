@@ -21,8 +21,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
   int? _selectedFilterSession; // null: 전체
   final Set<String> _selectedStudentIds = {};
   TextbookModel? _selectedTextbook;
-  int _startVolume = 1; // 시작 권호
-  int _orderQuantity = 1; // 주문 수량
+  int _targetVolume = 1; // 할당할 권호
   String _searchQuery = '';
 
   @override
@@ -40,8 +39,8 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     context.read<ProgressProvider>().loadAcademyProgress(widget.academy.id);
   }
 
-  // 학생 선택 시 가장 적절한 시작 권호 추천
-  void _updateRecommendedStartVolume() {
+  // 선택된 학생들의 진도를 분석하여 다음 권호 추천
+  void _updateRecommendedVolume() {
     if (_selectedTextbook == null || _selectedStudentIds.isEmpty) return;
 
     final progressProvider = context.read<ProgressProvider>();
@@ -64,7 +63,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     }
 
     setState(() {
-      _startVolume = (maxLastVolume + 1).clamp(
+      _targetVolume = (maxLastVolume + 1).clamp(
         1,
         _selectedTextbook!.totalVolumes,
       );
@@ -107,7 +106,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
         _selectedStudentIds.addAll(filteredStudents.map((s) => s.id));
       }
     });
-    _updateRecommendedStartVolume();
+    _updateRecommendedVolume();
   }
 
   Future<void> _handleOrderAndAssign() async {
@@ -125,8 +124,8 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     }
 
     final progressProvider = context.read<ProgressProvider>();
-    Map<int, int> volumeCounts = {};
-    int totalAssigned = 0;
+    int targetVol = _targetVolume;
+    int studentCount = _selectedStudentIds.length;
 
     showDialog(
       context: context,
@@ -146,29 +145,19 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           }
         }
 
-        // 2. 지정된 시작 권호부터 수량만큼 할당
-        for (int i = 0; i < _orderQuantity; i++) {
-          int targetVolume = _startVolume + i;
-
-          // 최대 권수 초과 방지
-          if (targetVolume > _selectedTextbook!.totalVolumes) break;
-
-          await progressProvider.assignVolume(
-            studentId: studentId,
-            academyId: widget.academy.id,
-            ownerId: widget.academy.ownerId,
-            textbook: _selectedTextbook!,
-            volumeNumber: targetVolume,
-          );
-
-          volumeCounts[targetVolume] = (volumeCounts[targetVolume] ?? 0) + 1;
-          totalAssigned++;
-        }
+        // 2. 선택된 권호 할당 (인당 1권)
+        await progressProvider.assignVolume(
+          studentId: studentId,
+          academyId: widget.academy.id,
+          ownerId: widget.academy.ownerId,
+          textbook: _selectedTextbook!,
+          volumeNumber: targetVol,
+        );
       }
 
       if (mounted) {
         Navigator.pop(context); // 로딩 다이얼로그 닫기
-        _showOrderSummaryDialog(totalAssigned, volumeCounts);
+        _showOrderSummaryDialog(targetVol, studentCount);
       }
     } catch (e) {
       if (mounted) {
@@ -180,17 +169,13 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     }
   }
 
-  void _showOrderSummaryDialog(int totalCount, Map<int, int> volumeCounts) {
+  void _showOrderSummaryDialog(int volumeNumber, int count) {
     final String textbookName = _selectedTextbook!.name;
-    List<int> sortedVolumes = volumeCounts.keys.toList()..sort();
-    String detailedVolumes = sortedVolumes
-        .map((v) => '${v}권(${volumeCounts[v]})')
-        .join(', ');
 
     String orderSummary =
         '[${widget.academy.name}] 주문 내역:\n'
-        '$textbookName $detailedVolumes\n'
-        '총 $totalCount권 주문 요청합니다.';
+        '$textbookName ${volumeNumber}권 ($count명)\n'
+        '총 $count권 주문 요청합니다.';
 
     showDialog(
       context: context,
@@ -200,7 +185,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('지정된 권수대로 할당이 완료되었습니다.'),
+            const Text('지정된 권호로 할당이 완료되었습니다.'),
             const SizedBox(height: 16),
             const Text(
               '출판사 전송용 주문 문구:',
@@ -342,7 +327,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                       else
                         _selectedStudentIds.remove(student.id);
                     });
-                    _updateRecommendedStartVolume();
+                    _updateRecommendedVolume();
                   },
                 );
               },
@@ -370,7 +355,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
 
   Widget _buildOrderSettingsArea(List<TextbookModel> textbooks) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: const [
@@ -386,136 +371,48 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
-            '교재 및 주문 정보 설정',
+            '교재 및 권호 선택',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
           const SizedBox(height: 20),
 
-          // 1. 교재 선택
           DropdownButtonFormField<TextbookModel>(
             value: _selectedTextbook,
             decoration: const InputDecoration(
               labelText: '교재 시리즈',
               border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12),
               prefixIcon: Icon(Icons.book),
             ),
             items: textbooks
                 .map((t) => DropdownMenuItem(value: t, child: Text(t.name)))
                 .toList(),
             onChanged: (val) {
-              setState(() {
-                _selectedTextbook = val;
-                _orderQuantity = 1;
-              });
-              _updateRecommendedStartVolume();
+              setState(() => _selectedTextbook = val);
+              _updateRecommendedVolume();
             },
           ),
 
           if (_selectedTextbook != null) ...[
-            const SizedBox(height: 20),
-
-            Row(
-              children: [
-                // 2. 시작 권호 선택
-                Expanded(
-                  flex: 2,
-                  child: DropdownButtonFormField<int>(
-                    value: _startVolume,
-                    decoration: const InputDecoration(
-                      labelText: '시작 권호',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                    ),
-                    items:
-                        List.generate(
-                              _selectedTextbook!.totalVolumes,
-                              (i) => i + 1,
-                            )
-                            .map(
-                              (v) => DropdownMenuItem(
-                                value: v,
-                                child: Text('$v권'),
-                              ),
-                            )
-                            .toList(),
-                    onChanged: (val) => setState(() => _startVolume = val!),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // 3. 수량 조절
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '주문 수량',
-                        style: TextStyle(fontSize: 13, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade400),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.remove),
-                              onPressed: _orderQuantity > 1
-                                  ? () => setState(() => _orderQuantity--)
-                                  : null,
-                            ),
-                            Text(
-                              '$_orderQuantity권',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add),
-                              onPressed: () => setState(() => _orderQuantity++),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            const SizedBox(height: 16),
+            DropdownButtonFormField<int>(
+              value: _targetVolume,
+              decoration: const InputDecoration(
+                labelText: '할당할 권호 선택',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.pin),
+              ),
+              items:
+                  List.generate(_selectedTextbook!.totalVolumes, (i) => i + 1)
+                      .map(
+                        (v) => DropdownMenuItem(value: v, child: Text('$v권')),
+                      )
+                      .toList(),
+              onChanged: (val) => setState(() => _targetVolume = val!),
             ),
-
             const SizedBox(height: 12),
-            // 범위 안내 문구
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline,
-                    size: 16,
-                    color: Colors.orange,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _orderQuantity == 1
-                        ? '$_startVolume권을 할당합니다.'
-                        : '$_startVolume권부터 ${math.min(_startVolume + _orderQuantity - 1, _selectedTextbook!.totalVolumes)}권까지 할당합니다.',
-                    style: TextStyle(
-                      color: Colors.orange.shade900,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
+            Text(
+              '※ 선택한 학생들에게 ${_targetVolume}권을 1권씩 할당합니다.',
+              style: const TextStyle(color: Colors.grey, fontSize: 13),
             ),
           ],
         ],
@@ -524,7 +421,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
   }
 
   Widget _buildBottomButton() {
-    final int totalBooks = _selectedStudentIds.length * _orderQuantity;
+    final int totalCount = _selectedStudentIds.length;
     return Container(
       width: double.infinity,
       color: Colors.white,
@@ -541,7 +438,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
         ),
         onPressed: _handleOrderAndAssign,
         child: Text(
-          totalBooks > 0 ? '총 $totalBooks권 주문 및 할당 실행' : '주문 및 할당 실행',
+          totalCount > 0 ? '총 $totalCount권 주문 및 할당 실행' : '주문 및 할당 실행',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
       ),

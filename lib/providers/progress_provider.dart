@@ -250,6 +250,24 @@ class ProgressProvider with ChangeNotifier {
     }
   }
 
+  /// 진도 권수 수정
+  Future<bool> updateVolume(
+    String progressId,
+    String studentId,
+    int newVolume,
+  ) async {
+    try {
+      await _progressService.updateVolume(progressId, newVolume);
+      await loadStudentProgress(studentId);
+      return true;
+    } catch (e) {
+      _errorMessage = '권수 수정 실패: $e';
+      return false;
+    } finally {
+      notifyListeners();
+    }
+  }
+
   /// 에러 메시지 초기화
   void clearErrorMessage() {
     _errorMessage = null;

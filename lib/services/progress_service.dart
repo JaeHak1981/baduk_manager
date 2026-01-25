@@ -96,6 +96,16 @@ class ProgressService {
     await _firestore.collection(_collection).doc(progressId).update(data);
   }
 
+  /// 진도 권수 업데이트
+  Future<void> updateVolume(String progressId, int newVolume) async {
+    final data = <String, dynamic>{
+      'volumeNumber': newVolume,
+      'updatedAt': Timestamp.now(),
+    };
+
+    await _firestore.collection(_collection).doc(progressId).update(data);
+  }
+
   /// 진도 기록 삭제
   Future<void> deleteProgress(String progressId) async {
     await _firestore.collection(_collection).doc(progressId).delete();

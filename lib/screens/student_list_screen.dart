@@ -869,59 +869,66 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                     children: progressList.map((progress) {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 6.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '${progress.textbookName} (${progress.volumeNumber}권)',
+                        child: InkWell(
+                          onTap: () => _showEditVolumeDialog(context, progress),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '${progress.textbookName} (${progress.volumeNumber}권)',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${progress.progressPercentage.toInt()}%',
                                     style: const TextStyle(
                                       fontSize: 10,
-                                      fontWeight: FontWeight.w500,
+                                      color: Colors.blue,
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${progress.progressPercentage.toInt()}%',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.blue,
-                                    fontWeight: FontWeight.bold,
+                                  const SizedBox(width: 4),
+                                  InkWell(
+                                    onTap: () => _confirmDeleteProgress(
+                                      context,
+                                      progress,
+                                    ),
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: Colors.redAccent,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 4),
-                                InkWell(
-                                  onTap: () =>
-                                      _confirmDeleteProgress(context, progress),
-                                  child: const Icon(
-                                    Icons.close,
-                                    size: 14,
-                                    color: Colors.redAccent,
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(2),
+                                child: LinearProgressIndicator(
+                                  value: progress.progressPercentage / 100,
+                                  minHeight: 3,
+                                  backgroundColor: Colors.grey[200],
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    progress.isCompleted
+                                        ? Colors.green
+                                        : Colors.blue,
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(2),
-                              child: LinearProgressIndicator(
-                                value: progress.progressPercentage / 100,
-                                minHeight: 3,
-                                backgroundColor: Colors.grey[200],
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  progress.isCompleted
-                                      ? Colors.green
-                                      : Colors.blue,
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       );
                     }).toList(),
@@ -1060,6 +1067,75 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('교재 할달이 삭제되었습니다.')));
+      }
+    }
+  }
+
+  Future<void> _showEditVolumeDialog(
+    BuildContext context,
+    StudentProgressModel progress,
+  ) async {
+    final controller = TextEditingController(
+      text: progress.volumeNumber.toString(),
+    );
+
+    final newVolume = await showDialog<int?>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${progress.textbookName} 권수 수정'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('현재 학습 중인 권수를 입력하세요.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: '권수 (최대 ${progress.totalVolumes})',
+                border: const OutlineInputBorder(),
+              ),
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              final val = int.tryParse(controller.text);
+              if (val != null && val > 0 && val <= progress.totalVolumes) {
+                Navigator.pop(context, val);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      '1에서 ${progress.totalVolumes} 사이의 숫자를 입력해주세요.',
+                    ),
+                  ),
+                );
+              }
+            },
+            child: const Text('수정'),
+          ),
+        ],
+      ),
+    );
+
+    if (newVolume != null && newVolume != progress.volumeNumber && mounted) {
+      final success = await context.read<ProgressProvider>().updateVolume(
+        progress.id,
+        widget.student.id,
+        newVolume,
+      );
+      if (mounted && success) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('교재 권수가 수정되었습니다.')));
       }
     }
   }

@@ -8,7 +8,7 @@ import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
 import 'add_student_screen.dart';
 import 'textbook_center_screen.dart';
-import 'progress_edit_screen.dart';
+// import 'progress_edit_screen.dart'; // Removed
 import 'batch_add_student_dialog.dart';
 import 'student_history_screen.dart'; // 학생 히스토리 화면 import
 
@@ -928,8 +928,8 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                 const SizedBox(height: 12),
                 const Divider(height: 1),
                 const SizedBox(height: 12),
-                InkWell(
-                  onTap: () => _navigateToEditProgress(context, activeProgress),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Column(
                     children: [
                       Row(
@@ -985,21 +985,7 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
     );
   }
 
-  void _navigateToEditProgress(
-    BuildContext context,
-    StudentProgressModel progress,
-  ) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ProgressEditScreen(progress: progress),
-      ),
-    ).then(
-      (_) => context.read<ProgressProvider>().loadStudentProgress(
-        widget.student.id,
-      ),
-    );
-  }
+  // Method removed: _navigateToEditProgress
 
   Future<void> _showDeleteConfirmation(BuildContext context) async {
     final confirmed = await showDialog<bool>(

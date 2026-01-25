@@ -541,7 +541,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           ),
                         ),
                       ],
-                      rows: students.map((student) {
+                      rows: students.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final student = entry.value;
                         int presentCount = 0;
                         int validLessonCount = 0;
 
@@ -560,7 +562,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         }
 
                         // 출석률 계산
-                        // int rate = validLessonCount == 0 ? 0 : ((presentCount / validLessonCount) * 100).round();
                         Color rateColor =
                             (validLessonCount > 0 &&
                                 (presentCount / validLessonCount) >= 0.8)
@@ -622,11 +623,31 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                               if (isHoliday) {
                                 final holidayName =
-                                    HolidayHelper.getHolidayName(date);
+                                    HolidayHelper.getHolidayName(date) ?? "";
+                                if (holidayName.isEmpty)
+                                  return const DataCell(SizedBox());
+
+                                // 세로 글씨 로직
+                                final totalRows = students.length;
+                                final textLength = holidayName.length;
+
+                                // 충분한 공간이 있는 경우 중앙 정렬
+                                int startIndex = (totalRows - textLength) ~/ 2;
+                                if (startIndex < 0)
+                                  startIndex =
+                                      0; // 학생 수가 글자 수보다 적을 때 예외 처리 (상단부터 표시)
+
+                                final charIndex = index - startIndex;
+                                String charToDisplay = "";
+
+                                if (charIndex >= 0 && charIndex < textLength) {
+                                  charToDisplay = holidayName[charIndex];
+                                }
+
                                 return DataCell(
                                   Center(
                                     child: Text(
-                                      holidayName ?? '-',
+                                      charToDisplay,
                                       style: const TextStyle(
                                         color: Colors.red,
                                         fontWeight: FontWeight.bold,

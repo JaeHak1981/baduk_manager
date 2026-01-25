@@ -9,8 +9,10 @@ import 'academy_management_screen.dart';
 import 'admin_recovery_screen.dart';
 import 'student_list_screen.dart';
 import 'textbook_center_screen.dart';
+import 'textbook_order_screen.dart';
 import 'attendance_screen.dart';
 import '../providers/progress_provider.dart';
+import 'components/enrollment_statistics_dialog.dart';
 
 /// 홈 화면
 class HomePage extends StatefulWidget {
@@ -553,6 +555,56 @@ class _AcademySummaryCard extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            OutlinedButton(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => EnrollmentStatisticsDialog(
+                    academy: academy,
+                    initialYear: DateTime.now().year,
+                    initialMonth: DateTime.now().month,
+                  ),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                side: BorderSide(color: Colors.blue.shade300),
+                foregroundColor: Colors.blue.shade700,
+              ),
+              child: const Text(
+                '인원 통계',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(width: 4),
+            OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TextbookOrderScreen(academy: academy),
+                  ),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                side: BorderSide(color: Colors.orange.shade300),
+                foregroundColor: Colors.orange.shade700,
+              ),
+              child: const Text(
+                '교재 주문',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(width: 4),
             OutlinedButton(
               onPressed: () {
                 Navigator.push(

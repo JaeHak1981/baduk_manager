@@ -53,12 +53,32 @@ class _StudentListScreenState extends State<StudentListScreen> {
     });
   }
 
-  void _toggleSelectAll(List<StudentModel> students) {
+  List<StudentModel> _getFilteredStudents(List<StudentModel> allStudents) {
+    if (_selectedFilterSession == null) return allStudents;
+    if (_selectedFilterSession == 0) {
+      return allStudents
+          .where((s) => s.session == null || s.session == 0)
+          .toList();
+    }
+    return allStudents
+        .where((s) => s.session == _selectedFilterSession)
+        .toList();
+  }
+
+  void _toggleSelectAll(List<StudentModel> filteredStudents) {
     setState(() {
-      if (_selectedStudentIds.length == students.length) {
-        _selectedStudentIds.clear();
+      final allSelected =
+          filteredStudents.isNotEmpty &&
+          filteredStudents.every((s) => _selectedStudentIds.contains(s.id));
+
+      if (allSelected) {
+        // 현재 필터링된 학생들만 선택 해제
+        for (var s in filteredStudents) {
+          _selectedStudentIds.remove(s.id);
+        }
       } else {
-        _selectedStudentIds.addAll(students.map((s) => s.id));
+        // 현재 필터링된 학생들을 모두 추가
+        _selectedStudentIds.addAll(filteredStudents.map((s) => s.id));
       }
     });
   }
@@ -157,11 +177,9 @@ class _StudentListScreenState extends State<StudentListScreen> {
             Consumer<StudentProvider>(
               builder: (context, provider, _) {
                 // 현재 필터링된 학생들 기준 전체 선택
-                final filteredStudents = _selectedFilterSession == null
-                    ? provider.students
-                    : provider.students
-                          .where((s) => s.session == _selectedFilterSession)
-                          .toList();
+                final filteredStudents = _getFilteredStudents(
+                  provider.students,
+                );
 
                 return Row(
                   children: [
@@ -179,7 +197,10 @@ class _StudentListScreenState extends State<StudentListScreen> {
                     TextButton(
                       onPressed: () => _toggleSelectAll(filteredStudents),
                       child: Text(
-                        _selectedStudentIds.length == filteredStudents.length
+                        _selectedStudentIds.isNotEmpty &&
+                                filteredStudents.every(
+                                  (s) => _selectedStudentIds.contains(s.id),
+                                )
                             ? '선택 해제'
                             : '전체 선택',
                         style: const TextStyle(color: Colors.red),
@@ -207,15 +228,9 @@ class _StudentListScreenState extends State<StudentListScreen> {
           }
 
           // 부 필터링 적용
-          final filteredStudents = _selectedFilterSession == null
-              ? studentProvider.students
-              : _selectedFilterSession == 0
-              ? studentProvider.students
-                    .where((s) => s.session == null || s.session == 0)
-                    .toList()
-              : studentProvider.students
-                    .where((s) => s.session == _selectedFilterSession)
-                    .toList();
+          final filteredStudents = _getFilteredStudents(
+            studentProvider.students,
+          );
 
           return Column(
             children: [
@@ -467,11 +482,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
 
   void _handleExport() async {
     final provider = context.read<StudentProvider>();
-    final students = _selectedFilterSession == null
-        ? provider.students
-        : provider.students
-              .where((s) => s.session == _selectedFilterSession)
-              .toList();
+    final students = _getFilteredStudents(provider.students);
 
     if (students.isEmpty) {
       ScaffoldMessenger.of(

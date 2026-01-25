@@ -138,7 +138,6 @@ class ProgressProvider with ChangeNotifier {
     required String ownerId,
     required TextbookModel textbook,
     required int volumeNumber,
-    required int totalPages,
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -153,8 +152,7 @@ class ProgressProvider with ChangeNotifier {
         textbookId: textbook.id,
         textbookName: textbook.name,
         volumeNumber: volumeNumber,
-        currentPage: 0,
-        totalPages: totalPages,
+        totalVolumes: textbook.totalVolumes, // [Refactor] Use volume count
         startDate: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -171,16 +169,14 @@ class ProgressProvider with ChangeNotifier {
     }
   }
 
-  /// 진도 업데이트
-  Future<bool> updateCurrentPage(
+  /// 진도 상태 업데이트 (완료 여부)
+  Future<bool> updateVolumeStatus(
     String progressId,
     String studentId,
-    int newPage,
-    int totalPages,
+    bool isCompleted,
   ) async {
     try {
-      final isCompleted = newPage >= totalPages;
-      await _progressService.updateProgress(progressId, newPage, isCompleted);
+      await _progressService.updateStatus(progressId, isCompleted);
       await loadStudentProgress(studentId);
       return true;
     } catch (e) {

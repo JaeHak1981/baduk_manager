@@ -940,10 +940,10 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                             style: const TextStyle(fontSize: 14),
                           ),
                           Text(
-                            '${activeProgress.currentPage} / ${activeProgress.totalPages}p',
+                            '총 ${activeProgress.totalVolumes}권',
                             style: const TextStyle(
                               fontSize: 12,
-                              color: Colors.blue,
+                              color: Colors.grey,
                             ),
                           ),
                         ],

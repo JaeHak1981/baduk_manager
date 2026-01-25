@@ -9,9 +9,10 @@ class StudentProgressModel {
   final String textbookId; // 교재 시리즈 ID
   final String textbookName; // 표시용 교재 이름
   final int volumeNumber; // 현재 학습 중인 권수 (시리즈 중 몇 권인지)
-  final int currentPage; // 현재 학습 페이지
-  final int totalPages; // 해당 권의 전체 페이지
-  final bool isCompleted; // 완료 여부
+  final int totalVolumes; // 전체 권수 (시리즈) - [ADDED] for progress calculation
+  final bool
+  isCompleted; // 완료 여부 (현재 권수가 마지막 권이고 완료되었을 때?) or simply "Current Volume Completed"?
+  // For simplicity: False = In Progress, True = Completed (Waiting for next volume assignment or fully done)
   final DateTime startDate; // 학습 시작일
   final DateTime? endDate; // 학습 완료일
   final DateTime updatedAt; // 마지막 기록일
@@ -24,16 +25,23 @@ class StudentProgressModel {
     required this.textbookId,
     required this.textbookName,
     required this.volumeNumber,
-    required this.currentPage,
-    required this.totalPages,
+    required this.totalVolumes,
     this.isCompleted = false,
     required this.startDate,
     this.endDate,
     required this.updatedAt,
   });
 
-  double get progressPercentage =>
-      (currentPage / totalPages * 100).clamp(0, 100);
+  // Calculate percentage based on Volumes
+  // If volumeNumber is 1 (of 4), and not completed: 0%? Or 1/4?
+  // Let's say: "Completed Volumes / Total Volumes"
+  // If isCompleted is true, count current volume as done.
+  // If false, count (volumeNumber - 1) as done.
+  double get progressPercentage {
+    if (totalVolumes == 0) return 0.0;
+    int completedCount = isCompleted ? volumeNumber : (volumeNumber - 1);
+    return (completedCount / totalVolumes * 100).clamp(0, 100);
+  }
 
   Map<String, dynamic> toFirestore() {
     return {
@@ -43,8 +51,7 @@ class StudentProgressModel {
       'textbookId': textbookId,
       'textbookName': textbookName,
       'volumeNumber': volumeNumber,
-      'currentPage': currentPage,
-      'totalPages': totalPages,
+      'totalVolumes': totalVolumes,
       'isCompleted': isCompleted,
       'startDate': Timestamp.fromDate(startDate),
       'endDate': endDate != null ? Timestamp.fromDate(endDate!) : null,
@@ -60,12 +67,11 @@ class StudentProgressModel {
       id: snapshot.id,
       studentId: data['studentId'] as String,
       academyId: data['academyId'] as String,
-      ownerId: data['ownerId'] as String? ?? '', // 기존 데이터 호환
+      ownerId: data['ownerId'] as String? ?? '',
       textbookId: data['textbookId'] as String,
       textbookName: data['textbookName'] as String? ?? '알 수 없는 교재',
       volumeNumber: data['volumeNumber'] as int? ?? 1,
-      currentPage: data['currentPage'] as int? ?? 0,
-      totalPages: data['totalPages'] as int? ?? 1,
+      totalVolumes: data['totalVolumes'] as int? ?? 1, // [ADDED] default 1
       isCompleted: data['isCompleted'] as bool? ?? false,
       startDate: (data['startDate'] as Timestamp).toDate(),
       endDate: data['endDate'] != null
@@ -77,7 +83,7 @@ class StudentProgressModel {
 
   StudentProgressModel copyWith({
     int? volumeNumber,
-    int? currentPage,
+    int? totalVolumes,
     bool? isCompleted,
     DateTime? endDate,
     DateTime? updatedAt,
@@ -90,8 +96,7 @@ class StudentProgressModel {
       textbookId: textbookId,
       textbookName: textbookName,
       volumeNumber: volumeNumber ?? this.volumeNumber,
-      currentPage: currentPage ?? this.currentPage,
-      totalPages: totalPages,
+      totalVolumes: totalVolumes ?? this.totalVolumes,
       isCompleted: isCompleted ?? this.isCompleted,
       startDate: startDate,
       endDate: endDate ?? this.endDate,

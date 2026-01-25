@@ -312,7 +312,6 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
         ownerId: widget.academy.ownerId,
         textbook: textbook,
         volumeNumber: result,
-        totalPages: 60, // 기본값 60p 사용 (필요시 교재별 메타데이터 활용 가능)
       );
 
       if (mounted) {

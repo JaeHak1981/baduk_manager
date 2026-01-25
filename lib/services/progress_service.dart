@@ -65,20 +65,17 @@ class ProgressService {
         );
   }
 
-  /// 진도 업데이트 (페이지 변경)
-  Future<void> updateProgress(
-    String progressId,
-    int currentPage,
-    bool isCompleted,
-  ) async {
-    final data = {
-      'currentPage': currentPage,
+  /// 진도 상태 업데이트 (완료 여부만)
+  Future<void> updateStatus(String progressId, bool isCompleted) async {
+    final data = <String, dynamic>{
       'isCompleted': isCompleted,
       'updatedAt': Timestamp.now(),
     };
 
     if (isCompleted) {
       data['endDate'] = Timestamp.now();
+    } else {
+      data['endDate'] = null; // 미완료로 변경 시 종료일 제거
     }
 
     await _firestore.collection(_collection).doc(progressId).update(data);

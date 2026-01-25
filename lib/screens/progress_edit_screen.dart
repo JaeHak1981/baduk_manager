@@ -15,43 +15,22 @@ class ProgressEditScreen extends StatefulWidget {
 }
 
 class _ProgressEditScreenState extends State<ProgressEditScreen> {
-  late TextEditingController _pageController;
-  late int _currentPage;
+  late bool _isCompleted;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _currentPage = widget.progress.currentPage;
-    _pageController = TextEditingController(text: _currentPage.toString());
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
+    _isCompleted = widget.progress.isCompleted;
   }
 
   Future<void> _handleSave() async {
-    final newPage = int.tryParse(_pageController.text);
-    if (newPage == null ||
-        newPage < 0 ||
-        newPage > widget.progress.totalPages) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('0에서 ${widget.progress.totalPages} 사이의 숫자를 입력해주세요'),
-        ),
-      );
-      return;
-    }
-
     setState(() => _isLoading = true);
 
-    final success = await context.read<ProgressProvider>().updateCurrentPage(
+    final success = await context.read<ProgressProvider>().updateVolumeStatus(
       widget.progress.id,
       widget.progress.studentId,
-      newPage,
-      widget.progress.totalPages,
+      _isCompleted,
     );
 
     setState(() => _isLoading = false);
@@ -80,12 +59,53 @@ class _ProgressEditScreenState extends State<ProgressEditScreen> {
     }
   }
 
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('진도 기록 삭제'),
+        content: const Text('이 교재의 학습 기록을 삭제하시겠습니까?\n잘못 할당된 경우에만 삭제해 주세요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final success = await context.read<ProgressProvider>().removeProgress(
+        widget.progress.id,
+        widget.progress.studentId,
+      );
+      if (success && mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('진도 기록이 삭제되었습니다')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('진도 업데이트'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            onPressed: _isLoading ? null : _confirmDelete,
+            tooltip: '기록 삭제',
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -98,35 +118,44 @@ class _ProgressEditScreenState extends State<ProgressEditScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              '전체 페이지: ${widget.progress.totalPages}',
-              style: const TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 32),
-
-            Text('현재 기록된 페이지: ${widget.progress.currentPage}'),
-            const SizedBox(height: 16),
-
-            TextFormField(
-              controller: _pageController,
-              decoration: const InputDecoration(
-                labelText: '진행 중인 페이지',
-                border: OutlineInputBorder(),
+              '현재 ${widget.progress.volumeNumber}권 / 총 ${widget.progress.totalVolumes}권',
+              style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
               ),
-              keyboardType: TextInputType.number,
-              autofocus: true,
             ),
+            const SizedBox(height: 48),
 
-            const SizedBox(height: 32),
-
-            // 프리셋 버튼들
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildQuickButton(-5),
-                _buildQuickButton(-1),
-                _buildQuickButton(1),
-                _buildQuickButton(5),
-              ],
+            Center(
+              child: Column(
+                children: [
+                  Text(
+                    _isCompleted ? '학습 완료' : '학습 중',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: _isCompleted ? Colors.green : Colors.blue,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Transform.scale(
+                    scale: 1.5,
+                    child: Switch(
+                      value: _isCompleted,
+                      activeColor: Colors.green,
+                      onChanged: (val) {
+                        setState(() => _isCompleted = val);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _isCompleted ? '이 권의 학습을 마쳤습니다.' : '아직 학습을 진행하고 있습니다.',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                ],
+              ),
             ),
 
             const Spacer(),
@@ -136,29 +165,24 @@ class _ProgressEditScreenState extends State<ProgressEditScreen> {
               height: 50,
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _handleSave,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isCompleted ? Colors.green : Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
                 child: _isLoading
-                    ? const CircularProgressIndicator()
+                    ? const CircularProgressIndicator(color: Colors.white)
                     : const Text(
                         '저장하기',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
                       ),
               ),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildQuickButton(int delta) {
-    return ActionChip(
-      label: Text(delta > 0 ? '+$delta' : '$delta'),
-      onPressed: () {
-        final val = int.tryParse(_pageController.text) ?? 0;
-        _pageController.text = (val + delta)
-            .clamp(0, widget.progress.totalPages)
-            .toString();
-      },
     );
   }
 }

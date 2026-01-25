@@ -100,7 +100,7 @@ class _StudentHistoryScreenState extends State<StudentHistoryScreen>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${progress.currentPage} / ${progress.totalPages}p (${progress.progressPercentage.toStringAsFixed(0)}%)',
+                      '총 ${progress.totalVolumes}권 (${progress.progressPercentage.toStringAsFixed(0)}%)',
                     ),
                     Text(
                       '시작일: ${DateFormat('yyyy-MM-dd').format(progress.startDate)}',

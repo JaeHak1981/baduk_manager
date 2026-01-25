@@ -311,12 +311,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ],
                       rows: students.map((student) {
                         int presentCount = 0;
+                        int validLessonCount = 0;
+
                         for (var date in lessonDates) {
-                          final key =
-                              "${student.id}_${date.year}_${date.month}_${date.day}";
-                          if (attendanceMap[key]?.type ==
-                              AttendanceType.present) {
-                            presentCount++;
+                          final isHoliday = HolidayHelper.isHoliday(date);
+                          if (!isHoliday) {
+                            validLessonCount++;
+                            final key =
+                                "${student.id}_${date.year}_${date.month}_${date.day}";
+                            if (attendanceMap[key]?.type ==
+                                AttendanceType.present) {
+                              presentCount++;
+                            }
                           }
                         }
 
@@ -332,6 +338,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               ),
                             ),
                             ...lessonDates.map((date) {
+                              final isHoliday = HolidayHelper.isHoliday(date);
+
+                              if (isHoliday) {
+                                return const DataCell(
+                                  Center(
+                                    child: Text(
+                                      '-',
+                                      style: TextStyle(color: Colors.grey),
+                                    ),
+                                  ),
+                                );
+                              }
+
                               final key =
                                   "${student.id}_${date.year}_${date.month}_${date.day}";
                               final record = attendanceMap[key];
@@ -366,7 +385,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             DataCell(
                               Center(
                                 child: Text(
-                                  '$presentCount/${lessonDates.length}',
+                                  '$presentCount/$validLessonCount',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
@@ -398,14 +417,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     AttendanceType type,
     bool isSelected,
   ) {
-    Color activeColor = Colors.blue.shade700;
+    Color activeColor;
     String label = "";
 
     switch (type) {
       case AttendanceType.present:
+        activeColor = Colors.blue.shade700;
         label = "O";
         break;
       case AttendanceType.absent:
+        activeColor = Colors.red.shade700;
         label = "X";
         break;
       default:

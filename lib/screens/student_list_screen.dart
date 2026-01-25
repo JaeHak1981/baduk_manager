@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/academy_model.dart';
 import '../models/student_model.dart';
+import '../models/student_progress_model.dart';
 
 import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
@@ -815,12 +816,31 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                                 fontSize: 16,
                               ),
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '(${widget.student.levelDisplayName})',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 12,
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primaryContainer.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withOpacity(0.4),
+                                  width: 1.0,
+                                ),
+                              ),
+                              child: Text(
+                                widget.student.levelDisplayName,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ],
@@ -835,7 +855,7 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                       ],
                     ),
                   ),
-                  if (activeProgress != null)
+                  if (progressList.isNotEmpty)
                     Expanded(
                       flex: 2,
                       child: Padding(
@@ -843,46 +863,68 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '${activeProgress.textbookName} (${activeProgress.volumeNumber}권)',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w500,
+                          children: progressList.map((progress) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 6.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          '${progress.textbookName} (${progress.volumeNumber}권)',
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${progress.progressPercentage.toInt()}%',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.blue,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      InkWell(
+                                        onTap: () => _confirmDeleteProgress(
+                                          context,
+                                          progress,
+                                        ),
+                                        child: const Icon(
+                                          Icons.close,
+                                          size: 14,
+                                          color: Colors.redAccent,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(2),
+                                    child: LinearProgressIndicator(
+                                      value: progress.progressPercentage / 100,
+                                      minHeight: 3,
+                                      backgroundColor: Colors.grey[200],
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        progress.isCompleted
+                                            ? Colors.green
+                                            : Colors.blue,
+                                      ),
                                     ),
-                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${activeProgress.progressPercentage.toInt()}%',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.blue,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(2),
-                              child: LinearProgressIndicator(
-                                value: activeProgress.progressPercentage / 100,
-                                minHeight: 4,
-                                backgroundColor: Colors.grey[200],
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  activeProgress.isCompleted
-                                      ? Colors.green
-                                      : Colors.blue,
-                                ),
+                                ],
                               ),
-                            ),
-                          ],
+                            );
+                          }).toList(),
                         ),
                       ),
                     ),
@@ -992,6 +1034,44 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('학생이 삭제되었습니다')));
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteProgress(
+    BuildContext context,
+    StudentProgressModel progress,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('교재 할당 삭제'),
+        content: Text(
+          '[${progress.textbookName} ${progress.volumeNumber}권] 할당을 삭제하시겠습니까?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final success = await context.read<ProgressProvider>().removeProgress(
+        progress.id,
+        widget.student.id,
+      );
+      if (mounted && success) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('교재 할달이 삭제되었습니다.')));
       }
     }
   }

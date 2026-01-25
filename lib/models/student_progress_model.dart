@@ -38,9 +38,10 @@ class StudentProgressModel {
   // If isCompleted is true, count current volume as done.
   // If false, count (volumeNumber - 1) as done.
   double get progressPercentage {
-    if (totalVolumes == 0) return 0.0;
-    int completedCount = isCompleted ? volumeNumber : (volumeNumber - 1);
-    return (completedCount / totalVolumes * 100).clamp(0, 100);
+    if (totalVolumes <= 0) return 0.0;
+    // 사용자의 요청: 4권 중 1권을 지급하면 25%가 나와야 함
+    // 즉, 현재 배정된 권수 자체가 진도 지표가 됨
+    return (volumeNumber / totalVolumes * 100).clamp(0, 100);
   }
 
   Map<String, dynamic> toFirestore() {

@@ -621,11 +621,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               final isHoliday = HolidayHelper.isHoliday(date);
 
                               if (isHoliday) {
-                                return const DataCell(
+                                final holidayName =
+                                    HolidayHelper.getHolidayName(date);
+                                return DataCell(
                                   Center(
                                     child: Text(
-                                      '-',
-                                      style: TextStyle(color: Colors.black26),
+                                      holidayName ?? '-',
+                                      style: const TextStyle(
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
                                     ),
                                   ),
                                 );

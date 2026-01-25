@@ -306,11 +306,8 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             flex: 12,
             child: Text(
               '권호',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-                textAlign: TextAlign.center,
-              ),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
           Expanded(
@@ -345,7 +342,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           name: '알수없음',
           ownerId: '',
           totalVolumes: 0,
-          category: '',
+          createdAt: DateTime.now(),
         ),
       );
       currentStatus = '${textbook.name} ${lastP.volumeNumber}권';
@@ -421,7 +418,6 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
               child: DropdownButton<int>(
                 isExpanded: true,
                 value: entry.volume,
-                textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 13,
                   color: Colors.orange,

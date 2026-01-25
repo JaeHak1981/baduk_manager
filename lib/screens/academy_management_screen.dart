@@ -263,58 +263,57 @@ class _AcademyCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      academy.name,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          academy.name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (academy.lessonDays.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '(${academy.lessonDays.map((d) {
+                                switch (d) {
+                                  case 1:
+                                    return '월';
+                                  case 2:
+                                    return '화';
+                                  case 3:
+                                    return '수';
+                                  case 4:
+                                    return '목';
+                                  case 5:
+                                    return '금';
+                                  case 6:
+                                    return '토';
+                                  case 7:
+                                    return '일';
+                                  default:
+                                    return '';
+                                }
+                              }).join(', ')})',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.blue.shade800,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
                       academy.type.displayName,
                       style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
-                    if (academy.lessonDays.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.calendar_month,
-                            size: 14,
-                            color: Colors.blue.shade700,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '주 ${academy.lessonDays.length}회 (${academy.lessonDays.map((d) {
-                              switch (d) {
-                                case 1:
-                                  return '월';
-                                case 2:
-                                  return '화';
-                                case 3:
-                                  return '수';
-                                case 4:
-                                  return '목';
-                                case 5:
-                                  return '금';
-                                case 6:
-                                  return '토';
-                                case 7:
-                                  return '일';
-                                default:
-                                  return '';
-                              }
-                            }).join(', ')})',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.blue.shade700,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
                   ],
                 ),
               ),

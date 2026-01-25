@@ -42,7 +42,11 @@ class AcademyService {
   /// 기관 조회
   Future<AcademyModel?> getAcademy(String academyId) async {
     try {
-      final doc = await _firestore.collection('academies').doc(academyId).get();
+      final doc = await _firestore
+          .collection('academies')
+          .doc(academyId)
+          .get()
+          .timeout(const Duration(seconds: 10));
 
       if (!doc.exists) {
         return null;
@@ -61,7 +65,8 @@ class AcademyService {
       final querySnapshot = await _firestore
           .collection('academies')
           .where('ownerId', isEqualTo: ownerId)
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
 
       return querySnapshot.docs
           .map((doc) => AcademyModel.fromFirestore(doc))

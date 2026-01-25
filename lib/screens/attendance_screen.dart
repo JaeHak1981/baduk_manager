@@ -349,7 +349,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 ),
                 const SizedBox(width: 8),
               ]
-            : null,
+            : [
+                IconButton(
+                  icon: const Icon(Icons.check_box_outlined),
+                  tooltip: '다중 선택',
+                  onPressed: _toggleSelectionMode,
+                ),
+              ],
       ),
       body: Column(
         children: [

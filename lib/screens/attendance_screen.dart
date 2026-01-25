@@ -20,6 +20,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   DateTime _selectedDate = DateTime.now();
   late int _currentYear;
   late int _currentMonth;
+  int? _selectedSession; // 선택된 부 (null: 전체, 0: 미배정)
 
   @override
   void initState() {
@@ -41,6 +42,50 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ownerId: widget.academy.ownerId,
       );
     });
+  }
+
+  Widget _buildSessionFilter(List<dynamic> allStudents) {
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          ChoiceChip(
+            label: Text('전체 (${allStudents.length})'),
+            selected: _selectedSession == null,
+            onSelected: (selected) {
+              if (selected) setState(() => _selectedSession = null);
+            },
+          ),
+          const SizedBox(width: 8),
+          ChoiceChip(
+            label: Text(
+              '미배정 (${allStudents.where((s) => s.session == null || s.session == 0).length})',
+            ),
+            selected: _selectedSession == 0,
+            onSelected: (selected) {
+              if (selected) setState(() => _selectedSession = 0);
+            },
+          ),
+          const SizedBox(width: 8),
+          ...List.generate(widget.academy.totalSessions, (i) => i + 1).map((s) {
+            final count = allStudents.where((st) => st.session == s).length;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text('$s부 ($count)'),
+                selected: _selectedSession == s,
+                onSelected: (selected) {
+                  if (selected) setState(() => _selectedSession = s);
+                },
+              ),
+            );
+          }),
+        ],
+      ),
+    );
   }
 
   List<DateTime> _getLessonDates() {
@@ -94,40 +139,48 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         children: [
           // 년/월 선택 영역
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+            child: Column(
               children: [
-                IconButton(
-                  onPressed: _prevMonth,
-                  icon: const Icon(Icons.chevron_left),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      onPressed: _prevMonth,
+                      icon: const Icon(Icons.chevron_left),
+                    ),
+                    Text(
+                      '$_currentYear년 $_currentMonth월',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _nextMonth,
+                      icon: const Icon(Icons.chevron_right),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: const Text(
+                        '출석(O) 결석(X) 지각(L)',
+                        style: TextStyle(fontSize: 11, color: Colors.blue),
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '$_currentYear년 $_currentMonth월',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                IconButton(
-                  onPressed: _nextMonth,
-                  icon: const Icon(Icons.chevron_right),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: const Text(
-                    '클릭: 출석 → 결석 → 지각 → 취소',
-                    style: TextStyle(fontSize: 12, color: Colors.blue),
-                  ),
+                Consumer<StudentProvider>(
+                  builder: (context, provider, _) =>
+                      _buildSessionFilter(provider.students),
                 ),
               ],
             ),
@@ -140,9 +193,26 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final students = studentProvider.students;
+                final students = _selectedSession == null
+                    ? studentProvider.students
+                    : _selectedSession == 0
+                    ? studentProvider.students
+                          .where((s) => s.session == null || s.session == 0)
+                          .toList()
+                    : studentProvider.students
+                          .where((s) => s.session == _selectedSession)
+                          .toList();
+
                 if (students.isEmpty) {
-                  return const Center(child: Text('등록된 학생이 없습니다.'));
+                  return const Center(child: Text('해당되는 학생이 없습니다.'));
+                }
+
+                // 빠른 조회를 위한 맵 생성 (key: "studentId_YYYY_MM_DD")
+                final attendanceMap = <String, AttendanceRecord>{};
+                for (var r in attendanceProvider.monthlyRecords) {
+                  final key =
+                      "${r.studentId}_${r.timestamp.year}_${r.timestamp.month}_${r.timestamp.day}";
+                  attendanceMap[key] = r;
                 }
 
                 return SingleChildScrollView(
@@ -150,41 +220,54 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      columnSpacing: 20,
+                      columnSpacing: 10,
+                      horizontalMargin: 12,
+                      headingRowHeight: 50,
+                      dataRowMinHeight: 45,
+                      dataRowMaxHeight: 45,
                       headingRowColor: WidgetStateProperty.all(
                         Colors.grey.shade100,
                       ),
                       border: TableBorder.all(
-                        color: Colors.grey.shade300,
+                        color: Colors.grey.shade200,
                         width: 0.5,
                       ),
                       columns: [
                         const DataColumn(
                           label: SizedBox(
-                            width: 80,
+                            width: 70,
                             child: Text(
                               '이름',
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ),
                         ...lessonDates.map(
                           (date) => DataColumn(
-                            label: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '${date.day}',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                Text(
-                                  _getWeekdayName(date.weekday),
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: _getDayColor(date.weekday),
+                            label: SizedBox(
+                              width: 25,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    '${date.day}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  Text(
+                                    _getWeekdayName(date.weekday),
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: _getDayColor(date.weekday),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -201,39 +284,24 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               ),
                             ),
                             ...lessonDates.map((date) {
-                              final record = attendanceProvider.monthlyRecords
-                                  .firstWhere(
-                                    (r) =>
-                                        r.studentId == student.id &&
-                                        r.timestamp.year == date.year &&
-                                        r.timestamp.month == date.month &&
-                                        r.timestamp.day == date.day,
-                                    orElse: () => AttendanceRecord(
-                                      id: '',
-                                      studentId: '',
-                                      academyId: '',
-                                      ownerId: '',
-                                      timestamp: date,
-                                      type: AttendanceType
-                                          .late, // Placeholder, will not be used
-                                    ),
-                                  );
+                              final key =
+                                  "${student.id}_${date.year}_${date.month}_${date.day}";
+                              final record = attendanceMap[key];
 
                               return DataCell(
                                 InkWell(
-                                  onTap: () {
-                                    attendanceProvider.toggleAttendance(
-                                      studentId: student.id,
-                                      academyId: widget.academy.id,
-                                      ownerId: ownerId,
-                                      date: date,
-                                    );
-                                  },
+                                  onTap: () =>
+                                      attendanceProvider.toggleAttendance(
+                                        studentId: student.id,
+                                        academyId: widget.academy.id,
+                                        ownerId: ownerId,
+                                        date: date,
+                                      ),
                                   child: Container(
-                                    width: double.infinity,
-                                    height: double.infinity,
                                     alignment: Alignment.center,
-                                    child: _getAttendanceIcon(record),
+                                    child: record != null
+                                        ? _getAttendanceIcon(record)
+                                        : const SizedBox(width: 25),
                                   ),
                                 ),
                               );
@@ -280,24 +348,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Widget _getAttendanceIcon(AttendanceRecord record) {
-    if (record.id.isEmpty) return const SizedBox.shrink();
-
     switch (record.type) {
       case AttendanceType.present:
-        return const Icon(Icons.circle_outlined, color: Colors.green, size: 20);
+        return const Icon(Icons.circle_outlined, color: Colors.green, size: 22);
       case AttendanceType.absent:
-        return const Icon(Icons.close, color: Colors.red, size: 20);
+        return const Icon(Icons.close, color: Colors.red, size: 22);
       case AttendanceType.late:
         return const Text(
           'L',
           style: TextStyle(
             color: Colors.orange,
             fontWeight: FontWeight.bold,
-            fontSize: 16,
+            fontSize: 18,
           ),
         );
       case AttendanceType.manual:
-        return const Icon(Icons.edit_note, color: Colors.grey, size: 20);
+        return const Icon(Icons.edit_note, color: Colors.grey, size: 22);
     }
   }
 }

@@ -85,6 +85,141 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               ),
             );
           }),
+          const SizedBox(width: 8),
+          ActionChip(
+            avatar: const Icon(Icons.bar_chart, size: 16, color: Colors.white),
+            label: const Text(
+              '통계',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            backgroundColor: Colors.deepPurple,
+            onPressed: () => _showStatisticsDialog(allStudents),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showStatisticsDialog(List<dynamic> students) {
+    // 현재 필터링된 학생 기준 통계 계산
+    final filteredStudents = _selectedSession == null
+        ? students
+        : _selectedSession == 0
+        ? students.where((s) => s.session == null || s.session == 0).toList()
+        : students.where((s) => s.session == _selectedSession).toList();
+
+    if (filteredStudents.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('통계를 낼 학생이 없습니다.')));
+      return;
+    }
+
+    final attendanceProvider = context.read<AttendanceProvider>();
+    final lessonDates = _getLessonDates();
+
+    int totalPresent = 0;
+    int totalAbsent = 0;
+    int totalValidLessons = 0; // 학생별 수업일수의 합
+
+    // 빠른 조회를 위한 로컬 맵 생성
+    final localMap = <String, AttendanceRecord>{};
+    for (var r in attendanceProvider.monthlyRecords) {
+      final key =
+          "${r.studentId}_${r.timestamp.year}_${r.timestamp.month}_${r.timestamp.day}";
+      localMap[key] = r;
+    }
+
+    for (var student in filteredStudents) {
+      for (var date in lessonDates) {
+        if (HolidayHelper.isHoliday(date)) continue;
+
+        final key = "${student.id}_${date.year}_${date.month}_${date.day}";
+        final record = localMap[key];
+
+        if (record?.type == AttendanceType.present) totalPresent++;
+        if (record?.type == AttendanceType.absent) totalAbsent++;
+
+        totalValidLessons++;
+      }
+    }
+
+    // 전체 출석률 (총 출석 수 / (총 학생 수 * 수업일수))
+    // *주의: 각 학생별로 수업일수가 같다고 가정 (휴일 제외)
+    // 정확히는 (총 출석 수 / 총 유효 수업 횟수)
+    double attendanceRate = totalValidLessons == 0
+        ? 0
+        : (totalPresent / totalValidLessons) * 100;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.bar_chart, color: Colors.deepPurple),
+            const SizedBox(width: 8),
+            Text('${_currentMonth}월 출석 통계'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildStatRow('대상 학생', '${filteredStudents.length}명'),
+            _buildStatRow(
+              '총 수업 횟수',
+              '${lessonDates.where((d) => !HolidayHelper.isHoliday(d)).length}회',
+            ),
+            const Divider(),
+            _buildStatRow('총 출석', '$totalPresent회', color: Colors.blue),
+            _buildStatRow('총 결석', '$totalAbsent회', color: Colors.red),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '평균 출석률',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  '${attendanceRate.toStringAsFixed(1)}%',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Colors.deepPurple,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('닫기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatRow(String label, String value, {Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.black54)),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: color ?? Colors.black87,
+            ),
+          ),
         ],
       ),
     );

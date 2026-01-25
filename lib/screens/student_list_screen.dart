@@ -664,14 +664,11 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
     final s = widget.student;
     List<String> parts = [];
 
-    // 학년-반 정보를 자막 영역으로 이동
     if (s.grade != null && s.classNumber != null) {
       parts.add('${s.grade}-${s.classNumber}');
     } else if (s.grade != null) {
       parts.add('${s.grade}학년');
     }
-
-    // 급수는 타이틀로 이동했으므로 여기서는 제외
 
     if (s.studentNumber != null && s.studentNumber!.isNotEmpty) {
       parts.add('${s.studentNumber}번');
@@ -682,303 +679,294 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
     return parts.join(' | ');
   }
 
-  // initState removed to prevent N+1 fetching (handled by bulk load in parent)
-
   @override
   Widget build(BuildContext context) {
     final progressProvider = context.watch<ProgressProvider>();
     final progressList = progressProvider.getProgressForStudent(
       widget.student.id,
     );
-    final activeProgress = progressList.isEmpty ? null : progressList.first;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: widget.isSelected ? Colors.blue.shade50 : null,
-      child: InkWell(
-        onTap: () {
-          if (widget.isSelectionMode) {
-            widget.onToggleSelection();
-          } else {
-            // 일반 모드: 정보 수정 화면으로 이동
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => AddStudentScreen(
-                  academy: widget.academy,
-                  student: widget.student,
-                ),
-              ),
-            );
-          }
-        },
-        onLongPress: () {
-          if (!widget.isSelectionMode) {
-            widget.onToggleSelection();
-          }
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  // 순번 표시 (선택 모드가 아닐 때만 혹은 항상?) -> 항상 표시하는 게 좋음
-                  if (!widget.isSelectionMode) ...[
-                    Container(
-                      width: 28,
-                      height: 28,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        '${widget.index}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey.shade700,
-                          fontSize: 12,
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          children: [
+            // 1. 아바타 및 이름 영역 (클릭 시 학생 정보 수정으로 이동)
+            Expanded(
+              flex: 3,
+              child: InkWell(
+                onTap: () {
+                  if (widget.isSelectionMode) {
+                    widget.onToggleSelection();
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AddStudentScreen(
+                          academy: widget.academy,
+                          student: widget.student,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  if (widget.isSelectionMode)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: Checkbox(
-                        value: widget.isSelected,
-                        onChanged: (_) => widget.onToggleSelection(),
+                    );
+                  }
+                },
+                onLongPress: () {
+                  if (!widget.isSelectionMode) {
+                    widget.onToggleSelection();
+                  }
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Row(
+                  children: [
+                    if (!widget.isSelectionMode) ...[
+                      Container(
+                        width: 28,
+                        height: 28,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${widget.index}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey.shade700,
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
-                    ),
-                  CircleAvatar(child: Text(widget.student.name[0])),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            if (widget.student.session != null &&
-                                widget.student.session != 0) ...[
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                margin: const EdgeInsets.only(right: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.shade50,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
-                                    color: Colors.orange.shade200,
+                      const SizedBox(width: 12),
+                    ],
+                    if (widget.isSelectionMode)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: Checkbox(
+                          value: widget.isSelected,
+                          onChanged: (_) => widget.onToggleSelection(),
+                        ),
+                      ),
+                    CircleAvatar(child: Text(widget.student.name[0])),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              if (widget.student.session != null &&
+                                  widget.student.session != 0)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: Colors.orange.shade200,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '${widget.student.session}부',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orange.shade900,
+                                    ),
+                                  ),
+                                )
+                              else
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: Colors.grey.shade300,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '미등록',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade700,
+                                    ),
                                   ),
                                 ),
-                                child: Text(
-                                  '${widget.student.session}부',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.orange.shade900,
-                                  ),
+                              Text(
+                                widget.student.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
                                 ),
                               ),
-                            ] else ...[
+                              const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
+                                  horizontal: 10,
+                                  vertical: 4,
                                 ),
-                                margin: const EdgeInsets.only(right: 6),
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(4),
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer
+                                      .withOpacity(0.7),
+                                  borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                    color: Colors.grey.shade300,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withOpacity(0.4),
+                                    width: 1.0,
                                   ),
                                 ),
                                 child: Text(
-                                  '미등록',
+                                  widget.student.levelDisplayName,
                                   style: TextStyle(
-                                    fontSize: 10,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade700,
                                   ),
                                 ),
                               ),
                             ],
-                            Text(
-                              widget.student.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                          ),
+                          Text(
+                            _buildStudentSubtitle(),
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 11,
                             ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.primaryContainer.withOpacity(0.7),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withOpacity(0.4),
-                                  width: 1.0,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // 2. 진도 목록 영역 (클릭 시 이동 안 함)
+            if (progressList.isNotEmpty)
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: progressList.map((progress) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${progress.textbookName} (${progress.volumeNumber}권)',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                              ),
-                              child: Text(
-                                widget.student.levelDisplayName,
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${progress.progressPercentage.toInt()}%',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                InkWell(
+                                  onTap: () =>
+                                      _confirmDeleteProgress(context, progress),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 14,
+                                    color: Colors.redAccent,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(
+                                value: progress.progressPercentage / 100,
+                                minHeight: 3,
+                                backgroundColor: Colors.grey[200],
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  progress.isCompleted
+                                      ? Colors.green
+                                      : Colors.blue,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                        Text(
-                          _buildStudentSubtitle(),
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
+                      );
+                    }).toList(),
                   ),
-                  if (progressList.isNotEmpty)
-                    Expanded(
-                      flex: 2,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: progressList.map((progress) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 6.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          '${progress.textbookName} (${progress.volumeNumber}권)',
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${progress.progressPercentage.toInt()}%',
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.blue,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      InkWell(
-                                        onTap: () => _confirmDeleteProgress(
-                                          context,
-                                          progress,
-                                        ),
-                                        child: const Icon(
-                                          Icons.close,
-                                          size: 14,
-                                          color: Colors.redAccent,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(2),
-                                    child: LinearProgressIndicator(
-                                      value: progress.progressPercentage / 100,
-                                      minHeight: 3,
-                                      backgroundColor: Colors.grey[200],
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        progress.isCompleted
-                                            ? Colors.green
-                                            : Colors.blue,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
-                  // 작업 버튼 영역 (기존 스타일 복구)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextButton.icon(
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: () =>
-                            _navigateToStudentHistory(context, widget.student),
-                        icon: const Icon(Icons.assignment_ind, size: 16),
-                        label: const Text('정보', style: TextStyle(fontSize: 11)),
-                      ),
-                      TextButton.icon(
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: () => _navigateToAssignTextbook(context),
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text(
-                          '교재 할당',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.redAccent,
-                          size: 18,
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        constraints: const BoxConstraints(),
-                        onPressed: () => _showDeleteConfirmation(context),
-                        tooltip: '학생 삭제',
-                      ),
-                    ],
-                  ),
-                  if (activeProgress != null)
-                    const Icon(
-                      Icons.chevron_right,
-                      color: Colors.grey,
-                      size: 14,
-                    ),
-                ],
+                ),
               ),
-            ],
-          ),
+            // 3. 작업 버튼 영역
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () =>
+                      _navigateToStudentHistory(context, widget.student),
+                  icon: const Icon(Icons.assignment_ind, size: 16),
+                  label: const Text('정보', style: TextStyle(fontSize: 11)),
+                ),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () => _navigateToAssignTextbook(context),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('교재 할당', style: TextStyle(fontSize: 11)),
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: Colors.redAccent,
+                    size: 18,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  constraints: const BoxConstraints(),
+                  onPressed: () => _showDeleteConfirmation(context),
+                  tooltip: '학생 삭제',
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

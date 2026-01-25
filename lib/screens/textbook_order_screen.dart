@@ -545,7 +545,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
               ),
               onPressed: _handleOrderComplete,
               child: const Text(
-                '주문 완료',
+                '교재 저장',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),

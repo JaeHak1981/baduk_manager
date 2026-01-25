@@ -224,15 +224,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      // 데이터가 변경될 때마다 테이블을 강제 리빌드하게 함
+                      // 데이터가 바뀌면 테이블을 새로 그리도록 함
                       key: ValueKey(
-                        'attendance_${_currentYear}_${_currentMonth}_${attendanceProvider.monthlyRecords.length}',
+                        'attendance_table_${_currentYear}_${_currentMonth}_${attendanceProvider.monthlyRecords.length}',
                       ),
-                      columnSpacing: 20, // 간격 넓힘
+                      columnSpacing: 15,
                       horizontalMargin: 12,
                       headingRowHeight: 65,
-                      dataRowMinHeight: 60, // 높이 조절
-                      dataRowMaxHeight: 60,
+                      dataRowMinHeight: 65,
+                      dataRowMaxHeight: 65,
                       headingRowColor: WidgetStateProperty.all(
                         Colors.grey.shade100,
                       ),
@@ -265,7 +265,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                           return DataColumn(
                             label: SizedBox(
-                              width: 85, // 너비 확장
+                              width: 80, // 너비 확장
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -364,30 +364,31 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               final record = attendanceMap[key];
 
                               return DataCell(
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    _buildStatusButton(
-                                      context,
-                                      attendanceProvider,
-                                      student.id,
-                                      ownerId,
-                                      date,
-                                      AttendanceType.present,
-                                      record?.type == AttendanceType.present,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _buildStatusButton(
-                                      context,
-                                      attendanceProvider,
-                                      student.id,
-                                      ownerId,
-                                      date,
-                                      AttendanceType.absent,
-                                      record?.type == AttendanceType.absent,
-                                    ),
-                                  ],
+                                Center(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _buildStatusButton(
+                                        context,
+                                        attendanceProvider,
+                                        student.id,
+                                        ownerId,
+                                        date,
+                                        AttendanceType.present,
+                                        record?.type == AttendanceType.present,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _buildStatusButton(
+                                        context,
+                                        attendanceProvider,
+                                        student.id,
+                                        ownerId,
+                                        date,
+                                        AttendanceType.absent,
+                                        record?.type == AttendanceType.absent,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               );
                             }),
@@ -431,11 +432,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
     switch (type) {
       case AttendanceType.present:
-        activeColor = Colors.blue; // 선명한 파란색
+        activeColor = Colors.blue.shade600; // 선명한 파란색
         label = "O";
         break;
       case AttendanceType.absent:
-        activeColor = Colors.red; // 선명한 빨간색
+        activeColor = Colors.red.shade600; // 선명한 빨간색
         label = "X";
         break;
       default:
@@ -445,9 +446,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque, // 터치 영역 안정성 강화
       onTap: () {
-        debugPrint(
-          'Tap detected: $studentId, type: $type, isSelected: $isSelected',
-        );
         provider.updateStatus(
           studentId: studentId,
           academyId: widget.academy.id,
@@ -456,36 +454,35 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           type: isSelected ? null : type,
         );
       },
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          width: 40, // 버튼 크기 조금 더 확대
-          height: 40,
-          decoration: BoxDecoration(
-            color: isSelected ? activeColor : Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isSelected ? activeColor : Colors.grey.shade400,
-              width: 2.0, // 테두리 조금 더 굵게
-            ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: activeColor.withOpacity(0.4),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
+      child: Container(
+        // key를 부여하여 상태 변경 시 반드시 다시 그리게 함
+        key: ValueKey('btn_${studentId}_${date.day}_${type.name}_$isSelected'),
+        width: 40, // 버튼 크기 조금 더 확대
+        height: 40,
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? activeColor : Colors.grey.shade400,
+            width: 2, // 테두리 조금 더 굵게
           ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.grey.shade700,
-                fontWeight: FontWeight.bold,
-                fontSize: 20, // 글자 크기 확대
-              ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: activeColor.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.grey.shade700,
+              fontWeight: FontWeight.bold,
+              fontSize: 18, // 글자 크기 확대
             ),
           ),
         ),

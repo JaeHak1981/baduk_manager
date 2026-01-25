@@ -292,6 +292,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             flex: 22,
             child: Text(
               '이름',
+              textAlign: TextAlign.center,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
@@ -299,6 +300,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             flex: 38,
             child: Text(
               '교재 선택',
+              textAlign: TextAlign.center,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
@@ -314,6 +316,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             flex: 28,
             child: Text(
               '전 교재',
+              textAlign: TextAlign.center,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
@@ -356,10 +359,11 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           Expanded(
             flex: 22,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
                   student.name,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
@@ -369,6 +373,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                   student.session != null && student.session != 0
                       ? '${student.session}부'
                       : '미지정',
+                  textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 10, color: Colors.grey),
                 ),
               ],
@@ -381,9 +386,16 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
               child: DropdownButton<TextbookModel?>(
                 isExpanded: true,
                 value: entry.textbook,
-                hint: const Text(
-                  '주문없음',
-                  style: TextStyle(color: Colors.black38, fontSize: 12),
+                alignment: Alignment.center,
+                hint: const Center(
+                  child: Text(
+                    '주문없음',
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 style: const TextStyle(
                   fontSize: 12,
@@ -393,15 +405,23 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                 items: [
                   const DropdownMenuItem<TextbookModel?>(
                     value: null,
-                    child: Text(
-                      '주문없음',
-                      style: TextStyle(color: Colors.black26),
+                    child: Center(
+                      child: Text(
+                        '주문없음',
+                        style: TextStyle(color: Colors.black54),
+                      ),
                     ),
                   ),
                   ...textbooks.map(
                     (t) => DropdownMenuItem<TextbookModel?>(
                       value: t,
-                      child: Text(t.name, overflow: TextOverflow.ellipsis),
+                      child: Center(
+                        child: Text(
+                          t.name,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -421,6 +441,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
               child: DropdownButton<int>(
                 isExpanded: true,
                 value: entry.volume,
+                alignment: Alignment.center,
                 style: const TextStyle(
                   fontSize: 13,
                   color: Colors.orange,
@@ -452,17 +473,17 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             flex: 28,
             child: Text(
               currentStatus,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 11,
                 color: currentStatus == '없음'
-                    ? Colors.red.shade300
-                    : Colors.black45,
+                    ? Colors.red.shade400
+                    : Colors.black54,
                 fontWeight: currentStatus == '없음'
-                    ? FontWeight.normal
+                    ? FontWeight.bold
                     : FontWeight.w500,
               ),
               overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.end,
             ),
           ),
         ],

@@ -280,41 +280,70 @@ class _StudentListScreenState extends State<StudentListScreen> {
     return Container(
       height: 60,
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
         children: [
-          ChoiceChip(
-            label: Text('전체 (${allStudents.length}명)'),
-            selected: _selectedFilterSession == null,
-            onSelected: (selected) {
-              if (selected) setState(() => _selectedFilterSession = null);
-            },
-          ),
-          const SizedBox(width: 8),
-          ChoiceChip(
-            label: Text(
-              '미등록 (${allStudents.where((s) => s.session == null || s.session == 0).length}명)',
+          Expanded(
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                ChoiceChip(
+                  label: Text('전체 (${allStudents.length}명)'),
+                  selected: _selectedFilterSession == null,
+                  onSelected: (selected) {
+                    if (selected) setState(() => _selectedFilterSession = null);
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text(
+                    '미등록 (${allStudents.where((s) => s.session == null || s.session == 0).length}명)',
+                  ),
+                  selected: _selectedFilterSession == 0,
+                  onSelected: (selected) {
+                    if (selected) setState(() => _selectedFilterSession = 0);
+                  },
+                ),
+                const SizedBox(width: 8),
+                ...List.generate(
+                  widget.academy.totalSessions,
+                  (i) => i + 1,
+                ).map((s) {
+                  final count = allStudents
+                      .where((st) => st.session == s)
+                      .length;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text('$s부 ($count명)'),
+                      selected: _selectedFilterSession == s,
+                      onSelected: (selected) {
+                        if (selected)
+                          setState(() => _selectedFilterSession = s);
+                      },
+                    ),
+                  );
+                }),
+              ],
             ),
-            selected: _selectedFilterSession == 0,
-            onSelected: (selected) {
-              if (selected) setState(() => _selectedFilterSession = 0);
-            },
           ),
-          const SizedBox(width: 8),
-          ...List.generate(widget.academy.totalSessions, (i) => i + 1).map((s) {
-            final count = allStudents.where((st) => st.session == s).length;
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text('$s부 ($count명)'),
-                selected: _selectedFilterSession == s,
-                onSelected: (selected) {
-                  if (selected) setState(() => _selectedFilterSession = s);
-                },
+          const VerticalDivider(width: 1, indent: 10, endIndent: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: OutlinedButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('출석부 기능은 준비 중입니다')),
+                );
+              },
+              icon: const Icon(Icons.assignment_turned_in_outlined, size: 18),
+              label: const Text('출석부 명단', style: TextStyle(fontSize: 13)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                side: BorderSide(color: Theme.of(context).primaryColor),
               ),
-            );
-          }),
+            ),
+          ),
         ],
       ),
     );

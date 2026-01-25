@@ -21,7 +21,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   DateTime _selectedDate = DateTime.now();
   late int _currentYear;
   late int _currentMonth;
-  int? _selectedSession; // 선택된 부 (null: 전체, 0: 미배정)
+  int? _selectedSession;
+  int _localStateCounter = 0; // 로컬 UI 강제 갱신용
 
   @override
   void initState() {
@@ -225,14 +226,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      // 데이터가 바뀌면 테이블을 강제 리빌드함
                       key: ValueKey(
-                        'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}',
+                        'at_table_${_localStateCounter}_${attendanceProvider.stateCounter}',
                       ),
-                      columnSpacing: 15,
+                      columnSpacing: 18,
                       horizontalMargin: 12,
-                      headingRowHeight: 80, // 공휴일명 표시를 위해 더 높임
-                      dataRowMinHeight: 75, // 버튼 클릭 영역 확보를 위해 높임
+                      headingRowHeight: 80,
+                      dataRowMinHeight: 75,
                       dataRowMaxHeight: 75,
                       headingRowColor: WidgetStateProperty.all(
                         Colors.grey.shade100,
@@ -451,6 +451,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       behavior: HitTestBehavior.opaque, // 터치 영역 안정성 강화
       onTap: () {
         HapticFeedback.lightImpact(); // 짧은 진동 추가
+
+        setState(() {
+          _localStateCounter++;
+        });
 
         provider.updateStatus(
           studentId: studentId,

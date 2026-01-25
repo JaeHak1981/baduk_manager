@@ -227,24 +227,29 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       key: ValueKey(
-                        'at_table_${_localStateCounter}_${attendanceProvider.stateCounter}',
+                        'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}',
                       ),
-                      columnSpacing: 18,
-                      horizontalMargin: 12,
-                      headingRowHeight: 80,
-                      dataRowMinHeight: 75,
-                      dataRowMaxHeight: 75,
+                      columnSpacing: 12, // 간격 대폭 축소
+                      horizontalMargin: 8,
+                      headingRowHeight: 50, // 헤더 높이 축소
+                      dataRowMinHeight: 45, // 데이터 행 높이 축소
+                      dataRowMaxHeight: 45,
                       headingRowColor: WidgetStateProperty.all(
-                        Colors.grey.shade100,
+                        Colors.grey.shade50,
                       ),
-                      border: TableBorder.all(
-                        color: Colors.grey.shade500,
-                        width: 1.2,
+                      // 테두리 스타일 변경: 수직선 제거, 깔끔한 수평선 위주
+                      border: const TableBorder(
+                        horizontalInside: BorderSide(
+                          color: Colors.black12,
+                          width: 0.5,
+                        ),
+                        bottom: BorderSide(color: Colors.black12, width: 0.5),
                       ),
                       columns: [
+                        // 1. 이름 (항상 고정)
                         const DataColumn(
                           label: SizedBox(
-                            width: 65,
+                            width: 50,
                             child: Text(
                               '이름',
                               style: TextStyle(
@@ -254,6 +259,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             ),
                           ),
                         ),
+                        // 2. 출석률 (앞으로 이동)
+                        const DataColumn(
+                          label: SizedBox(
+                            width: 40,
+                            child: Text(
+                              '율(%)',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: Colors.blueAccent,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                        // 3. 날짜별 컬럼
                         ...lessonDates.map((date) {
                           final holidayName = HolidayHelper.getHolidayName(
                             date,
@@ -262,18 +283,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           final isSunday = date.weekday == 7;
                           final textPrimaryColor = (isHoliday || isSunday)
                               ? Colors.red
-                              : Colors.black;
+                              : Colors.black87;
 
                           return DataColumn(
                             label: SizedBox(
-                              width: 85, // 너비 확장
+                              width: 60, // 버튼 두 개가 들어갈 최소 너비
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
                                     '${date.day}',
                                     style: TextStyle(
-                                      fontSize: 14, // 가독성 위해 키움
+                                      fontSize: 13,
                                       fontWeight: FontWeight.bold,
                                       color: textPrimaryColor,
                                     ),
@@ -282,46 +303,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                     _getWeekdayName(date.weekday),
                                     style: TextStyle(
                                       fontSize: 10,
-                                      color: textPrimaryColor,
+                                      color: textPrimaryColor.withOpacity(0.7),
                                     ),
                                   ),
-                                  if (isHoliday)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 2),
-                                      child: Text(
-                                        holidayName,
-                                        style: const TextStyle(
-                                          fontSize: 9,
-                                          color: Colors.red,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
                                 ],
                               ),
                             ),
                           );
                         }),
-                        const DataColumn(
-                          label: SizedBox(
-                            width: 50,
-                            child: Text(
-                              '출석/계',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: Colors.blueAccent,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
                       ],
                       rows: students.map((student) {
                         int presentCount = 0;
                         int validLessonCount = 0;
 
+                        // 통계 계산
                         for (var date in lessonDates) {
                           final isHoliday = HolidayHelper.isHoliday(date);
                           if (!isHoliday) {
@@ -335,17 +330,46 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           }
                         }
 
+                        // 출석률 계산
+                        int rate = validLessonCount == 0
+                            ? 0
+                            : ((presentCount / validLessonCount) * 100).round();
+                        Color rateColor = rate >= 80
+                            ? Colors.blue
+                            : (rate >= 50 ? Colors.orange : Colors.red);
+
                         return DataRow(
                           cells: [
+                            // 1. 이름
                             DataCell(
-                              Text(
-                                student.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
+                              SizedBox(
+                                width: 50,
+                                child: Text(
+                                  student.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ),
+                            // 2. 출석률
+                            DataCell(
+                              Container(
+                                width: 40,
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '$rate%',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: rateColor,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // 3. 날짜별 버튼
                             ...lessonDates.map((date) {
                               final isHoliday = HolidayHelper.isHoliday(date);
 
@@ -354,10 +378,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   Center(
                                     child: Text(
                                       '-',
-                                      style: TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 18,
-                                      ),
+                                      style: TextStyle(color: Colors.black26),
                                     ),
                                   ),
                                 );
@@ -372,7 +393,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      _buildStatusButton(
+                                      _buildCompactButton(
                                         context,
                                         attendanceProvider,
                                         student.id,
@@ -381,8 +402,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                         AttendanceType.present,
                                         record?.type == AttendanceType.present,
                                       ),
-                                      const SizedBox(width: 8),
-                                      _buildStatusButton(
+                                      const SizedBox(width: 4), // 간격 축소
+                                      _buildCompactButton(
                                         context,
                                         attendanceProvider,
                                         student.id,
@@ -396,18 +417,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                 ),
                               );
                             }),
-                            DataCell(
-                              Center(
-                                child: Text(
-                                  '$presentCount/$validLessonCount',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                              ),
-                            ),
                           ],
                         );
                       }).toList(),
@@ -422,7 +431,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
-  Widget _buildStatusButton(
+  // 컴팩트하고 예쁜 버튼 빌더
+  Widget _buildCompactButton(
     BuildContext context,
     AttendanceProvider provider,
     String studentId,
@@ -432,15 +442,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     bool isSelected,
   ) {
     Color activeColor;
+    Color borderColor;
     String label = "";
 
     switch (type) {
       case AttendanceType.present:
-        activeColor = Colors.blue.shade600; // 선명한 파란색
+        activeColor = const Color(0xFF3B82F6); // Modern Blue
+        borderColor = const Color(0xFF2563EB);
         label = "O";
         break;
       case AttendanceType.absent:
-        activeColor = Colors.red.shade600; // 선명한 빨간색
+        activeColor = const Color(0xFFEF4444); // Modern Red
+        borderColor = const Color(0xFFDC2626);
         label = "X";
         break;
       default:
@@ -448,9 +461,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
 
     return GestureDetector(
-      behavior: HitTestBehavior.opaque, // 터치 영역 안정성 강화
+      behavior: HitTestBehavior.opaque,
       onTap: () {
-        HapticFeedback.mediumImpact(); // 확실한 진동
+        HapticFeedback.lightImpact(); // 가벼운 햅틱
 
         setState(() {
           _localStateCounter++;
@@ -463,47 +476,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           date: date,
           type: isSelected ? null : type,
         );
-
-        // 하단 안내 메시지
-        ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isSelected
-                  ? '기록이 취소되었습니다.'
-                  : '${label == "O" ? "출석" : "결석"} 처리가 완료되었습니다.',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            duration: const Duration(milliseconds: 600),
-            backgroundColor: isSelected
-                ? Colors.grey.shade800
-                : (label == "O" ? Colors.blue : Colors.red),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            width: 250,
-          ),
-        );
       },
-      child: Container(
-        // key를 부여하여 상태 변경 시 반드시 다시 그리게 함
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
         key: ValueKey('b_${studentId}_${date.day}_${type.name}_$isSelected'),
-        width: 44, // 더 크게 만듬
-        height: 44,
+        width: 28, // 확 줄임 (컴팩트)
+        height: 28,
         decoration: BoxDecoration(
           color: isSelected ? activeColor : Colors.white,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(6), // 약간 둥글게
           border: Border.all(
-            color: isSelected ? activeColor : Colors.grey.shade400,
-            width: 2.5, // 테두리 강조
+            color: isSelected ? borderColor : Colors.grey.shade300,
+            width: isSelected ? 0 : 1.0,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: activeColor.withOpacity(0.5),
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
+                    color: activeColor.withOpacity(0.3),
+                    blurRadius: 3,
+                    offset: const Offset(0, 2),
                   ),
                 ]
               : null,
@@ -512,9 +503,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           child: Text(
             label,
             style: TextStyle(
-              color: isSelected ? Colors.white : Colors.grey.shade700,
-              fontWeight: FontWeight.w900,
-              fontSize: 22, // 텍스트를 크게
+              color: isSelected ? Colors.white : Colors.grey.shade400,
+              fontWeight: FontWeight.w900, // 굵게
+              fontSize: 14, // 적당한 크기
             ),
           ),
         ),

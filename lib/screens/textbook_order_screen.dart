@@ -374,7 +374,11 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                       ? '${student.session}부'
                       : '미지정',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
@@ -408,7 +412,10 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                     child: Center(
                       child: Text(
                         '주문없음',
-                        style: TextStyle(color: Colors.black54),
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -477,11 +484,11 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
               style: TextStyle(
                 fontSize: 11,
                 color: currentStatus == '없음'
-                    ? Colors.red.shade400
-                    : Colors.black54,
+                    ? Colors.red.shade700
+                    : Colors.black87,
                 fontWeight: currentStatus == '없음'
                     ? FontWeight.bold
-                    : FontWeight.w500,
+                    : FontWeight.bold,
               ),
               overflow: TextOverflow.ellipsis,
             ),

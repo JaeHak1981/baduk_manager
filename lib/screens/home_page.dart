@@ -8,6 +8,7 @@ import '../models/academy_model.dart';
 import 'academy_management_screen.dart';
 import 'student_list_screen.dart';
 import 'textbook_center_screen.dart';
+import 'attendance_screen.dart';
 import '../providers/progress_provider.dart';
 
 /// 홈 화면
@@ -516,7 +517,27 @@ class _AcademySummaryCard extends StatelessWidget {
           ],
         ),
         subtitle: Text(academy.type.displayName),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(
+                Icons.assignment_turned_in_outlined,
+                color: Colors.blue,
+              ),
+              tooltip: '출석부 바로가기',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AttendanceScreen(academy: academy),
+                  ),
+                );
+              },
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+          ],
+        ),
         onTap: () {
           Navigator.push(
             context,

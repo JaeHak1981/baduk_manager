@@ -441,6 +441,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       key: ValueKey(
                         'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}_${_selectedStudentIds.length}_$_isSelectionMode',
                       ),
+                      showCheckboxColumn: false, // 수동으로 만든 체크박스와 겹치지 않게 비활성화
                       columnSpacing: 12, // 간격 대폭 축소
                       horizontalMargin: 8,
                       headingRowHeight: 50, // 헤더 높이 축소

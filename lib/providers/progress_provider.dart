@@ -112,7 +112,35 @@ class ProgressProvider with ChangeNotifier {
     }
   }
 
-  /// 학생별 진도 목록 로드
+  /// 기관의 모든 학생 진도 로드 (Bulk Load)
+  Future<void> loadAcademyProgress(String academyId) async {
+    // 이미 로딩 중이면 스킵? 아니면 강제 리로드? -> 강제 리로드 필요
+    // _isLoading = true; // 부분 로딩 시 UI 깜빡임 방지 위해 true로 설정 안 할 수도 있음
+    // notifyListeners();
+
+    try {
+      final allProgress = await _progressService.getAcademyProgress(academyId);
+
+      // Map 초기화
+      final Map<String, List<StudentProgressModel>> newMap = {};
+
+      for (var p in allProgress) {
+        if (!newMap.containsKey(p.studentId)) {
+          newMap[p.studentId] = [];
+        }
+        newMap[p.studentId]!.add(p);
+      }
+
+      _studentProgressMap = newMap;
+    } catch (e) {
+      print('진도 데이터 로드 실패: $e');
+      // _errorMessage = ... (Global error triggers snackbar usually)
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// 학생별 진도 목록 로드 (개별 리프레시용)
   Future<void> loadStudentProgress(String studentId, {String? ownerId}) async {
     try {
       final progressList = await _progressService.getStudentProgress(

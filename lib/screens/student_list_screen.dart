@@ -40,6 +40,8 @@ class _StudentListScreenState extends State<StudentListScreen> {
       widget.academy.id,
       ownerId: widget.academy.ownerId,
     );
+    // [Bulk Load] 전체 진도 한 번에 로드
+    context.read<ProgressProvider>().loadAcademyProgress(widget.academy.id);
   }
 
   void _toggleSelectionMode() {
@@ -691,18 +693,7 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
     return parts.join(' | ');
   }
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        context.read<ProgressProvider>().loadStudentProgress(
-          widget.student.id,
-          ownerId: widget.academy.ownerId,
-        );
-      }
-    });
-  }
+  // initState removed to prevent N+1 fetching (handled by bulk load in parent)
 
   @override
   Widget build(BuildContext context) {

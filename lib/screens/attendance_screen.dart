@@ -126,6 +126,155 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     });
   }
 
+  // 선택된 학생 ID 목록
+  final Set<String> _selectedStudentIds = {};
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedStudentIds.contains(id)) {
+        _selectedStudentIds.remove(id);
+      } else {
+        _selectedStudentIds.add(id);
+      }
+    });
+  }
+
+  void _toggleSelectAll(List<dynamic> students) {
+    setState(() {
+      if (_selectedStudentIds.length == students.length) {
+        _selectedStudentIds.clear();
+      } else {
+        _selectedStudentIds.addAll(students.map((s) => s.id));
+      }
+    });
+  }
+
+  Future<void> _moveSelectedStudents(
+    BuildContext context,
+    String currentOwnerId,
+  ) async {
+    if (_selectedStudentIds.isEmpty) return;
+
+    int? targetSession;
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${_selectedStudentIds.length}명 부 이동'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('이동할 부를 선택하세요.'),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('미배정'),
+                  selected: targetSession == 0,
+                  onSelected: (s) {
+                    Navigator.pop(context, 0);
+                  },
+                ),
+                ...List.generate(
+                  widget.academy.totalSessions,
+                  (i) => i + 1,
+                ).map((s) {
+                  return ChoiceChip(
+                    label: Text('$s부'),
+                    selected: targetSession == s,
+                    onSelected: (_) {
+                      Navigator.pop(context, s);
+                    },
+                  );
+                }),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+        ],
+      ),
+    ).then((value) {
+      if (value != null) targetSession = value;
+    });
+
+    if (targetSession == null) return;
+
+    if (!context.mounted) return;
+
+    final provider = context.read<StudentProvider>();
+    final success = await provider.moveStudents(
+      _selectedStudentIds.toList(),
+      targetSession!,
+      academyId: widget.academy.id,
+      ownerId: currentOwnerId,
+    );
+
+    if (success && context.mounted) {
+      setState(() {
+        _selectedStudentIds.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '학생들이 ${targetSession == 0 ? "미배정" : "$targetSession부"}로 이동되었습니다.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteSelectedStudents(
+    BuildContext context,
+    String currentOwnerId,
+  ) async {
+    if (_selectedStudentIds.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('학생 삭제'),
+        content: Text(
+          '선택한 ${_selectedStudentIds.length}명의 학생을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+    if (!context.mounted) return;
+
+    final provider = context.read<StudentProvider>();
+    final success = await provider.deleteStudents(
+      _selectedStudentIds.toList(),
+      academyId: widget.academy.id,
+      ownerId: currentOwnerId,
+    );
+
+    if (success && context.mounted) {
+      setState(() {
+        _selectedStudentIds.clear();
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('선택한 학생이 삭제되었습니다.')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final lessonDates = _getLessonDates();
@@ -227,7 +376,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       key: ValueKey(
-                        'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}',
+                        'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}_${_selectedStudentIds.length}',
                       ),
                       columnSpacing: 12, // 간격 대폭 축소
                       horizontalMargin: 8,
@@ -246,6 +395,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         bottom: BorderSide(color: Colors.black12, width: 0.5),
                       ),
                       columns: [
+                        // 0. 체크박스 (전체 선택)
+                        DataColumn(
+                          label: SizedBox(
+                            width: 30,
+                            child: Checkbox(
+                              value:
+                                  students.isNotEmpty &&
+                                  _selectedStudentIds.length == students.length,
+                              onChanged: (v) => _toggleSelectAll(students),
+                            ),
+                          ),
+                        ),
                         // 1. 이름 (항상 고정)
                         const DataColumn(
                           label: SizedBox(
@@ -331,15 +492,32 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         }
 
                         // 출석률 계산
-                        int rate = validLessonCount == 0
-                            ? 0
-                            : ((presentCount / validLessonCount) * 100).round();
-                        Color rateColor = rate >= 80
+                        // int rate = validLessonCount == 0 ? 0 : ((presentCount / validLessonCount) * 100).round();
+                        Color rateColor =
+                            (validLessonCount > 0 &&
+                                (presentCount / validLessonCount) >= 0.8)
                             ? Colors.blue
-                            : (rate >= 50 ? Colors.orange : Colors.red);
+                            : (presentCount > 0 ? Colors.orange : Colors.red);
 
                         return DataRow(
+                          selected: _selectedStudentIds.contains(student.id),
+                          onSelectChanged: (val) {
+                            _toggleSelection(student.id);
+                          },
                           cells: [
+                            // 0. 체크박스
+                            DataCell(
+                              SizedBox(
+                                width: 30,
+                                child: Checkbox(
+                                  value: _selectedStudentIds.contains(
+                                    student.id,
+                                  ),
+                                  onChanged: (val) =>
+                                      _toggleSelection(student.id),
+                                ),
+                              ),
+                            ),
                             // 1. 이름
                             DataCell(
                               SizedBox(
@@ -426,6 +604,58 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               },
             ),
           ),
+
+          // 하단 일괄 작업 바 (선택 시 표시)
+          if (_selectedStudentIds.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 4,
+                    offset: Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                child: Row(
+                  children: [
+                    Text(
+                      '${_selectedStudentIds.length}명 선택됨',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const Spacer(),
+                    ElevatedButton.icon(
+                      onPressed: () => _moveSelectedStudents(context, ownerId),
+                      icon: const Icon(Icons.swap_horiz, size: 18),
+                      label: const Text('부 이동'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade50,
+                        foregroundColor: Colors.blue,
+                        elevation: 0,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () =>
+                          _deleteSelectedStudents(context, ownerId),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('삭제'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade50,
+                        foregroundColor: Colors.red,
+                        elevation: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );

@@ -126,6 +126,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         academy: widget.academy,
         currentYear: _currentYear,
         currentMonth: _currentMonth,
+        isSessionFiltered: _selectedSession != null,
       ),
     );
   }

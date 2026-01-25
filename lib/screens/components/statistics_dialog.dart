@@ -10,6 +10,7 @@ class StatisticsDialog extends StatefulWidget {
   final AcademyModel academy;
   final int currentYear;
   final int currentMonth;
+  final bool isSessionFiltered;
 
   const StatisticsDialog({
     super.key,
@@ -17,6 +18,7 @@ class StatisticsDialog extends StatefulWidget {
     required this.academy,
     required this.currentYear,
     required this.currentMonth,
+    this.isSessionFiltered = false,
   });
 
   @override
@@ -37,6 +39,7 @@ class _StatisticsDialogState extends State<StatisticsDialog> {
   int _totalAbsent = 0;
   double _attendanceRate = 0.0;
   int _totalLessonDays = 0; // 기간 내 총 수업일 수
+  int _targetStudentCount = 0; // 계산된 대상 학생 수
 
   @override
   void initState() {
@@ -56,11 +59,11 @@ class _StatisticsDialogState extends State<StatisticsDialog> {
       DateTime start, end;
 
       if (_selectedPeriod == 0) {
-        // 1개월: 현재 화면의 연/월
+        // 1개월
         start = DateTime(widget.currentYear, widget.currentMonth);
         end = DateTime(widget.currentYear, widget.currentMonth);
       } else if (_selectedPeriod == 1) {
-        // 3개월: (현재 - 2개월) ~ 현재
+        // 3개월
         final now = DateTime(widget.currentYear, widget.currentMonth);
         start = DateTime(now.year, now.month - 2);
         end = now;
@@ -97,48 +100,56 @@ class _StatisticsDialogState extends State<StatisticsDialog> {
     int lessonDaysCount = 0;
 
     // 기간 내 수업일(Date) 계산 (휴일 제외)
-    // start부터 end의 마지막 날까지 루프
     DateTime loopStart = DateTime(start.year, start.month, 1);
-    DateTime loopEnd = DateTime(end.year, end.month + 1, 0); // 해당 월의 마지막 날
-
-    List<DateTime> validDates = [];
+    DateTime loopEnd = DateTime(end.year, end.month + 1, 0);
 
     for (int i = 0; i <= loopEnd.difference(loopStart).inDays; i++) {
       DateTime d = loopStart.add(Duration(days: i));
       if (widget.academy.lessonDays.contains(d.weekday) &&
           !HolidayHelper.isHoliday(d)) {
-        validDates.add(d);
         lessonDaysCount++;
       }
     }
 
-    // 빠른 조회를 위한 맵
-    final recordMap = <String, AttendanceRecord>{};
+    // 대상 학생 ID 집합 (현재 활성 학생 + 기록이 있는 학생)
+    final Set<String> targetStudentIds = {};
+
+    // 1. 현재 리스트에 있는 학생들은 기본적으로 포함
+    final activeStudentIds = widget.students.map((s) => s.id as String).toSet();
+    targetStudentIds.addAll(activeStudentIds);
+
+    // 2. 기록 집계
     for (var r in records) {
-      final key =
-          "${r.studentId}_${r.timestamp.year}_${r.timestamp.month}_${r.timestamp.day}";
-      recordMap[key] = r;
-    }
+      // 전체 보기(Total)일 때는 모든 기록 포함 (삭제된 학생 포함)
+      // 세션 필터링 중일 때는 해당 세션 학생(active)의 기록만 포함
+      bool shouldInclude = false;
 
-    for (var student in widget.students) {
-      for (var date in validDates) {
-        final key = "${student.id}_${date.year}_${date.month}_${date.day}";
-        final record = recordMap[key];
+      if (!widget.isSessionFiltered) {
+        shouldInclude = true;
+      } else {
+        if (activeStudentIds.contains(r.studentId)) {
+          shouldInclude = true;
+        }
+      }
 
-        if (record?.type == AttendanceType.present) present++;
-        if (record?.type == AttendanceType.absent) absent++;
+      if (shouldInclude) {
+        if (r.type == AttendanceType.present) present++;
+        if (r.type == AttendanceType.absent) absent++;
 
-        validLessons++;
+        targetStudentIds.add(r.studentId);
+        validLessons++; // 기록이 있다는 건 유효한 수업이었다고 가정
       }
     }
 
     setState(() {
       _totalPresent = present;
       _totalAbsent = absent;
+      _targetStudentCount = targetStudentIds.length;
       _totalLessonDays = lessonDaysCount;
+
+      // 출석률: (총 출석 / 총 기록 수)
       _attendanceRate = validLessons == 0 ? 0 : (present / validLessons) * 100;
 
-      // 날짜 업데이트 (제목 표시용)
       if (_selectedPeriod != 2) {
         _startDate = start;
         _endDate = end;
@@ -155,7 +166,7 @@ class _StatisticsDialogState extends State<StatisticsDialog> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
       helpText: isStart ? '시작 월 선택' : '종료 월 선택',
-      initialDatePickerMode: DatePickerMode.year, // 연도부터 선택하게 하여 월 선택 유도
+      initialDatePickerMode: DatePickerMode.year,
     );
 
     if (picked != null) {
@@ -261,7 +272,7 @@ class _StatisticsDialogState extends State<StatisticsDialog> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _buildStatRow('대상 학생', '${widget.students.length}명'),
+                  _buildStatRow('대상 학생', '$_targetStudentCount명'),
                   _buildStatRow('기간 내 총 수업일', '${_totalLessonDays}회'),
                   const Divider(),
                   _buildStatRow('총 출석', '$_totalPresent회', color: Colors.blue),

@@ -456,7 +456,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                 alignment: Alignment.center,
                 style: const TextStyle(
                   fontSize: 14,
-                  color: Colors.orange,
+                  color: Colors.black,
                   fontWeight: FontWeight.bold,
                 ),
                 items: (entry.textbook != null)

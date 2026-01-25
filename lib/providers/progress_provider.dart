@@ -222,11 +222,12 @@ class ProgressProvider with ChangeNotifier {
   Future<bool> updateVolumeStatus(
     String progressId,
     String studentId,
-    bool isCompleted,
-  ) async {
+    bool isCompleted, {
+    String? ownerId,
+  }) async {
     try {
       await _progressService.updateStatus(progressId, isCompleted);
-      await loadStudentProgress(studentId);
+      await loadStudentProgress(studentId, ownerId: ownerId);
       return true;
     } catch (e) {
       _errorMessage = '진도 업데이트 실패: $e';
@@ -237,10 +238,14 @@ class ProgressProvider with ChangeNotifier {
   }
 
   /// 진도 기록 삭제
-  Future<bool> removeProgress(String progressId, String studentId) async {
+  Future<bool> removeProgress(
+    String progressId,
+    String studentId, {
+    String? ownerId,
+  }) async {
     try {
       await _progressService.deleteProgress(progressId);
-      await loadStudentProgress(studentId);
+      await loadStudentProgress(studentId, ownerId: ownerId);
       return true;
     } catch (e) {
       _errorMessage = '기록 삭제 실패: $e';
@@ -254,11 +259,12 @@ class ProgressProvider with ChangeNotifier {
   Future<bool> updateVolume(
     String progressId,
     String studentId,
-    int newVolume,
-  ) async {
+    int newVolume, {
+    String? ownerId,
+  }) async {
     try {
       await _progressService.updateVolume(progressId, newVolume);
-      await loadStudentProgress(studentId);
+      await loadStudentProgress(studentId, ownerId: ownerId);
       return true;
     } catch (e) {
       _errorMessage = '권수 수정 실패: $e';

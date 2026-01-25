@@ -323,7 +323,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
       child: Row(
         children: const [
           Expanded(
-            flex: 20,
+            flex: 18,
             child: Text(
               '이름',
               textAlign: TextAlign.center,
@@ -331,7 +331,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             ),
           ),
           Expanded(
-            flex: 52,
+            flex: 48,
             child: Text(
               '교재 선택 (클릭)',
               textAlign: TextAlign.center,
@@ -339,7 +339,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             ),
           ),
           Expanded(
-            flex: 12,
+            flex: 8,
             child: Text(
               '권',
               textAlign: TextAlign.center,
@@ -347,9 +347,9 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             ),
           ),
           Expanded(
-            flex: 16,
+            flex: 26,
             child: Text(
-              '기존',
+              '기존 교재',
               textAlign: TextAlign.center,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
@@ -391,7 +391,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
         children: [
           // 1. 이름 및 부 (고정)
           Expanded(
-            flex: 20,
+            flex: 18,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -419,7 +419,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           ),
           // 2. 교재 선택 버튼들 (가로 스크롤)
           Expanded(
-            flex: 52,
+            flex: 48,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -448,7 +448,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           ),
           // 3. 권호 선택
           Expanded(
-            flex: 12,
+            flex: 8,
             child: DropdownButtonHideUnderline(
               child: DropdownButton<int>(
                 isExpanded: true,
@@ -482,7 +482,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           ),
           // 4. 기존 상태
           Expanded(
-            flex: 16,
+            flex: 26,
             child: Text(
               currentStatus,
               textAlign: TextAlign.center,

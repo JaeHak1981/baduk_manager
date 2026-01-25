@@ -1120,11 +1120,12 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
       final success = await context.read<ProgressProvider>().removeProgress(
         progress.id,
         widget.student.id,
+        ownerId: widget.academy.ownerId,
       );
       if (mounted && success) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('교재 할달이 삭제되었습니다.')));
+        ).showSnackBar(const SnackBar(content: Text('교재 할당이 삭제되었습니다.')));
       }
     }
   }
@@ -1189,6 +1190,7 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
         progress.id,
         widget.student.id,
         newVolume,
+        ownerId: widget.academy.ownerId,
       );
       if (mounted && success) {
         ScaffoldMessenger.of(

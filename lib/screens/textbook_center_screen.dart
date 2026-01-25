@@ -39,13 +39,6 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
       appBar: AppBar(
         title: const Text('교재 관리 센터'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: '새 교재 등록',
-            onPressed: () => _navigateToRegister(context),
-          ),
-        ],
       ),
       body: Consumer<ProgressProvider>(
         builder: (context, provider, child) {

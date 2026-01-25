@@ -208,30 +208,7 @@ class _HomePageState extends State<HomePage> {
                                         .titleLarge
                                         ?.copyWith(fontWeight: FontWeight.bold),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.library_add,
-                                      size: 20,
-                                    ),
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              TextbookCenterScreen(
-                                                academy: AcademyModel(
-                                                  id: 'global',
-                                                  name: '내 교재 관리',
-                                                  type: AcademyType.academy,
-                                                  ownerId: user.uid,
-                                                  createdAt: DateTime.now(),
-                                                ),
-                                              ),
-                                        ),
-                                      ).then((_) => _loadInitialData());
-                                    },
-                                    tooltip: '교재 관리',
-                                  ),
+                                  // 기존 상단 아이콘 버튼 제거
                                 ],
                               ),
                             ),
@@ -265,6 +242,43 @@ class _HomePageState extends State<HomePage> {
                                         },
                                       ),
                                     ),
+                            ),
+                            // 하단에 교재 관리 버튼 배치
+                            Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          TextbookCenterScreen(
+                                            academy: AcademyModel(
+                                              id: 'global',
+                                              name: '내 교재 관리',
+                                              type: AcademyType.academy,
+                                              ownerId: user.uid,
+                                              createdAt: DateTime.now(),
+                                            ),
+                                          ),
+                                    ),
+                                  ).then((_) => _loadInitialData());
+                                },
+                                icon: const Icon(Icons.library_books),
+                                label: const Text('교재 관리 및 추가'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primaryContainer,
+                                  foregroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimaryContainer,
+                                  minimumSize: const Size.fromHeight(45),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                         ),

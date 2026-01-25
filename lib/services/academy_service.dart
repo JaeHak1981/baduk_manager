@@ -89,21 +89,22 @@ class AcademyService {
   /// 기관 수정
   Future<AcademyModel> updateAcademy(AcademyModel academy) async {
     try {
-      final updatedAcademy = academy.copyWith(updatedAt: DateTime.now());
+      final updatedAt = DateTime.now();
+      final updatedAcademy = academy.copyWith(updatedAt: updatedAt);
 
+      final data = updatedAcademy.toFirestore();
+
+      // Firestore에 명시적으로 업데이트 실행
       await _firestore
           .collection('academies')
           .doc(academy.id)
-          .set(updatedAcademy.toFirestore(), SetOptions(merge: true))
-          .timeout(const Duration(seconds: 10));
+          .set(data, SetOptions(merge: true)) // set(merge:true)가 가장 안전함
+          .timeout(const Duration(seconds: 8));
 
       return updatedAcademy;
     } catch (e) {
-      debugPrint('Error updating academy: $e');
-      if (e.toString().contains('TimeoutException')) {
-        throw Exception('네트워크 연결이 지연되고 있습니다. 잠시 후 다시 시도해주세요.');
-      }
-      throw Exception('기관 수정 실패: $e');
+      debugPrint('Academy Update Error: $e');
+      rethrow;
     }
   }
 

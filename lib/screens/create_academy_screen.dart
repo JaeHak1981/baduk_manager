@@ -72,7 +72,6 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
     }
 
     setState(() => _isLoading = true);
-
     _selectedDays.sort(); // 정렬해서 저장
 
     try {
@@ -83,7 +82,7 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
           name: _nameController.text.trim(),
           type: _selectedType,
           totalSessions: _selectedSessions,
-          lessonDays: _selectedDays,
+          lessonDays: List<int>.from(_selectedDays),
         );
         success = await academyProvider.updateAcademy(updatedAcademy);
       } else {
@@ -93,40 +92,60 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
           type: _selectedType,
           ownerId: currentUser.uid,
           totalSessions: _selectedSessions,
-          lessonDays: _selectedDays,
+          lessonDays: List<int>.from(_selectedDays),
         );
       }
 
       if (mounted) {
         if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(widget.academy != null ? '수정 완료' : '등록 완료')),
+          // 성공 시 다이얼로그 표시 (사용자 요청 반영: "수정 완료")
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Text('완료'),
+              content: Text(widget.academy != null ? '수정 완료' : '등록 완료'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('확인'),
+                ),
+              ],
+            ),
           );
-          Navigator.pop(context, true);
+          if (mounted) Navigator.pop(context, true);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(academyProvider.errorMessage ?? '요청 실패'),
-              backgroundColor: Colors.red,
-              action: academyProvider.errorMessage != null
-                  ? SnackBarAction(
-                      label: '복사',
-                      textColor: Colors.white,
-                      onPressed: () {
-                        Clipboard.setData(
-                          ClipboardData(text: academyProvider.errorMessage!),
-                        );
-                      },
-                    )
-                  : null,
+          // Provider에서 설정한 에러 메시지 표시
+          await showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('오류'),
+              content: Text(academyProvider.errorMessage ?? '처리에 실패했습니다.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('확인'),
+                ),
+              ],
             ),
           );
         }
       }
     } catch (e) {
+      debugPrint('Submission Error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('에러 발생: $e'), backgroundColor: Colors.red),
+        await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('시스템 오류'),
+            content: Text('통신 중 문제가 발생했습니다: $e'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('확인'),
+              ),
+            ],
+          ),
         );
       }
     } finally {

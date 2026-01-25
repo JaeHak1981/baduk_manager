@@ -58,7 +58,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     final students = context.read<StudentProvider>().students;
 
     for (var student in students) {
-      // 기본값을 '없음' (textbook: null)으로 설정
+      // 기본값을 '없음'으로 설정
       _orderEntries[student.id] = _OrderEntry(textbook: null, volume: 1);
     }
 
@@ -88,9 +88,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
 
   Future<void> _handleOrderComplete() async {
     final progressProvider = context.read<ProgressProvider>();
-    final students = context.read<StudentProvider>().students;
 
-    // 실제로 교재가 선택된 항목이 있는지 확인
     final entriesToAssign = _orderEntries.entries
         .where((e) => e.value.textbook != null)
         .toList();
@@ -113,13 +111,11 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
         final studentId = entry.key;
         final orderEntry = entry.value;
 
-        // 1. 기존 진행 중 완료 처리
         final currentP = progressProvider.getProgressForStudent(studentId);
         for (var p in currentP) {
           if (!p.isCompleted)
             await progressProvider.updateVolumeStatus(p.id, studentId, true);
         }
-        // 2. 새 권호 할당
         await progressProvider.assignVolume(
           studentId: studentId,
           academyId: widget.academy.id,
@@ -148,7 +144,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
   }
 
   void _handleGenerateOrderSheet() {
-    Map<String, Map<int, int>> summary = {}; // TextbookName -> {Volume: Count}
+    Map<String, Map<int, int>> summary = {};
 
     _orderEntries.forEach((studentId, entry) {
       if (entry.textbook != null) {
@@ -284,14 +280,14 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
       child: Row(
         children: const [
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               '이름',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
-          ), // 이름 너비 소폭 축소
+          ), // 너비 대폭 축소
           Expanded(
-            flex: 4,
+            flex: 5,
             child: Text(
               '교재 선택',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
@@ -301,7 +297,11 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             flex: 2,
             child: Text(
               '권호',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
         ],
@@ -314,15 +314,12 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     if (entry == null) return const SizedBox();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 2,
-      ), // 세로 간격 더 축소
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: Row(
         children: [
-          // 1. 학생 이름 (공간 축소)
+          // 1. 학생 이름 (최소화)
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -342,28 +339,32 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
               ],
             ),
           ),
-          // 2. 교재 선택 + 3. 권호 선택 (가깝게 배치)
+          // 2. 교재 선택 + 권호 선택 (완전 밀착)
           Expanded(
-            flex: 6,
+            flex: 7,
             child: Row(
               children: [
+                // 교재 드롭다운 (비중 확대)
                 Expanded(
-                  flex: 2,
+                  flex: 5,
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<TextbookModel?>(
                       isExpanded: true,
                       value: entry.textbook,
                       hint: const Text(
-                        '없음',
+                        '주문없음',
                         style: TextStyle(color: Colors.grey, fontSize: 13),
                       ),
-                      style: const TextStyle(fontSize: 13, color: Colors.black),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.blueAccent,
+                      ),
                       items: [
                         const DropdownMenuItem<TextbookModel?>(
                           value: null,
                           child: Text(
-                            '없음',
-                            style: TextStyle(color: Colors.red),
+                            '주문없음',
+                            style: TextStyle(color: Colors.grey),
                           ),
                         ),
                         ...textbooks.map(
@@ -385,16 +386,19 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 4), // 간격 최소화
+                // 구분선 또는 아주 미세한 간격
+                Container(width: 1, height: 20, color: Colors.grey.shade300),
+                // 권호 드롭다운 (바짝 밀착)
                 Expanded(
-                  flex: 1,
+                  flex: 2,
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<int>(
                       isExpanded: true,
                       value: entry.volume,
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.blue,
+                        fontSize: 14,
+                        color: Colors.orange,
                         fontWeight: FontWeight.bold,
                       ),
                       items: (entry.textbook != null)
@@ -405,12 +409,15 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                                 .map(
                                   (v) => DropdownMenuItem(
                                     value: v,
-                                    child: Text('$v권'),
+                                    child: Center(child: Text('$v')),
                                   ),
                                 )
                                 .toList()
                           : const [
-                              DropdownMenuItem(value: 1, child: Text('1')),
+                              DropdownMenuItem(
+                                value: 1,
+                                child: Center(child: Text('-')),
+                              ),
                             ],
                       onChanged: entry.textbook == null
                           ? null
@@ -454,7 +461,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
               onPressed: _handleGenerateOrderSheet,
               icon: const Icon(Icons.description),
               label: const Text(
-                '주문서 (문자)',
+                '주문서 생성',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -473,7 +480,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
               onPressed: _handleOrderComplete,
               icon: const Icon(Icons.check_circle),
               label: const Text(
-                '주문 완료',
+                '진도 할당 완료',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),

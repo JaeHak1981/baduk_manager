@@ -38,6 +38,58 @@ class AttendanceProvider with ChangeNotifier {
     }
   }
 
+  /// 특정 날짜/학생의 출결 상태 직접 지정 (출석/결석/지각/취소)
+  Future<void> updateStatus({
+    required String studentId,
+    required String academyId,
+    required String ownerId,
+    required DateTime date,
+    required AttendanceType? type, // null이면 기록 삭제
+  }) async {
+    final targetDate = DateTime(date.year, date.month, date.day);
+
+    // 기존 기록 찾기
+    AttendanceRecord? existing;
+    try {
+      existing = _monthlyRecords.firstWhere((r) {
+        final rDate = DateTime(
+          r.timestamp.year,
+          r.timestamp.month,
+          r.timestamp.day,
+        );
+        return r.studentId == studentId && rDate.isAtSameMomentAs(targetDate);
+      });
+    } catch (_) {
+      existing = null;
+    }
+
+    if (type == null) {
+      if (existing != null) {
+        await deleteAttendance(existing.id, studentId);
+      }
+    } else {
+      if (existing == null) {
+        await markAttendance(
+          studentId: studentId,
+          academyId: academyId,
+          ownerId: ownerId,
+          type: type,
+          date: targetDate,
+        );
+      } else {
+        if (existing.type != type) {
+          await updateAttendance(existing.copyWith(type: type));
+        }
+      }
+    }
+
+    await loadMonthlyAttendance(
+      academyId: academyId,
+      year: targetDate.year,
+      month: targetDate.month,
+    );
+  }
+
   /// 특정 날짜/학생의 출결 상태 토글
   Future<void> toggleAttendance({
     required String studentId,

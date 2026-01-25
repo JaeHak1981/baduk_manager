@@ -220,17 +220,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      columnSpacing: 10,
+                      columnSpacing: 15,
                       horizontalMargin: 12,
                       headingRowHeight: 50,
-                      dataRowMinHeight: 45,
-                      dataRowMaxHeight: 45,
+                      dataRowMinHeight: 55,
+                      dataRowMaxHeight: 55,
                       headingRowColor: WidgetStateProperty.all(
                         Colors.grey.shade100,
                       ),
                       border: TableBorder.all(
-                        color: Colors.grey.shade200,
-                        width: 0.5,
+                        color: Colors.grey.shade500,
+                        width: 1.2,
                       ),
                       columns: [
                         const DataColumn(
@@ -248,7 +248,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         ...lessonDates.map(
                           (date) => DataColumn(
                             label: SizedBox(
-                              width: 25,
+                              width: 65, // 요일부터 버튼 영역을 위해 가로폭 확장
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -279,7 +279,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               Text(
                                 student.name,
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
                                 ),
                               ),
                             ),
@@ -289,20 +290,39 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               final record = attendanceMap[key];
 
                               return DataCell(
-                                InkWell(
-                                  onTap: () =>
-                                      attendanceProvider.toggleAttendance(
-                                        studentId: student.id,
-                                        academyId: widget.academy.id,
-                                        ownerId: ownerId,
-                                        date: date,
-                                      ),
-                                  child: Container(
-                                    alignment: Alignment.center,
-                                    child: record != null
-                                        ? _getAttendanceIcon(record)
-                                        : const SizedBox(width: 25),
-                                  ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _buildStatusButton(
+                                      context,
+                                      attendanceProvider,
+                                      student.id,
+                                      ownerId,
+                                      date,
+                                      AttendanceType.present,
+                                      record?.type == AttendanceType.present,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    _buildStatusButton(
+                                      context,
+                                      attendanceProvider,
+                                      student.id,
+                                      ownerId,
+                                      date,
+                                      AttendanceType.absent,
+                                      record?.type == AttendanceType.absent,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    _buildStatusButton(
+                                      context,
+                                      attendanceProvider,
+                                      student.id,
+                                      ownerId,
+                                      date,
+                                      AttendanceType.late,
+                                      record?.type == AttendanceType.late,
+                                    ),
+                                  ],
                                 ),
                               );
                             }),
@@ -316,6 +336,74 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStatusButton(
+    BuildContext context,
+    AttendanceProvider provider,
+    String studentId,
+    String ownerId,
+    DateTime date,
+    AttendanceType type,
+    bool isSelected,
+  ) {
+    IconData icon;
+    Color activeColor;
+
+    switch (type) {
+      case AttendanceType.present:
+        icon = Icons.circle_outlined;
+        activeColor = Colors.green;
+        break;
+      case AttendanceType.absent:
+        icon = Icons.close;
+        activeColor = Colors.red;
+        break;
+      case AttendanceType.late:
+        icon = Icons.access_time;
+        activeColor = Colors.orange;
+        break;
+      default:
+        icon = Icons.help;
+        activeColor = Colors.grey;
+    }
+
+    return InkWell(
+      onTap: () {
+        provider.updateStatus(
+          studentId: studentId,
+          academyId: widget.academy.id,
+          ownerId: ownerId,
+          date: date,
+          type: isSelected ? null : type, // 이미 선택되어 있으면 취소
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor : Colors.white,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isSelected ? activeColor : Colors.grey.shade300,
+            width: 1,
+          ),
+        ),
+        child: type == AttendanceType.late && !isSelected
+            ? Text(
+                "L",
+                style: TextStyle(
+                  color: Colors.orange.shade800,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                ),
+              )
+            : Icon(
+                icon,
+                size: 16,
+                color: isSelected ? Colors.white : Colors.grey.shade400,
+              ),
       ),
     );
   }
@@ -345,25 +433,5 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (weekday == 6) return Colors.blue;
     if (weekday == 7) return Colors.red;
     return Colors.black54;
-  }
-
-  Widget _getAttendanceIcon(AttendanceRecord record) {
-    switch (record.type) {
-      case AttendanceType.present:
-        return const Icon(Icons.circle_outlined, color: Colors.green, size: 22);
-      case AttendanceType.absent:
-        return const Icon(Icons.close, color: Colors.red, size: 22);
-      case AttendanceType.late:
-        return const Text(
-          'L',
-          style: TextStyle(
-            color: Colors.orange,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        );
-      case AttendanceType.manual:
-        return const Icon(Icons.edit_note, color: Colors.grey, size: 22);
-    }
   }
 }

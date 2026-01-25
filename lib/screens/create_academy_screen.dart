@@ -75,57 +75,63 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
 
     _selectedDays.sort(); // 정렬해서 저장
 
-    bool success;
-    if (widget.academy != null) {
-      // 수정 모드
-      final updatedAcademy = widget.academy!.copyWith(
-        name: _nameController.text.trim(),
-        type: _selectedType,
-        totalSessions: _selectedSessions,
-        lessonDays: _selectedDays,
-      );
-      success = await academyProvider.updateAcademy(updatedAcademy);
-    } else {
-      // 등록 모드
-      success = await academyProvider.createAcademy(
-        name: _nameController.text.trim(),
-        type: _selectedType,
-        ownerId: currentUser.uid,
-        totalSessions: _selectedSessions,
-        lessonDays: _selectedDays,
-      );
-    }
-
-    setState(() => _isLoading = false);
-
-    if (mounted) {
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.academy != null ? '기관 정보가 수정되었습니다' : '기관이 등록되었습니다',
-            ),
-          ),
+    try {
+      bool success;
+      if (widget.academy != null) {
+        // 수정 모드
+        final updatedAcademy = widget.academy!.copyWith(
+          name: _nameController.text.trim(),
+          type: _selectedType,
+          totalSessions: _selectedSessions,
+          lessonDays: _selectedDays,
         );
-        Navigator.pop(context, true);
+        success = await academyProvider.updateAcademy(updatedAcademy);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(academyProvider.errorMessage ?? '기관 등록 실패'),
-            backgroundColor: Colors.red,
-            action: academyProvider.errorMessage != null
-                ? SnackBarAction(
-                    label: '복사',
-                    textColor: Colors.white,
-                    onPressed: () {
-                      Clipboard.setData(
-                        ClipboardData(text: academyProvider.errorMessage!),
-                      );
-                    },
-                  )
-                : null,
-          ),
+        // 등록 모드
+        success = await academyProvider.createAcademy(
+          name: _nameController.text.trim(),
+          type: _selectedType,
+          ownerId: currentUser.uid,
+          totalSessions: _selectedSessions,
+          lessonDays: _selectedDays,
         );
+      }
+
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(widget.academy != null ? '수정 완료' : '등록 완료')),
+          );
+          Navigator.pop(context, true);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(academyProvider.errorMessage ?? '요청 실패'),
+              backgroundColor: Colors.red,
+              action: academyProvider.errorMessage != null
+                  ? SnackBarAction(
+                      label: '복사',
+                      textColor: Colors.white,
+                      onPressed: () {
+                        Clipboard.setData(
+                          ClipboardData(text: academyProvider.errorMessage!),
+                        );
+                      },
+                    )
+                  : null,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('에러 발생: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }

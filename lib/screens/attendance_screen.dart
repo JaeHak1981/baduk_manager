@@ -128,11 +128,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   // 선택된 학생 ID 목록
   final Set<String> _selectedStudentIds = {};
+  bool _isSelectionMode = false; // 선택 모드 상태
+
+  void _toggleSelectionMode() {
+    setState(() {
+      _isSelectionMode = !_isSelectionMode;
+      if (!_isSelectionMode) {
+        _selectedStudentIds.clear();
+      }
+    });
+  }
 
   void _toggleSelection(String id) {
     setState(() {
       if (_selectedStudentIds.contains(id)) {
         _selectedStudentIds.remove(id);
+        if (_selectedStudentIds.isEmpty) {
+          // 선택된 학생이 없으면 자동으로 모드 해제할지는 기획에 따름.
+          // 여기선 유지하되 사용자 경험상 0명이면 모드 유지
+        }
       } else {
         _selectedStudentIds.add(id);
       }
@@ -215,9 +229,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
 
     if (success && context.mounted) {
-      setState(() {
-        _selectedStudentIds.clear();
-      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -225,6 +236,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ),
         ),
       );
+      setState(() {
+        _isSelectionMode = false;
+        _selectedStudentIds.clear();
+      });
     }
   }
 
@@ -266,12 +281,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
 
     if (success && context.mounted) {
-      setState(() {
-        _selectedStudentIds.clear();
-      });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('선택한 학생이 삭제되었습니다.')));
+      setState(() {
+        _isSelectionMode = false;
+        _selectedStudentIds.clear();
+      });
     }
   }
 
@@ -280,11 +296,60 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final lessonDates = _getLessonDates();
     final authProvider = context.read<AuthProvider>();
     final ownerId = authProvider.currentUser?.uid ?? '';
+    final studentProvider = context
+        .watch<StudentProvider>(); // Watch to use filtered list in AppBar
+
+    // 현재 화면에 보이는 학생 목록 (필터링 적용)
+    final visibleStudents = _selectedSession == null
+        ? studentProvider.students
+        : _selectedSession == 0
+        ? studentProvider.students
+              .where((s) => s.session == null || s.session == 0)
+              .toList()
+        : studentProvider.students
+              .where((s) => s.session == _selectedSession)
+              .toList();
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.academy.name} 출석부'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: _isSelectionMode
+            ? Text('${_selectedStudentIds.length}명 선택됨')
+            : Text('${widget.academy.name} 출석부'),
+        backgroundColor: _isSelectionMode
+            ? Colors.red.shade50
+            : Theme.of(context).colorScheme.inversePrimary,
+        leading: _isSelectionMode
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _toggleSelectionMode,
+              )
+            : null,
+        actions: _isSelectionMode
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.drive_file_move_outline),
+                  tooltip: '부 이동',
+                  onPressed: () => _moveSelectedStudents(context, ownerId),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  tooltip: '삭제',
+                  onPressed: () => _deleteSelectedStudents(context, ownerId),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      _toggleSelectAll(visibleStudents), // 필터링된 학생 전체 선택
+                  child: Text(
+                    _selectedStudentIds.length == visibleStudents.length &&
+                            visibleStudents.isNotEmpty
+                        ? '해제'
+                        : '전체',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ]
+            : null,
       ),
       body: Column(
         children: [
@@ -344,15 +409,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final students = _selectedSession == null
-                    ? studentProvider.students
-                    : _selectedSession == 0
-                    ? studentProvider.students
-                          .where((s) => s.session == null || s.session == 0)
-                          .toList()
-                    : studentProvider.students
-                          .where((s) => s.session == _selectedSession)
-                          .toList();
+                final students = visibleStudents; // 위에서 계산한 리스트 재사용
 
                 if (students.isEmpty) {
                   return const Center(child: Text('해당되는 학생이 없습니다.'));
@@ -376,7 +433,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       key: ValueKey(
-                        'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}_${_selectedStudentIds.length}',
+                        'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}_${_selectedStudentIds.length}_$_isSelectionMode',
                       ),
                       columnSpacing: 12, // 간격 대폭 축소
                       horizontalMargin: 8,
@@ -384,7 +441,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       dataRowMinHeight: 45, // 데이터 행 높이 축소
                       dataRowMaxHeight: 45,
                       headingRowColor: WidgetStateProperty.all(
-                        Colors.grey.shade50,
+                        _isSelectionMode
+                            ? Colors.red.shade50
+                            : Colors.grey.shade50,
                       ),
                       // 테두리 스타일 변경: 수직선 제거, 깔끔한 수평선 위주
                       border: const TableBorder(
@@ -396,17 +455,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ),
                       columns: [
                         // 0. 체크박스 (전체 선택)
-                        DataColumn(
-                          label: SizedBox(
-                            width: 30,
-                            child: Checkbox(
-                              value:
-                                  students.isNotEmpty &&
-                                  _selectedStudentIds.length == students.length,
-                              onChanged: (v) => _toggleSelectAll(students),
+                        if (_isSelectionMode)
+                          DataColumn(
+                            label: SizedBox(
+                              width: 30,
+                              child: Checkbox(
+                                value:
+                                    students.isNotEmpty &&
+                                    _selectedStudentIds.length ==
+                                        students.length,
+                                onChanged: (v) => _toggleSelectAll(students),
+                              ),
                             ),
                           ),
-                        ),
                         // 1. 이름 (항상 고정)
                         const DataColumn(
                           label: SizedBox(
@@ -501,34 +562,50 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                         return DataRow(
                           selected: _selectedStudentIds.contains(student.id),
-                          onSelectChanged: (val) {
-                            _toggleSelection(student.id);
-                          },
+                          onSelectChanged: _isSelectionMode
+                              ? (val) {
+                                  _toggleSelection(student.id);
+                                }
+                              : null, // 선택 모드 아닐 땐 null
                           cells: [
                             // 0. 체크박스
-                            DataCell(
-                              SizedBox(
-                                width: 30,
-                                child: Checkbox(
-                                  value: _selectedStudentIds.contains(
-                                    student.id,
+                            if (_isSelectionMode)
+                              DataCell(
+                                SizedBox(
+                                  width: 30,
+                                  child: Checkbox(
+                                    value: _selectedStudentIds.contains(
+                                      student.id,
+                                    ),
+                                    onChanged: (val) =>
+                                        _toggleSelection(student.id),
                                   ),
-                                  onChanged: (val) =>
-                                      _toggleSelection(student.id),
                                 ),
                               ),
-                            ),
-                            // 1. 이름
+                            // 1. 이름 (롱프레스 기능 추가)
                             DataCell(
-                              SizedBox(
-                                width: 50,
-                                child: Text(
-                                  student.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
+                              InkWell(
+                                onLongPress: () {
+                                  if (!_isSelectionMode) {
+                                    _toggleSelectionMode(); // 모드 진입
+                                    _toggleSelection(student.id); // 해당 학생 선택
+                                  }
+                                },
+                                onTap: _isSelectionMode
+                                    ? () => _toggleSelection(student.id)
+                                    : null,
+                                child: Container(
+                                  width: 50,
+                                  height: double.infinity,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    student.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ),
@@ -604,58 +681,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               },
             ),
           ),
-
-          // 하단 일괄 작업 바 (선택 시 표시)
-          if (_selectedStudentIds.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 4,
-                    offset: Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: SafeArea(
-                child: Row(
-                  children: [
-                    Text(
-                      '${_selectedStudentIds.length}명 선택됨',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const Spacer(),
-                    ElevatedButton.icon(
-                      onPressed: () => _moveSelectedStudents(context, ownerId),
-                      icon: const Icon(Icons.swap_horiz, size: 18),
-                      label: const Text('부 이동'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade50,
-                        foregroundColor: Colors.blue,
-                        elevation: 0,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: () =>
-                          _deleteSelectedStudents(context, ownerId),
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text('삭제'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.shade50,
-                        foregroundColor: Colors.red,
-                        elevation: 0,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );

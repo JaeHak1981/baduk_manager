@@ -20,6 +20,7 @@ class AttendanceProvider with ChangeNotifier {
   /// 월별 출결 기록 로드
   Future<void> loadMonthlyAttendance({
     required String academyId,
+    required String ownerId,
     required int year,
     required int month,
     bool showLoading = true,
@@ -32,6 +33,7 @@ class AttendanceProvider with ChangeNotifier {
     try {
       _monthlyRecords = await _attendanceService.getMonthlyAttendance(
         academyId: academyId,
+        ownerId: ownerId,
         year: year,
         month: month,
       );
@@ -131,6 +133,7 @@ class AttendanceProvider with ChangeNotifier {
     await Future.delayed(const Duration(milliseconds: 1000));
     await loadMonthlyAttendance(
       academyId: academyId,
+      ownerId: ownerId,
       year: targetDate.year,
       month: targetDate.month,
       showLoading: false,
@@ -198,6 +201,7 @@ class AttendanceProvider with ChangeNotifier {
   /// 기간별 출결 기록 로드 (시작 월 ~ 종료 월)
   Future<List<AttendanceRecord>> getRecordsForPeriod({
     required String academyId,
+    required String ownerId,
     required DateTime start,
     required DateTime end,
   }) async {
@@ -211,6 +215,7 @@ class AttendanceProvider with ChangeNotifier {
       futures.add(
         _attendanceService.getMonthlyAttendance(
           academyId: academyId,
+          ownerId: ownerId,
           year: current.year,
           month: current.month,
         ),

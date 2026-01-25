@@ -6,6 +6,7 @@ import '../providers/academy_provider.dart';
 import '../models/user_model.dart';
 import '../models/academy_model.dart';
 import 'academy_management_screen.dart';
+import 'admin_recovery_screen.dart';
 import 'student_list_screen.dart';
 import 'textbook_center_screen.dart';
 import 'attendance_screen.dart';
@@ -177,30 +178,62 @@ class _HomePageState extends State<HomePage> {
                             // 하단에 기관 관리 버튼 배치 (교재 관리와 대칭)
                             Padding(
                               padding: const EdgeInsets.all(16.0),
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const AcademyManagementScreen(),
+                              child: Column(
+                                children: [
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const AcademyManagementScreen(),
+                                        ),
+                                      ).then((_) => _loadInitialData());
+                                    },
+                                    icon: const Icon(Icons.settings),
+                                    label: const Text('기관 관리 및 등록'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Theme.of(
+                                        context,
+                                      ).colorScheme.primaryContainer,
+                                      foregroundColor: Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimaryContainer,
+                                      minimumSize: const Size.fromHeight(45),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
                                     ),
-                                  );
-                                },
-                                icon: const Icon(Icons.settings),
-                                label: const Text('기관 관리 및 등록'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Theme.of(
-                                    context,
-                                  ).colorScheme.primaryContainer,
-                                  foregroundColor: Theme.of(
-                                    context,
-                                  ).colorScheme.onPrimaryContainer,
-                                  minimumSize: const Size.fromHeight(45),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
                                   ),
-                                ),
+                                  if (user.isDeveloper) ...[
+                                    const SizedBox(height: 8),
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const AdminRecoveryScreen(),
+                                          ),
+                                        ).then((_) => _loadInitialData());
+                                      },
+                                      icon: const Icon(
+                                        Icons.restore_from_trash,
+                                      ),
+                                      label: const Text('데이터 복구 (관리자)'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.red.shade50,
+                                        foregroundColor: Colors.red,
+                                        minimumSize: const Size.fromHeight(45),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                           ],

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -171,13 +172,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // 개발자 계정 생성 링크
-                  TextButton(
-                    onPressed: authProvider.isLoading
-                        ? null
-                        : _navigateToCreateDeveloper,
-                    child: const Text('개발자 계정 생성'),
-                  ),
+                  // 개발자 계정 생성 링크 (디버그 모드에서만 노출)
+                  if (kDebugMode)
+                    TextButton(
+                      onPressed: authProvider.isLoading
+                          ? null
+                          : _navigateToCreateDeveloper,
+                      child: const Text('개발자 계정 생성'),
+                    ),
                 ],
               ),
             ),

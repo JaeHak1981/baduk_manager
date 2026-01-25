@@ -62,6 +62,7 @@ class AttendanceService {
   /// 특정 기관의 특정 월 전체 출결 내역 조회
   Future<List<AttendanceRecord>> getMonthlyAttendance({
     required String academyId,
+    required String ownerId,
     required int year,
     required int month,
   }) async {
@@ -75,6 +76,7 @@ class AttendanceService {
     final snapshot = await _firestore
         .collection(_collection)
         .where('academyId', isEqualTo: academyId)
+        .where('ownerId', isEqualTo: ownerId)
         .where(
           'timestamp',
           isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth),

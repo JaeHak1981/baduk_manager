@@ -99,7 +99,18 @@ class AuthService {
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
 
       if (!userDoc.exists) {
-        throw Exception('사용자 정보를 찾을 수 없습니다');
+        // [추가] 문서가 없으면 기본 정보로 생성 (수동 생성 계정 대응)
+        final newUser = UserModel(
+          uid: user.uid,
+          email: email,
+          role: UserRole.owner, // 기본적으로 학원 소유자로 설정
+          createdAt: DateTime.now(),
+        );
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .set(newUser.toFirestore());
+        return newUser;
       }
 
       return UserModel.fromFirestore(userDoc);
@@ -122,17 +133,33 @@ class AuthService {
   /// Firestore에서 사용자 정보 가져오기
   ///
   /// [uid] 사용자 UID
+  /// [email] 이메일 (UID로 찾을 수 없을 때 백업 검색용)
   ///
   /// Returns: UserModel 또는 null
-  Future<UserModel?> getUserData(String uid) async {
+  Future<UserModel?> getUserData(String uid, {String? email}) async {
     try {
+      // 1. UID로 먼저 시도
       final userDoc = await _firestore.collection('users').doc(uid).get();
 
-      if (!userDoc.exists) {
-        return null;
+      if (userDoc.exists) {
+        return UserModel.fromFirestore(userDoc);
       }
 
-      return UserModel.fromFirestore(userDoc);
+      // 2. UID로 없으면 이메일로 검색 (백업)
+      if (email != null && email.isNotEmpty) {
+        final querySnapshot = await _firestore
+            .collection('users')
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
+
+        if (querySnapshot.docs.isNotEmpty) {
+          debugPrint('UID 불일치: 이메일로 사용자 찾음 ($email)');
+          return UserModel.fromFirestore(querySnapshot.docs.first);
+        }
+      }
+
+      return null;
     } catch (e) {
       debugPrint('사용자 정보 가져오기 실패: $e');
       return null;

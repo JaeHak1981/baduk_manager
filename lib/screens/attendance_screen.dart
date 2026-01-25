@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // 진동 피드백을 위해 추가
 import 'package:provider/provider.dart';
+import 'package:excel/excel.dart' as excel_lib;
 import '../models/academy_model.dart';
 import '../models/attendance_model.dart';
+import '../models/student_model.dart';
 import '../providers/attendance_provider.dart';
 import '../providers/student_provider.dart';
 import '../providers/auth_provider.dart';
 import '../utils/holiday_helper.dart';
+import '../utils/file_download_helper.dart';
 import 'components/statistics_dialog.dart';
 
 class AttendanceScreen extends StatefulWidget {
@@ -24,6 +27,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   late int _currentMonth;
   int? _selectedSession;
   int _localStateCounter = 0; // 로컬 UI 강제 갱신용
+  bool _isDownloading = false;
 
   @override
   void initState() {
@@ -37,6 +41,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AttendanceProvider>().loadMonthlyAttendance(
         academyId: widget.academy.id,
+        ownerId: widget.academy.ownerId,
         year: _currentYear,
         month: _currentMonth,
       );
@@ -87,6 +92,42 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             );
           }),
           const SizedBox(width: 8),
+          // [추가] 출석부 다운로드 버튼
+          ActionChip(
+            avatar: _isDownloading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.download, size: 16, color: Colors.white),
+            label: Text(
+              _isDownloading ? '준비 중...' : '출석부 다운로드',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            backgroundColor: Colors.blueAccent,
+            onPressed: _isDownloading
+                ? null
+                : () {
+                    final filteredStudents = _selectedSession == null
+                        ? allStudents
+                        : _selectedSession == 0
+                        ? allStudents
+                              .where((s) => s.session == null || s.session == 0)
+                              .toList()
+                        : allStudents
+                              .where((s) => s.session == _selectedSession)
+                              .toList();
+                    _downloadAsExcel(filteredStudents);
+                  },
+          ),
+          const SizedBox(width: 8),
           ActionChip(
             avatar: const Icon(Icons.bar_chart, size: 16, color: Colors.white),
             label: const Text(
@@ -102,6 +143,230 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ],
       ),
     );
+  }
+
+  // [수정] 출석부 진짜 엑셀(.xlsx) 다운로드 로직
+  Future<void> _downloadAsExcel(List<dynamic> students) async {
+    if (students.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('다운로드할 학생이 없습니다.')));
+      return;
+    }
+
+    setState(() => _isDownloading = true);
+    try {
+      final provider = context.read<AttendanceProvider>();
+      final startOfMonth = DateTime(_currentYear, _currentMonth, 1);
+      final endOfMonth = DateTime(_currentYear, _currentMonth + 1, 0);
+
+      final records = await provider.getRecordsForPeriod(
+        academyId: widget.academy.id,
+        ownerId: widget.academy.ownerId,
+        start: startOfMonth,
+        end: endOfMonth, // 이번 달 마지막 날까지
+      );
+
+      // 1. 엑셀 객체 생성 및 시트 설정
+      var excel = excel_lib.Excel.createExcel();
+      String sheetName = "$_currentYear년 $_currentMonth월 출석부";
+      excel.rename('Sheet1', sheetName);
+      var sheet = excel[sheetName];
+
+      // 2. 수업일 리스트 생성 (Header용)
+      final List<DateTime> lessonDates = [];
+      for (int i = 1; i <= endOfMonth.day; i++) {
+        DateTime d = DateTime(_currentYear, _currentMonth, i);
+        if (widget.academy.lessonDays.contains(d.weekday) &&
+            !HolidayHelper.isHoliday(d)) {
+          lessonDates.add(d);
+        }
+      }
+
+      // 3. 헤더 구성 및 스타일 적용
+      List<String> header = ['학생 이름'];
+      for (var date in lessonDates) {
+        header.add("${date.month}/${date.day}");
+      }
+      header.addAll(['출석', '결석', '출석률(%)']);
+
+      // 헤더 스타일 (배경색, 볼드)
+      var headerStyle = excel_lib.CellStyle(
+        backgroundColorHex: excel_lib.ExcelColor.fromHexString('#E0E0E0'),
+        fontFamily: excel_lib.getFontFamily(excel_lib.FontFamily.Arial),
+        bold: true,
+        horizontalAlign: excel_lib.HorizontalAlign.Center,
+      );
+
+      for (var i = 0; i < header.length; i++) {
+        var cell = sheet.cell(
+          excel_lib.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0),
+        );
+        cell.value = excel_lib.TextCellValue(header[i]);
+        cell.cellStyle = headerStyle;
+      }
+
+      // 4. 데이터 영역 채우기
+      for (var sIdx = 0; sIdx < students.length; sIdx++) {
+        final student = students[sIdx] as StudentModel;
+        final rowIndex = sIdx + 1;
+
+        // 이름
+        sheet
+            .cell(
+              excel_lib.CellIndex.indexByColumnRow(
+                columnIndex: 0,
+                rowIndex: rowIndex,
+              ),
+            )
+            .value = excel_lib.TextCellValue(
+          student.name,
+        );
+
+        int presentCount = 0;
+        int absentCount = 0;
+        int totalRecorded = 0;
+
+        // 날짜별 기록
+        for (var dIdx = 0; dIdx < lessonDates.length; dIdx++) {
+          final date = lessonDates[dIdx];
+          final dateStr =
+              "${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}";
+          final recordId = "${student.id}_$dateStr";
+
+          final record = records.any((r) => r.id == recordId)
+              ? records.firstWhere((r) => r.id == recordId)
+              : null;
+
+          var cell = sheet.cell(
+            excel_lib.CellIndex.indexByColumnRow(
+              columnIndex: dIdx + 1,
+              rowIndex: rowIndex,
+            ),
+          );
+          if (record != null) {
+            cell.value = excel_lib.TextCellValue(
+              record.type == AttendanceType.present ? 'O' : 'X',
+            );
+            if (record.type == AttendanceType.present) presentCount++;
+            if (record.type == AttendanceType.absent) absentCount++;
+            totalRecorded++;
+          } else {
+            cell.value = excel_lib.TextCellValue('');
+          }
+        }
+
+        // 통계
+        sheet
+            .cell(
+              excel_lib.CellIndex.indexByColumnRow(
+                columnIndex: lessonDates.length + 1,
+                rowIndex: rowIndex,
+              ),
+            )
+            .value = excel_lib.IntCellValue(
+          presentCount,
+        );
+        sheet
+            .cell(
+              excel_lib.CellIndex.indexByColumnRow(
+                columnIndex: lessonDates.length + 2,
+                rowIndex: rowIndex,
+              ),
+            )
+            .value = excel_lib.IntCellValue(
+          absentCount,
+        );
+
+        final rate = totalRecorded == 0
+            ? 0.0
+            : (presentCount / totalRecorded) * 100;
+        sheet
+            .cell(
+              excel_lib.CellIndex.indexByColumnRow(
+                columnIndex: lessonDates.length + 3,
+                rowIndex: rowIndex,
+              ),
+            )
+            .value = excel_lib.DoubleCellValue(
+          rate,
+        );
+      }
+
+      // 5. 다운로드
+      final fileBytes = excel.save();
+      if (fileBytes != null) {
+        String fileName =
+            "attendance_${_currentYear}_${_currentMonth.toString().padLeft(2, '0')}.xlsx";
+        FileDownloadHelper.downloadBytes(bytes: fileBytes, fileName: fileName);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$fileName 다운로드를 시작합니다.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        throw Exception('엑셀 파일 데이터 생성에 실패했습니다.');
+      }
+    } catch (e) {
+      debugPrint('Excel Export Error: $e');
+      if (mounted) {
+        final errorMsg = e.toString();
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('다운로드 오류 발생'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('다음 에러가 발생했습니다. 아래 내용을 복사해서 전달해 주세요:'),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: SelectableText(
+                      errorMsg,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: errorMsg));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('에러 내용이 클립보드에 복사되었습니다.')),
+                    );
+                  }
+                },
+                child: const Text('클립보드 복사'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('닫기'),
+              ),
+            ],
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
   }
 
   void _showStatisticsDialog(List<dynamic> students) {

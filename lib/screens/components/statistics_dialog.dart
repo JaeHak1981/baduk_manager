@@ -76,6 +76,7 @@ class _StatisticsDialogState extends State<StatisticsDialog> {
       final provider = context.read<AttendanceProvider>();
       final records = await provider.getRecordsForPeriod(
         academyId: widget.academy.id,
+        ownerId: widget.academy.ownerId,
         start: start,
         end: end,
       );

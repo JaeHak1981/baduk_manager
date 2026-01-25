@@ -32,7 +32,10 @@ class AuthProvider extends ChangeNotifier {
     _authService.authStateChanges.listen((User? user) async {
       if (user != null) {
         // 로그인된 경우 Firestore에서 사용자 정보 가져오기
-        _currentUser = await _authService.getUserData(user.uid);
+        _currentUser = await _authService.getUserData(
+          user.uid,
+          email: user.email,
+        );
       } else {
         // 로그아웃된 경우
         _currentUser = null;

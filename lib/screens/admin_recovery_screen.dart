@@ -115,7 +115,7 @@ class _AdminRecoveryScreenState extends State<AdminRecoveryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('휴지통 (관리자용)'),
+        title: const Text('데이터 복구 (관리자용)'),
         backgroundColor: Colors.red.shade50,
       ),
       body: Column(

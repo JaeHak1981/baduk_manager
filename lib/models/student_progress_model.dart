@@ -62,23 +62,42 @@ class StudentProgressModel {
   factory StudentProgressModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> snapshot,
   ) {
-    final data = snapshot.data()!;
-    return StudentProgressModel(
-      id: snapshot.id,
-      studentId: data['studentId'] as String,
-      academyId: data['academyId'] as String,
-      ownerId: data['ownerId'] as String? ?? '',
-      textbookId: data['textbookId'] as String,
-      textbookName: data['textbookName'] as String? ?? '알 수 없는 교재',
-      volumeNumber: data['volumeNumber'] as int? ?? 1,
-      totalVolumes: data['totalVolumes'] as int? ?? 1, // [ADDED] default 1
-      isCompleted: data['isCompleted'] as bool? ?? false,
-      startDate: (data['startDate'] as Timestamp).toDate(),
-      endDate: data['endDate'] != null
-          ? (data['endDate'] as Timestamp).toDate()
-          : null,
-      updatedAt: (data['updatedAt'] as Timestamp).toDate(),
-    );
+    try {
+      final data = snapshot.data()!;
+      return StudentProgressModel(
+        id: snapshot.id,
+        studentId: data['studentId'] as String? ?? '',
+        academyId: data['academyId'] as String? ?? '',
+        ownerId: data['ownerId'] as String? ?? '',
+        textbookId: data['textbookId'] as String? ?? '',
+        textbookName: data['textbookName'] as String? ?? '알 수 없는 교재',
+        volumeNumber: data['volumeNumber'] as int? ?? 1,
+        totalVolumes: data['totalVolumes'] as int? ?? 1,
+        isCompleted: data['isCompleted'] as bool? ?? false,
+        startDate: (data['startDate'] as Timestamp).toDate(),
+        endDate: data['endDate'] != null
+            ? (data['endDate'] as Timestamp).toDate()
+            : null,
+        updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+      );
+    } catch (e) {
+      print(
+        'StudentProgressModel.fromFirestore 파싱 에러 (ID: ${snapshot.id}): $e',
+      );
+      // 최소한의 데이터로 복구하여 리스트 깨짐 방지
+      return StudentProgressModel(
+        id: snapshot.id,
+        studentId: '',
+        academyId: '',
+        ownerId: '',
+        textbookId: '',
+        textbookName: '데이터 오류 교재',
+        volumeNumber: 1,
+        totalVolumes: 1,
+        startDate: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+    }
   }
 
   StudentProgressModel copyWith({

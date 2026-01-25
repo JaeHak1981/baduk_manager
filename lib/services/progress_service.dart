@@ -45,7 +45,7 @@ class ProgressService {
       query = query.where('ownerId', isEqualTo: ownerId);
     }
 
-    final snapshot = await query.orderBy('updatedAt', descending: true).get();
+    final snapshot = await query.get();
 
     return snapshot.docs
         .map(
@@ -69,18 +69,15 @@ class ProgressService {
       query = query.where('ownerId', isEqualTo: ownerId);
     }
 
-    return query
-        .orderBy('updatedAt', descending: true)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map(
-                (doc) => StudentProgressModel.fromFirestore(
-                  doc as DocumentSnapshot<Map<String, dynamic>>,
-                ),
-              )
-              .toList(),
-        );
+    return query.snapshots().map(
+      (snapshot) => snapshot.docs
+          .map(
+            (doc) => StudentProgressModel.fromFirestore(
+              doc as DocumentSnapshot<Map<String, dynamic>>,
+            ),
+          )
+          .toList(),
+    );
   }
 
   /// 진도 상태 업데이트 (완료 여부만)

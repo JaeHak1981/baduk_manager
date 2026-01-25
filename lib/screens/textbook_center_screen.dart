@@ -53,7 +53,8 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (provider.errorMessage != null) {
+          if (provider.errorMessage != null &&
+              provider.allOwnerTextbooks.isEmpty) {
             return _buildErrorState(provider.errorMessage!);
           }
 
@@ -61,63 +62,88 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
             return _buildEmptyState();
           }
 
-          return RefreshIndicator(
-            onRefresh: () =>
-                provider.loadOwnerTextbooks(widget.academy.ownerId),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: provider.allOwnerTextbooks.length,
-              itemBuilder: (context, index) {
-                final textbook = provider.allOwnerTextbooks[index];
-                final isCustom = textbook.ownerId != 'common';
+          return Stack(
+            children: [
+              RefreshIndicator(
+                onRefresh: () =>
+                    provider.loadOwnerTextbooks(widget.academy.ownerId),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: provider.allOwnerTextbooks.length,
+                  itemBuilder: (context, index) {
+                    final textbook = provider.allOwnerTextbooks[index];
+                    final isCustom = textbook.ownerId != 'common';
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.menu_book,
-                      color: isCustom ? Colors.blue : Colors.orange,
-                    ),
-                    title: Text(
-                      textbook.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text('총 ${textbook.totalVolumes}권'),
-                    trailing: widget.studentId != null
-                        ? ElevatedButton(
-                            onPressed: () =>
-                                _pickVolumeAndAssign(context, textbook),
-                            child: const Text('할당'),
-                          )
-                        : (isCustom
-                              ? Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.edit,
-                                        size: 20,
-                                        color: Colors.grey,
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.menu_book,
+                          color: isCustom ? Colors.blue : Colors.orange,
+                        ),
+                        title: Text(
+                          textbook.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text('총 ${textbook.totalVolumes}권'),
+                        trailing: widget.studentId != null
+                            ? ElevatedButton(
+                                onPressed: provider.isAssigning
+                                    ? null
+                                    : () => _pickVolumeAndAssign(
+                                        context,
+                                        textbook,
                                       ),
-                                      onPressed: () =>
-                                          _navigateToEdit(context, textbook),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.delete_outline,
-                                        size: 20,
-                                        color: Colors.redAccent,
-                                      ),
-                                      onPressed: () =>
-                                          _confirmDelete(context, textbook),
-                                    ),
-                                  ],
-                                )
-                              : null),
-                  ),
-                );
-              },
-            ),
+                                child:
+                                    provider.isAssigning &&
+                                        widget.studentId != null
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text('할당'),
+                              )
+                            : (isCustom
+                                  ? Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.edit,
+                                            size: 20,
+                                            color: Colors.grey,
+                                          ),
+                                          onPressed: () => _navigateToEdit(
+                                            context,
+                                            textbook,
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            size: 20,
+                                            color: Colors.redAccent,
+                                          ),
+                                          onPressed: () =>
+                                              _confirmDelete(context, textbook),
+                                        ),
+                                      ],
+                                    )
+                                  : null),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              if (provider.isAssigning)
+                Container(
+                  color: Colors.black12,
+                  child: const Center(child: CircularProgressIndicator()),
+                ),
+            ],
           );
         },
       ),
@@ -306,6 +332,9 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
     );
 
     if (result != null && mounted) {
+      // 이전에 발생했을 수 있는 에러 메시지 초기화
+      context.read<ProgressProvider>().clearErrorMessage();
+
       final success = await context.read<ProgressProvider>().assignVolume(
         studentId: widget.studentId!,
         academyId: widget.academy.id,
@@ -321,16 +350,18 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
           ).showSnackBar(SnackBar(content: Text('$result권이 할당되었습니다')));
           Navigator.pop(context);
         } else {
-          final curUid = FirebaseAuth.instance.currentUser?.uid;
           final errorMsg =
-              context.read<ProgressProvider>().errorMessage ?? '할당 실패';
+              context.read<ProgressProvider>().errorMessage ?? '할당에 실패했습니다.';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                '$errorMsg\n(User: $curUid, Owner: ${widget.academy.ownerId})',
-              ),
+              content: Text('오류: $errorMsg'),
               duration: const Duration(seconds: 10),
-              action: SnackBarAction(label: '닫기', onPressed: () {}),
+              backgroundColor: Colors.red,
+              action: SnackBarAction(
+                label: '확인',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
             ),
           );
         }

@@ -859,7 +859,7 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '${activeProgress.progressPercentage}%',
+                                  '${activeProgress.progressPercentage.toInt()}%',
                                   style: const TextStyle(
                                     fontSize: 10,
                                     color: Colors.blue,

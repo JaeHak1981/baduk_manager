@@ -20,7 +20,6 @@ class TextbookService {
     final ownerSnapshot = await _firestore
         .collection(_collection)
         .where('ownerId', isEqualTo: ownerId)
-        .orderBy('createdAt', descending: true)
         .get();
 
     // 2. 공용 교재 (common) - academyId 혹은 ownerId가 common인 것들

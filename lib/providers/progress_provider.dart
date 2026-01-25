@@ -14,10 +14,12 @@ class ProgressProvider with ChangeNotifier {
       {}; // Key: studentId
 
   bool _isLoading = false;
+  bool _isAssigning = false;
   String? _errorMessage;
 
   List<TextbookModel> get allOwnerTextbooks => _allOwnerTextbooks;
   bool get isLoading => _isLoading;
+  bool get isAssigning => _isAssigning;
   String? get errorMessage => _errorMessage;
 
   /// 선생님별 교재 목록 로드
@@ -27,7 +29,10 @@ class ProgressProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _allOwnerTextbooks = await _textbookService.getOwnerTextbooks(ownerId);
+      final textbooks = await _textbookService.getOwnerTextbooks(ownerId);
+      // 메모리에서 정렬
+      textbooks.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _allOwnerTextbooks = textbooks;
     } catch (e) {
       _errorMessage = '교재 목록을 불러오지 못했습니다: $e';
     } finally {
@@ -131,6 +136,11 @@ class ProgressProvider with ChangeNotifier {
         newMap[p.studentId]!.add(p);
       }
 
+      // 각 학생별 진도 리스트를 날짜순 정렬
+      for (var studentId in newMap.keys) {
+        newMap[studentId]!.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      }
+
       _studentProgressMap = newMap;
     } catch (e) {
       print('진도 데이터 로드 실패: $e');
@@ -147,8 +157,11 @@ class ProgressProvider with ChangeNotifier {
         studentId,
         ownerId,
       );
+      // 메모리에서 정렬 (Firestore 인덱스 이슈 방지)
+      progressList.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       _studentProgressMap[studentId] = progressList;
     } catch (e) {
+      print('loadStudentProgress 에러: $e');
       _errorMessage = '학생 진도 정보를 불러오지 못했습니다: $e';
     } finally {
       notifyListeners();
@@ -167,11 +180,14 @@ class ProgressProvider with ChangeNotifier {
     required TextbookModel textbook,
     required int volumeNumber,
   }) async {
-    _isLoading = true;
+    _isAssigning = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
+      print(
+        'DEBUG: assignVolume 시작 - studentId: $studentId, textbook: ${textbook.name}',
+      );
       final progress = StudentProgressModel(
         id: '',
         studentId: studentId,
@@ -180,19 +196,24 @@ class ProgressProvider with ChangeNotifier {
         textbookId: textbook.id,
         textbookName: textbook.name,
         volumeNumber: volumeNumber,
-        totalVolumes: textbook.totalVolumes, // [Refactor] Use volume count
+        totalVolumes: textbook.totalVolumes,
         startDate: DateTime.now(),
         updatedAt: DateTime.now(),
       );
 
       await _progressService.startProgress(progress);
+      print('DEBUG: startProgress 성공');
+
       await loadStudentProgress(studentId, ownerId: ownerId);
+      print('DEBUG: loadStudentProgress 성공');
+
       return true;
     } catch (e) {
+      print('DEBUG: assignVolume 실패: $e');
       _errorMessage = '교재 할당에 실패했습니다: $e';
       return false;
     } finally {
-      _isLoading = false;
+      _isAssigning = false;
       notifyListeners();
     }
   }
@@ -227,5 +248,11 @@ class ProgressProvider with ChangeNotifier {
     } finally {
       notifyListeners();
     }
+  }
+
+  /// 에러 메시지 초기화
+  void clearErrorMessage() {
+    _errorMessage = null;
+    notifyListeners();
   }
 }

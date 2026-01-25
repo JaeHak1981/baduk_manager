@@ -475,9 +475,45 @@ class _AcademySummaryCard extends StatelessWidget {
             color: Theme.of(context).colorScheme.primary,
           ),
         ),
-        title: Text(
-          academy.name,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        title: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          children: [
+            Text(
+              academy.name,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            if (academy.lessonDays.isNotEmpty)
+              Text(
+                academy.lessonDays
+                    .map((d) {
+                      switch (d) {
+                        case 1:
+                          return '월요일';
+                        case 2:
+                          return '화요일';
+                        case 3:
+                          return '수요일';
+                        case 4:
+                          return '목요일';
+                        case 5:
+                          return '금요일';
+                        case 6:
+                          return '토요일';
+                        case 7:
+                          return '일요일';
+                        default:
+                          return '';
+                      }
+                    })
+                    .join(', '),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.blue.shade800,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
         ),
         subtitle: Text(academy.type.displayName),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),

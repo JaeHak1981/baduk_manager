@@ -140,19 +140,7 @@ class _HomePageState extends State<HomePage> {
                                         .titleLarge
                                         ?.copyWith(fontWeight: FontWeight.bold),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, size: 20),
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const AcademyManagementScreen(),
-                                        ),
-                                      );
-                                    },
-                                    tooltip: '기관 관리',
-                                  ),
+                                  // 상단 관리 아이콘 제거 (하단 버튼으로 이동)
                                 ],
                               ),
                             ),
@@ -184,6 +172,35 @@ class _HomePageState extends State<HomePage> {
                                         },
                                       ),
                                     ),
+                            ),
+                            // 하단에 기관 관리 버튼 배치 (교재 관리와 대칭)
+                            Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const AcademyManagementScreen(),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.settings),
+                                label: const Text('기관 관리 및 등록'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primaryContainer,
+                                  foregroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimaryContainer,
+                                  minimumSize: const Size.fromHeight(45),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                         ),

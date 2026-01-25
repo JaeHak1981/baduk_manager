@@ -215,6 +215,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   attendanceMap[key] = r;
                 }
 
+                debugPrint(
+                  'Rebuilding attendance table. Month: $_currentYear-$_currentMonth, Records: ${attendanceProvider.monthlyRecords.length}',
+                );
+
                 return SingleChildScrollView(
                   scrollDirection: Axis.vertical,
                   child: SingleChildScrollView(
@@ -222,13 +226,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     child: DataTable(
                       // 데이터가 변경될 때마다 테이블을 강제 리빌드하게 함
                       key: ValueKey(
-                        'attendance_table_${attendanceProvider.monthlyRecords.length}_${attendanceProvider.monthlyRecords.fold(0, (prev, element) => prev + element.type.index + element.timestamp.day)}',
+                        'attendance_table_$_currentYear_$_currentMonth_${attendanceProvider.monthlyRecords.length}_${DateTime.now().millisecond}',
                       ),
-                      columnSpacing: 15,
+                      columnSpacing: 20, // 간격 넓힘
                       horizontalMargin: 12,
                       headingRowHeight: 65,
-                      dataRowMinHeight: 55,
-                      dataRowMaxHeight: 55,
+                      dataRowMinHeight: 60, // 높이 조절
+                      dataRowMaxHeight: 60,
                       headingRowColor: WidgetStateProperty.all(
                         Colors.grey.shade100,
                       ),
@@ -261,7 +265,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                           return DataColumn(
                             label: SizedBox(
-                              width: 75,
+                              width: 85, // 너비 확장
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -362,6 +366,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               return DataCell(
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     _buildStatusButton(
                                       context,
@@ -426,11 +431,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
     switch (type) {
       case AttendanceType.present:
-        activeColor = Colors.blue.shade700;
+        activeColor = Colors.blue; // 선명한 파란색
         label = "O";
         break;
       case AttendanceType.absent:
-        activeColor = Colors.red.shade700;
+        activeColor = Colors.red; // 선명한 빨간색
         label = "X";
         break;
       default:
@@ -438,7 +443,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque, // 터치 영역 안정성 강화
       onTap: () {
+        debugPrint(
+          'Tap detected: $studentId, type: $type, isSelected: $isSelected',
+        );
         provider.updateStatus(
           studentId: studentId,
           academyId: widget.academy.id,
@@ -450,14 +459,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       child: Material(
         color: Colors.transparent,
         child: Container(
-          width: 38, // 조금 더 키움
-          height: 38,
+          width: 40, // 버튼 크기 조금 더 확대
+          height: 40,
           decoration: BoxDecoration(
             color: isSelected ? activeColor : Colors.white,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isSelected ? activeColor : Colors.grey.shade400,
-              width: 1.5,
+              width: 2.0, // 테두리 조금 더 굵게
             ),
             boxShadow: isSelected
                 ? [
@@ -475,7 +484,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               style: TextStyle(
                 color: isSelected ? Colors.white : Colors.grey.shade700,
                 fontWeight: FontWeight.bold,
-                fontSize: 18,
+                fontSize: 20, // 글자 크기 확대
               ),
             ),
           ),

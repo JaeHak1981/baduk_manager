@@ -9,7 +9,7 @@ import '../providers/progress_provider.dart';
 
 /// 학생별 교재 주문 상태를 관리하기 위한 임시 모델
 class _OrderEntry {
-  TextbookModel? textbook; // null 이면 '주문없음'
+  TextbookModel? textbook; // null 이면 '없음'
   int volume;
 
   _OrderEntry({this.textbook, this.volume = 1});
@@ -208,7 +208,12 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('교재 주문 명계표'), toolbarHeight: 48),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('교재 주문 명계표'),
+        toolbarHeight: 48,
+        elevation: 0,
+      ),
       body: Consumer2<StudentProvider, ProgressProvider>(
         builder: (context, studentProvider, progressProvider, child) {
           if (!_isInitialized && studentProvider.isLoading) {
@@ -225,6 +230,10 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
               _buildTableHeader(),
               Expanded(
                 child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ), // 좌우 패딩 추가
                   itemCount: filteredStudents.length,
                   separatorBuilder: (context, index) =>
                       const Divider(height: 1),
@@ -244,7 +253,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
 
   Widget _buildFilterArea() {
     return Padding(
-      padding: const EdgeInsets.all(8.0), // 패딩 축소
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12), // 좌우 패딩 추가
       child: Row(
         children: [
           Expanded(
@@ -272,29 +281,43 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
 
   Widget _buildTableHeader() {
     return Container(
-      color: Colors.grey.shade200,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: Colors.grey.shade100,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 8,
+      ), // 좌우 패딩 동기화
       child: Row(
         children: const [
           Expanded(
-            flex: 2,
+            flex: 22,
             child: Text(
               '이름',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
           Expanded(
-            flex: 3,
+            flex: 38,
             child: Text(
-              '배정(교재/권)',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              '교재 선택',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
           Expanded(
-            flex: 3,
+            flex: 12,
             child: Text(
-              '현재 상태',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              '권호',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 28,
+            child: Text(
+              '전 교재',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
         ],
@@ -312,7 +335,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
 
     // 현재 진도 정보 가져오기
     final currentProgress = progressProvider.getProgressForStudent(student.id);
-    String currentStatus = '(없음)';
+    String currentStatus = '없음';
     if (currentProgress.isNotEmpty) {
       final lastP = currentProgress.first;
       final textbook = textbooks.firstWhere(
@@ -329,115 +352,110 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           // 1. 이름
           Expanded(
-            flex: 2,
-            child: Text(
-              student.name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-          ),
-          // 2. 교재/권호 선택 (더욱 슬림하게)
-          Expanded(
-            flex: 3,
-            child: Row(
+            flex: 22,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  flex: 3,
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<TextbookModel?>(
-                      isExpanded: true,
-                      value: entry.textbook,
-                      hint: const Text(
-                        '없음',
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      items: [
-                        const DropdownMenuItem<TextbookModel?>(
-                          value: null,
-                          child: Text(
-                            '없음',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ),
-                        ...textbooks.map(
-                          (t) => DropdownMenuItem<TextbookModel?>(
-                            value: t,
-                            child: Text(
-                              t.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
-                      onChanged: (val) {
-                        setState(() {
-                          entry.textbook = val;
-                          entry.volume = 1;
-                        });
-                      },
-                    ),
+                Text(
+                  student.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
                 ),
-                const VerticalDivider(width: 4),
-                Expanded(
-                  flex: 1,
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<int>(
-                      isExpanded: true,
-                      value: entry.volume,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.orange,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      items: (entry.textbook != null)
-                          ? List.generate(
-                                  entry.textbook!.totalVolumes,
-                                  (i) => i + 1,
-                                )
-                                .map(
-                                  (v) => DropdownMenuItem(
-                                    value: v,
-                                    child: Center(child: Text('$v')),
-                                  ),
-                                )
-                                .toList()
-                          : const [
-                              DropdownMenuItem(
-                                value: 1,
-                                child: Center(child: Text('-')),
-                              ),
-                            ],
-                      onChanged: entry.textbook == null
-                          ? null
-                          : (val) => setState(() => entry.volume = val!),
-                    ),
-                  ),
+                Text(
+                  student.session != null && student.session != 0
+                      ? '${student.session}부'
+                      : '미지정',
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          // 3. 현재 상태 (기존 진도)
+          // 2. 교재 선택
           Expanded(
-            flex: 3,
+            flex: 38,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<TextbookModel?>(
+                isExpanded: true,
+                value: entry.textbook,
+                hint: const Text(
+                  '없음',
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.blueAccent,
+                  fontWeight: FontWeight.w600,
+                ),
+                items: [
+                  const DropdownMenuItem<TextbookModel?>(
+                    value: null,
+                    child: Text('없음', style: TextStyle(color: Colors.grey)),
+                  ),
+                  ...textbooks.map(
+                    (t) => DropdownMenuItem<TextbookModel?>(
+                      value: t,
+                      child: Text(t.name, overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    entry.textbook = val;
+                    entry.volume = 1;
+                  });
+                },
+              ),
+            ),
+          ),
+          // 3. 권호 선택
+          Expanded(
+            flex: 12,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                isExpanded: true,
+                value: entry.volume,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.orange,
+                  fontWeight: FontWeight.bold,
+                ),
+                items: (entry.textbook != null)
+                    ? List.generate(entry.textbook!.totalVolumes, (i) => i + 1)
+                          .map(
+                            (v) => DropdownMenuItem(
+                              value: v,
+                              child: Center(child: Text('$v')),
+                            ),
+                          )
+                          .toList()
+                    : const [
+                        DropdownMenuItem(
+                          value: 1,
+                          child: Center(child: Text('-')),
+                        ),
+                      ],
+                onChanged: entry.textbook == null
+                    ? null
+                    : (val) => setState(() => entry.volume = val!),
+              ),
+            ),
+          ),
+          // 4. 전 교재 (현재 상태)
+          Expanded(
+            flex: 28,
             child: Text(
               currentStatus,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-                fontStyle: FontStyle.italic,
-              ),
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
               overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
             ),
           ),
         ],
@@ -447,25 +465,22 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
 
   Widget _buildBottomButtons() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24), // 좌우 패딩 추가
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 4,
-            offset: const Offset(0, -2),
-          ),
-        ],
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
       ),
       child: Row(
         children: [
           Expanded(
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 side: const BorderSide(color: Colors.orange),
                 foregroundColor: Colors.orange,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: _handleGenerateOrderSheet,
               child: const Text(
@@ -478,13 +493,17 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           Expanded(
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 backgroundColor: Colors.orange,
                 foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: _handleOrderComplete,
               child: const Text(
-                '진도 할당 완료',
+                '주문 완료',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -496,7 +515,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
 
   Widget _buildSessionFilterDropdown() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       height: 28,
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey.shade300),

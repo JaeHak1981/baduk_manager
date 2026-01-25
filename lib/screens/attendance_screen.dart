@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 진동 피드백을 위해 추가
 import 'package:provider/provider.dart';
 import '../models/academy_model.dart';
 import '../models/attendance_model.dart';
@@ -172,7 +173,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         border: Border.all(color: Colors.blue.shade200),
                       ),
                       child: const Text(
-                        '파란색: 선택됨',
+                        'O: 파랑, X: 빨강',
                         style: TextStyle(fontSize: 11, color: Colors.blue),
                       ),
                     ),
@@ -224,15 +225,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      // 데이터가 바뀌면 테이블을 새로 그리도록 함
+                      // 데이터가 바뀌면 테이블을 강제 리빌드함
                       key: ValueKey(
-                        'attendance_table_${_currentYear}_${_currentMonth}_${attendanceProvider.monthlyRecords.length}',
+                        'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}',
                       ),
                       columnSpacing: 15,
                       horizontalMargin: 12,
-                      headingRowHeight: 65,
-                      dataRowMinHeight: 65,
-                      dataRowMaxHeight: 65,
+                      headingRowHeight: 80, // 공휴일명 표시를 위해 더 높임
+                      dataRowMinHeight: 75, // 버튼 클릭 영역 확보를 위해 높임
+                      dataRowMaxHeight: 75,
                       headingRowColor: WidgetStateProperty.all(
                         Colors.grey.shade100,
                       ),
@@ -265,14 +266,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                           return DataColumn(
                             label: SizedBox(
-                              width: 80, // 너비 확장
+                              width: 85, // 너비 확장
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
                                     '${date.day}',
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 14, // 가독성 위해 키움
                                       fontWeight: FontWeight.bold,
                                       color: textPrimaryColor,
                                     ),
@@ -280,7 +281,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   Text(
                                     _getWeekdayName(date.weekday),
                                     style: TextStyle(
-                                      fontSize: 9,
+                                      fontSize: 10,
                                       color: textPrimaryColor,
                                     ),
                                   ),
@@ -290,9 +291,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                       child: Text(
                                         holidayName,
                                         style: const TextStyle(
-                                          fontSize: 8,
+                                          fontSize: 9,
                                           color: Colors.red,
-                                          fontWeight: FontWeight.bold,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -341,7 +342,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                 student.name,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 13,
+                                  fontSize: 14,
                                 ),
                               ),
                             ),
@@ -353,7 +354,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   Center(
                                     child: Text(
                                       '-',
-                                      style: TextStyle(color: Colors.grey),
+                                      style: TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 18,
+                                      ),
                                     ),
                                   ),
                                 );
@@ -398,7 +402,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   '$presentCount/$validLessonCount',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 13,
+                                    fontSize: 14,
                                     color: Colors.blue,
                                   ),
                                 ),
@@ -446,6 +450,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque, // 터치 영역 안정성 강화
       onTap: () {
+        HapticFeedback.lightImpact(); // 짧은 진동 추가
+
         provider.updateStatus(
           studentId: studentId,
           academyId: widget.academy.id,
@@ -453,25 +459,40 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           date: date,
           type: isSelected ? null : type,
         );
+
+        // 하단에 짧은 안내 메시지 표시 (이미 있으면 닫고 새로 띄움)
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isSelected
+                  ? '출석 기록을 취소했습니다.'
+                  : '${label == "O" ? "출석" : "결석"}으로 표시했습니다.',
+            ),
+            duration: const Duration(milliseconds: 700),
+            behavior: SnackBarBehavior.floating,
+            width: 200,
+          ),
+        );
       },
       child: Container(
         // key를 부여하여 상태 변경 시 반드시 다시 그리게 함
-        key: ValueKey('btn_${studentId}_${date.day}_${type.name}_$isSelected'),
-        width: 40, // 버튼 크기 조금 더 확대
-        height: 40,
+        key: ValueKey('b_${studentId}_${date.day}_${type.name}_$isSelected'),
+        width: 44, // 더 크게 만듬
+        height: 44,
         decoration: BoxDecoration(
           color: isSelected ? activeColor : Colors.white,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected ? activeColor : Colors.grey.shade400,
-            width: 2, // 테두리 조금 더 굵게
+            width: 2.5, // 테두리 강조
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: activeColor.withOpacity(0.3),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
+                    color: activeColor.withOpacity(0.5),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
                   ),
                 ]
               : null,
@@ -481,8 +502,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             label,
             style: TextStyle(
               color: isSelected ? Colors.white : Colors.grey.shade700,
-              fontWeight: FontWeight.bold,
-              fontSize: 18, // 글자 크기 확대
+              fontWeight: FontWeight.w900,
+              fontSize: 22, // 텍스트를 크게
             ),
           ),
         ),

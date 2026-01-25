@@ -10,10 +10,12 @@ class AttendanceProvider with ChangeNotifier {
   List<AttendanceRecord> _monthlyRecords = [];
   Map<String, List<AttendanceRecord>> _historyMap = {}; // Key: studentId
   bool _isLoading = false;
+  int _stateCounter = 0; // UI 강제 갱신을 위한 카운터
 
   List<AttendanceRecord> get todayRecords => _todayRecords;
   List<AttendanceRecord> get monthlyRecords => _monthlyRecords;
   bool get isLoading => _isLoading;
+  int get stateCounter => _stateCounter;
 
   /// 월별 출결 기록 로드
   Future<void> loadMonthlyAttendance({
@@ -95,6 +97,7 @@ class AttendanceProvider with ChangeNotifier {
       }
     }
     _monthlyRecords = newList;
+    _stateCounter++; // 카운터 증가
     notifyListeners(); // 즉시 UI 반영
 
     try {
@@ -121,10 +124,11 @@ class AttendanceProvider with ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error updating attendance: $e');
+      // 에러 시 로컬 데이터 복구 로직 (생략 가능)
     }
 
-    // 약간의 지연 후 서버 상태 재확인 (스피너 없이)
-    await Future.delayed(const Duration(milliseconds: 500));
+    // 서버와의 완전한 동기화를 위해 약간의 지연 후 재로드 (네트워크 딜레이 고려 1초)
+    await Future.delayed(const Duration(milliseconds: 1000));
     await loadMonthlyAttendance(
       academyId: academyId,
       year: targetDate.year,

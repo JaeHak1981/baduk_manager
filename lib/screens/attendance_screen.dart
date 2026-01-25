@@ -220,9 +220,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
+                      // 데이터가 변경될 때마다 테이블을 강제 리빌드하게 함
+                      key: ValueKey(
+                        'attendance_table_${attendanceProvider.monthlyRecords.length}_${attendanceProvider.monthlyRecords.fold(0, (prev, element) => prev + element.type.index + element.timestamp.day)}',
+                      ),
                       columnSpacing: 15,
                       horizontalMargin: 12,
-                      headingRowHeight: 65, // 공휴일 명칭 표시를 위해 높이 확장
+                      headingRowHeight: 65,
                       dataRowMinHeight: 55,
                       dataRowMaxHeight: 55,
                       headingRowColor: WidgetStateProperty.all(
@@ -433,7 +437,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         return const SizedBox.shrink();
     }
 
-    return InkWell(
+    return GestureDetector(
       onTap: () {
         provider.updateStatus(
           studentId: studentId,
@@ -443,33 +447,36 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           type: isSelected ? null : type,
         );
       },
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: isSelected ? activeColor : Colors.white,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isSelected ? activeColor : Colors.grey.shade400,
-            width: 1.5,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          width: 38, // 조금 더 키움
+          height: 38,
+          decoration: BoxDecoration(
+            color: isSelected ? activeColor : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? activeColor : Colors.grey.shade400,
+              width: 1.5,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: activeColor.withOpacity(0.4),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: activeColor.withOpacity(0.3),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.white : Colors.grey.shade600,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.grey.shade700,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
             ),
           ),
         ),

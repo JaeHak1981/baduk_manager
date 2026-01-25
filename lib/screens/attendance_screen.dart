@@ -259,22 +259,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             ),
                           ),
                         ),
-                        // 2. 출석률 (앞으로 이동)
-                        const DataColumn(
-                          label: SizedBox(
-                            width: 40,
-                            child: Text(
-                              '율(%)',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                color: Colors.blueAccent,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-                        // 3. 날짜별 컬럼
+                        // 2. 날짜별 컬럼
                         ...lessonDates.map((date) {
                           final holidayName = HolidayHelper.getHolidayName(
                             date,
@@ -311,6 +296,21 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             ),
                           );
                         }),
+                        // 3. 출석율 (맨 뒤로 이동 및 이름 변경)
+                        const DataColumn(
+                          label: SizedBox(
+                            width: 50,
+                            child: Text(
+                              '출석율',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: Colors.blueAccent,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
                       ],
                       rows: students.map((student) {
                         int presentCount = 0;
@@ -354,22 +354,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                 ),
                               ),
                             ),
-                            // 2. 출석률
-                            DataCell(
-                              Container(
-                                width: 40,
-                                alignment: Alignment.center,
-                                child: Text(
-                                  '$rate%',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                    color: rateColor,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            // 3. 날짜별 버튼
+                            // 2. 날짜별 버튼
                             ...lessonDates.map((date) {
                               final isHoliday = HolidayHelper.isHoliday(date);
 
@@ -417,6 +402,21 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                 ),
                               );
                             }),
+                            // 3. 출석율 (맨 뒤로 이동)
+                            DataCell(
+                              Container(
+                                width: 50,
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '$rate%',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: rateColor,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
                         );
                       }).toList(),

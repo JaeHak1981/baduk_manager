@@ -226,7 +226,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     child: DataTable(
                       // 데이터가 변경될 때마다 테이블을 강제 리빌드하게 함
                       key: ValueKey(
-                        'attendance_table_$_currentYear_$_currentMonth_${attendanceProvider.monthlyRecords.length}_${DateTime.now().millisecond}',
+                        'attendance_${_currentYear}_${_currentMonth}_${attendanceProvider.monthlyRecords.length}',
                       ),
                       columnSpacing: 20, // 간격 넓힘
                       horizontalMargin: 12,

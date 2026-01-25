@@ -228,7 +228,10 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('교재 주문 및 할당')),
+      appBar: AppBar(
+        title: const Text('교재 주문 및 할당'),
+        toolbarHeight: 48,
+      ), // 앱바 살짝 슬림하게
       body: Consumer2<StudentProvider, ProgressProvider>(
         builder: (context, studentProvider, progressProvider, child) {
           final filteredStudents = _getFilteredStudents(
@@ -236,10 +239,13 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           );
           return Column(
             children: [
+              // 1. 학생 명단 영역 (공간 최대 확보)
               _buildStudentSelectionArea(filteredStudents),
-              const Divider(height: 1),
-              _buildOrderSettingsArea(progressProvider.allOwnerTextbooks),
-              _buildBottomButton(),
+
+              const Divider(height: 1, thickness: 1, color: Colors.grey),
+
+              // 2. 콤팩트한 하단 설정 영역
+              _buildCompactSettingsArea(progressProvider.allOwnerTextbooks),
             ],
           );
         },
@@ -249,20 +255,27 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
 
   Widget _buildStudentSelectionArea(List<StudentModel> filteredStudents) {
     return Expanded(
-      flex: 5,
+      flex: 8, // 명단 노출 극대화 (80% 이상)
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12.0,
+              vertical: 8.0,
+            ),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     decoration: const InputDecoration(
                       hintText: '이름 검색',
-                      prefixIcon: Icon(Icons.search),
+                      prefixIcon: Icon(Icons.search, size: 20),
                       border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      isDense: true,
                     ),
                     onChanged: (val) => setState(() => _searchQuery = val),
                   ),
@@ -282,21 +295,27 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.blue,
+                    fontSize: 13,
                   ),
                 ),
                 TextButton.icon(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
                   onPressed: () => _toggleSelectAll(filteredStudents),
                   icon: Icon(
                     _selectedStudentIds.length == filteredStudents.length &&
                             filteredStudents.isNotEmpty
                         ? Icons.check_box
                         : Icons.check_box_outline_blank,
+                    size: 18,
                   ),
                   label: Text(
                     _selectedStudentIds.length == filteredStudents.length &&
                             filteredStudents.isNotEmpty
                         ? '전체 해제'
                         : '전체 선택',
+                    style: const TextStyle(fontSize: 13),
                   ),
                 ),
               ],
@@ -309,16 +328,24 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                 final student = filteredStudents[index];
                 final isSelected = _selectedStudentIds.contains(student.id);
                 return CheckboxListTile(
-                  visualDensity: VisualDensity.compact,
+                  visualDensity: const VisualDensity(
+                    horizontal: 0,
+                    vertical: -4,
+                  ), // 간격 더 좁게
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   value: isSelected,
                   title: Text(
                     student.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
                   subtitle: Text(
                     student.session != null && student.session != 0
                         ? '${student.session}부'
                         : '부 미지정',
+                    style: const TextStyle(fontSize: 12),
                   ),
                   onChanged: (val) {
                     setState(() {
@@ -339,108 +366,138 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
   }
 
   Widget _buildSessionFilterDropdown() {
-    return DropdownButton<int?>(
-      value: _selectedFilterSession,
-      items: [
-        const DropdownMenuItem(value: null, child: Text('전체 부')),
-        const DropdownMenuItem(value: 0, child: Text('미지정')),
-        ...List.generate(
-          widget.academy.totalSessions,
-          (i) => i + 1,
-        ).map((s) => DropdownMenuItem(value: s, child: Text('$s부'))),
-      ],
-      onChanged: (val) => setState(() => _selectedFilterSession = val),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      height: 40,
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade400),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int?>(
+          value: _selectedFilterSession,
+          style: const TextStyle(fontSize: 13, color: Colors.black),
+          items: [
+            const DropdownMenuItem(value: null, child: Text('전체 부')),
+            const DropdownMenuItem(value: 0, child: Text('미지정')),
+            ...List.generate(
+              widget.academy.totalSessions,
+              (i) => i + 1,
+            ).map((s) => DropdownMenuItem(value: s, child: Text('$s부'))),
+          ],
+          onChanged: (val) => setState(() => _selectedFilterSession = val),
+        ),
+      ),
     );
   }
 
-  Widget _buildOrderSettingsArea(List<TextbookModel> textbooks) {
+  Widget _buildCompactSettingsArea(List<TextbookModel> textbooks) {
+    final int totalCount = _selectedStudentIds.length;
+
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Colors.black12,
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: Offset(0, -5),
+            offset: const Offset(0, -5),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            '교재 및 권호 선택',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-          const SizedBox(height: 20),
-
-          DropdownButtonFormField<TextbookModel>(
-            value: _selectedTextbook,
-            decoration: const InputDecoration(
-              labelText: '교재 시리즈',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.book),
-            ),
-            items: textbooks
-                .map((t) => DropdownMenuItem(value: t, child: Text(t.name)))
-                .toList(),
-            onChanged: (val) {
-              setState(() => _selectedTextbook = val);
-              _updateRecommendedVolume();
-            },
-          ),
-
-          if (_selectedTextbook != null) ...[
-            const SizedBox(height: 16),
-            DropdownButtonFormField<int>(
-              value: _targetVolume,
-              decoration: const InputDecoration(
-                labelText: '할당할 권호 선택',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.pin),
-              ),
-              items:
-                  List.generate(_selectedTextbook!.totalVolumes, (i) => i + 1)
+          Row(
+            children: [
+              // 교재 선택 (가로 배치)
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<TextbookModel>(
+                  value: _selectedTextbook,
+                  decoration: const InputDecoration(
+                    labelText: '교재',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 0,
+                    ),
+                    isDense: true,
+                  ),
+                  style: const TextStyle(fontSize: 14, color: Colors.black),
+                  items: textbooks
                       .map(
-                        (v) => DropdownMenuItem(value: v, child: Text('$v권')),
+                        (t) => DropdownMenuItem(
+                          value: t,
+                          child: Text(t.name, overflow: TextOverflow.ellipsis),
+                        ),
                       )
                       .toList(),
-              onChanged: (val) => setState(() => _targetVolume = val!),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '※ 선택한 학생들에게 ${_targetVolume}권을 1권씩 할당합니다.',
-              style: const TextStyle(color: Colors.grey, fontSize: 13),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomButton() {
-    final int totalCount = _selectedStudentIds.length;
-    return Container(
-      width: double.infinity,
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          backgroundColor: Colors.orange,
-          foregroundColor: Colors.white,
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+                  onChanged: (val) {
+                    setState(() => _selectedTextbook = val);
+                    _updateRecommendedVolume();
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              // 권호 선택 (가로 배치)
+              Expanded(
+                flex: 2,
+                child: DropdownButtonFormField<int>(
+                  value: _targetVolume,
+                  decoration: const InputDecoration(
+                    labelText: '권호',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 0,
+                    ),
+                    isDense: true,
+                  ),
+                  style: const TextStyle(fontSize: 14, color: Colors.black),
+                  items: (_selectedTextbook != null)
+                      ? List.generate(
+                              _selectedTextbook!.totalVolumes,
+                              (i) => i + 1,
+                            )
+                            .map(
+                              (v) => DropdownMenuItem(
+                                value: v,
+                                child: Text('$v권'),
+                              ),
+                            )
+                            .toList()
+                      : const [DropdownMenuItem(value: 1, child: Text('1권'))],
+                  onChanged: (val) => setState(() => _targetVolume = val!),
+                ),
+              ),
+            ],
           ),
-        ),
-        onPressed: _handleOrderAndAssign,
-        child: Text(
-          totalCount > 0 ? '총 $totalCount권 주문 및 할당 실행' : '주문 및 할당 실행',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
+          const SizedBox(height: 12),
+          // 주문 버튼 (콤팩트하게 통합)
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: _handleOrderAndAssign,
+              child: Text(
+                totalCount > 0 ? '총 $totalCount권 주문 및 할당' : '주문 및 할당 실행',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

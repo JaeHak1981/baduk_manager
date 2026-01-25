@@ -6,6 +6,7 @@ import 'providers/auth_provider.dart';
 import 'providers/academy_provider.dart';
 import 'providers/student_provider.dart';
 import 'providers/progress_provider.dart';
+import 'providers/attendance_provider.dart';
 import 'utils/seed_data.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_page.dart';
@@ -33,6 +34,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AcademyProvider()),
         ChangeNotifierProvider(create: (_) => StudentProvider()),
         ChangeNotifierProvider(create: (_) => ProgressProvider()),
+        ChangeNotifierProvider(create: (_) => AttendanceProvider()),
       ],
       child: MaterialApp(
         title: '바둑 학원 관리',

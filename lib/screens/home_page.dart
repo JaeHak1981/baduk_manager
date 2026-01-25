@@ -520,12 +520,7 @@ class _AcademySummaryCard extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(
-                Icons.assignment_turned_in_outlined,
-                color: Colors.blue,
-              ),
-              tooltip: '출석부 바로가기',
+            OutlinedButton(
               onPressed: () {
                 Navigator.push(
                   context,
@@ -534,7 +529,19 @@ class _AcademySummaryCard extends StatelessWidget {
                   ),
                 );
               },
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                '출석부',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
             ),
+            const SizedBox(width: 4),
             const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
           ],
         ),

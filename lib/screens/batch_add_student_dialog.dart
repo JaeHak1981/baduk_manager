@@ -47,6 +47,7 @@ class _BatchAddStudentDialogState extends State<BatchAddStudentDialog> {
       String? classNumber;
       String? studentNumber;
       int? session;
+      String? parentPhone;
 
       // 1. 이름 찾기 (한글 2~4글자이고 숫자가 포함되지 않은 경우 우선)
       // 2. 교시/부 찾기 ('교시', '부' 포함)
@@ -75,6 +76,13 @@ class _BatchAddStudentDialogState extends State<BatchAddStudentDialog> {
               session = val; // 1부 -> 1
             }
           }
+          continue;
+        }
+
+        // 전화번호 감지 (하이픈 포함 혹은 숫자가 9자리 이상)
+        if (p.contains('-') ||
+            (p.length >= 9 && int.tryParse(p.replaceAll('-', '')) != null)) {
+          parentPhone = p;
           continue;
         }
 
@@ -111,6 +119,7 @@ class _BatchAddStudentDialogState extends State<BatchAddStudentDialog> {
             classNumber: classNumber == '' ? null : classNumber,
             studentNumber: studentNumber == '' ? null : studentNumber,
             session: session,
+            parentPhone: parentPhone,
             createdAt: DateTime.now(),
           ),
         );
@@ -194,7 +203,7 @@ class _BatchAddStudentDialogState extends State<BatchAddStudentDialog> {
               Container(
                 padding: const EdgeInsets.all(8),
                 color: Colors.grey[100],
-                child: const Text('이름  |  학년  |  반  |  번호  |  부(교시)'),
+                child: const Text('이름  |  학년  |  반  |  번호  |  전화번호  |  부(교시)'),
               ),
               const SizedBox(height: 16),
               Expanded(
@@ -258,6 +267,7 @@ class _BatchAddStudentDialogState extends State<BatchAddStudentDialog> {
                             DataColumn(label: Text('학년')),
                             DataColumn(label: Text('반')),
                             DataColumn(label: Text('번호')),
+                            DataColumn(label: Text('전화번호')),
                             DataColumn(label: Text('부')),
                           ],
                           rows: _parsedStudents.map((s) {
@@ -274,6 +284,7 @@ class _BatchAddStudentDialogState extends State<BatchAddStudentDialog> {
                                 DataCell(Text(s.grade?.toString() ?? '-')),
                                 DataCell(Text(s.classNumber ?? '-')),
                                 DataCell(Text(s.studentNumber ?? '-')),
+                                DataCell(Text(s.parentPhone ?? '-')),
                                 DataCell(Text(s.session?.toString() ?? '-')),
                               ],
                             );

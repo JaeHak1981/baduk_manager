@@ -268,7 +268,11 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                 ),
                 isDense: true,
               ),
-              style: const TextStyle(fontSize: 13),
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
               onChanged: (val) => setState(() => _searchQuery = val),
             ),
           ),
@@ -480,7 +484,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           border: Border.all(
             color: isSelected
                 ? Colors.blueAccent
-                : (isNone ? Colors.black45 : Colors.black12),
+                : (isNone ? Colors.black : Colors.black54),
             width: 1.5,
           ),
           borderRadius: BorderRadius.circular(6),
@@ -491,10 +495,10 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             fontSize: 11,
             color: isSelected
                 ? Colors.white
-                : (isNone ? Colors.black87 : Colors.black54),
+                : (isNone ? Colors.black : Colors.black),
             fontWeight: isSelected || isNone
                 ? FontWeight.bold
-                : FontWeight.normal,
+                : FontWeight.bold,
           ),
         ),
       ),
@@ -562,7 +566,11 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int?>(
           value: _selectedFilterSession,
-          style: const TextStyle(fontSize: 11, color: Colors.black),
+          style: const TextStyle(
+            fontSize: 11,
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+          ),
           items: [
             const DropdownMenuItem(value: null, child: Text('전체')),
             const DropdownMenuItem(value: 0, child: Text('미지정')),

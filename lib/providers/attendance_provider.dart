@@ -20,9 +20,12 @@ class AttendanceProvider with ChangeNotifier {
     required String academyId,
     required int year,
     required int month,
+    bool showLoading = true,
   }) async {
-    _isLoading = true;
-    notifyListeners();
+    if (showLoading) {
+      _isLoading = true;
+      notifyListeners();
+    }
 
     try {
       _monthlyRecords = await _attendanceService.getMonthlyAttendance(
@@ -33,7 +36,9 @@ class AttendanceProvider with ChangeNotifier {
     } catch (e) {
       debugPrint('Error loading monthly attendance: $e');
     } finally {
-      _isLoading = false;
+      if (showLoading) {
+        _isLoading = false;
+      }
       notifyListeners();
     }
   }
@@ -50,149 +55,82 @@ class AttendanceProvider with ChangeNotifier {
 
     // 기존 기록 찾기
     AttendanceRecord? existing;
-    try {
-      existing = _monthlyRecords.firstWhere((r) {
-        final rDate = DateTime(
-          r.timestamp.year,
-          r.timestamp.month,
-          r.timestamp.day,
-        );
-        return r.studentId == studentId && rDate.isAtSameMomentAs(targetDate);
-      });
-    } catch (_) {
-      existing = null;
+    int existingIndex = -1;
+
+    for (int i = 0; i < _monthlyRecords.length; i++) {
+      final r = _monthlyRecords[i];
+      final rDate = DateTime(
+        r.timestamp.year,
+        r.timestamp.month,
+        r.timestamp.day,
+      );
+      if (r.studentId == studentId && rDate.isAtSameMomentAs(targetDate)) {
+        existing = r;
+        existingIndex = i;
+        break;
+      }
     }
 
+    // --- 낙관적 업데이트 (Optimistic Update) ---
+    final List<AttendanceRecord> newList = List.from(_monthlyRecords);
     if (type == null) {
-      if (existing != null) {
-        await deleteAttendance(existing.id, studentId);
+      if (existingIndex != -1) {
+        newList.removeAt(existingIndex);
       }
     } else {
-      if (existing == null) {
-        await markAttendance(
-          studentId: studentId,
-          academyId: academyId,
-          ownerId: ownerId,
-          type: type,
-          date: targetDate,
-        );
-      } else {
-        if (existing.type != type) {
-          await updateAttendance(existing.copyWith(type: type));
-        }
-      }
-    }
-
-    await loadMonthlyAttendance(
-      academyId: academyId,
-      year: targetDate.year,
-      month: targetDate.month,
-    );
-  }
-
-  /// 특정 날짜/학생의 출결 상태 토글
-  Future<void> toggleAttendance({
-    required String studentId,
-    required String academyId,
-    required String ownerId,
-    required DateTime date,
-  }) async {
-    // 해당 날짜의 0시 0분으로 정규화
-    final targetDate = DateTime(date.year, date.month, date.day);
-
-    // 기존 기록 찾기
-    AttendanceRecord? existing;
-    try {
-      existing = _monthlyRecords.firstWhere((r) {
-        final rDate = DateTime(
-          r.timestamp.year,
-          r.timestamp.month,
-          r.timestamp.day,
-        );
-        return r.studentId == studentId && rDate.isAtSameMomentAs(targetDate);
-      });
-    } catch (_) {
-      existing = null;
-    }
-
-    if (existing == null) {
-      // 기록 없음 -> 출석으로 생성
-      await markAttendance(
+      final newRecord = AttendanceRecord(
+        id: (existing?.id.isNotEmpty ?? false)
+            ? existing!.id
+            : 'temp_${DateTime.now().millisecondsSinceEpoch}',
         studentId: studentId,
         academyId: academyId,
         ownerId: ownerId,
-        type: AttendanceType.present,
-        date: targetDate,
+        timestamp: targetDate,
+        type: type,
       );
-    } else {
-      // 기록 있음 -> 순환 (출석 -> 결석 -> 지각 -> 삭제)
-      switch (existing.type) {
-        case AttendanceType.present:
-          await updateAttendance(
-            existing.copyWith(type: AttendanceType.absent),
-          );
-          break;
-        case AttendanceType.absent:
-          await updateAttendance(existing.copyWith(type: AttendanceType.late));
-          break;
-        case AttendanceType.late:
-        case AttendanceType.manual:
-          await deleteAttendance(existing.id, studentId);
-          break;
+      if (existingIndex != -1) {
+        newList[existingIndex] = newRecord;
+      } else {
+        newList.add(newRecord);
       }
     }
+    _monthlyRecords = newList;
+    notifyListeners(); // 즉시 UI 반영
 
-    // 로드 없이도 로컬 상태 반영을 위해 다시 로드 (최적화 가능하지만 일단 안전하게)
+    try {
+      if (type == null) {
+        if (existing != null && existing.id.isNotEmpty) {
+          // 문서 ID가 있으면 삭제 (호환성을 위해)
+          await _attendanceService.deleteAttendance(existing.id);
+        } else {
+          // 예측 가능한 ID로 삭제 시도
+          final dateStr =
+              "${targetDate.year}${targetDate.month.toString().padLeft(2, '0')}${targetDate.day.toString().padLeft(2, '0')}";
+          await _attendanceService.deleteAttendance("${studentId}_$dateStr");
+        }
+      } else {
+        final newRecord = AttendanceRecord(
+          id: '',
+          studentId: studentId,
+          academyId: academyId,
+          ownerId: ownerId,
+          timestamp: targetDate,
+          type: type,
+        );
+        await _attendanceService.saveAttendance(newRecord);
+      }
+    } catch (e) {
+      debugPrint('Error updating attendance: $e');
+    }
+
+    // 약간의 지연 후 서버 상태 재확인 (스피너 없이)
+    await Future.delayed(const Duration(milliseconds: 500));
     await loadMonthlyAttendance(
       academyId: academyId,
       year: targetDate.year,
       month: targetDate.month,
+      showLoading: false,
     );
-  }
-
-  /// 오늘의 출결 현황 구독 (실시간)
-  void subscribeToTodayAttendance({
-    required String academyId,
-    required String ownerId,
-  }) {
-    _isLoading = true;
-    notifyListeners();
-
-    _attendanceService
-        .getTodayAttendanceStream(
-          academyId: academyId,
-          ownerId: ownerId,
-          date: DateTime.now(),
-        )
-        .listen((records) {
-          _todayRecords = records;
-          _isLoading = false;
-          notifyListeners();
-        });
-  }
-
-  /// 출결 기록 저장
-  Future<void> markAttendance({
-    required String studentId,
-    required String academyId,
-    required String ownerId,
-    required AttendanceType type,
-    String? note,
-    DateTime? date, // 선택적 날짜 파라미터 추가
-  }) async {
-    final record = AttendanceRecord(
-      id: '', // Firestore에서 자동 생성
-      studentId: studentId,
-      academyId: academyId,
-      ownerId: ownerId,
-      timestamp: date ?? DateTime.now(), // 날짜가 있으면 사용, 없으면 현재 시간
-      type: type,
-      note: note,
-    );
-
-    await _attendanceService.recordAttendance(record);
-    // 기록 추가 후 해당 학생의 기록 다시 로드 (히스토리 화면 갱신용)
-    await loadStudentAttendance(studentId);
   }
 
   /// 특정 학생이 오늘 출석했는지 확인
@@ -248,7 +186,7 @@ class AttendanceProvider with ChangeNotifier {
 
   /// 출결 기록 수정
   Future<void> updateAttendance(AttendanceRecord record) async {
-    await _attendanceService.updateAttendance(record);
+    await _attendanceService.saveAttendance(record);
     // 수정 후 해당 학생의 기록 다시 로드
     await loadStudentAttendance(record.studentId);
   }

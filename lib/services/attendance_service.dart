@@ -6,15 +6,16 @@ class AttendanceService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _collection = 'attendance';
 
-  /// 출결 기록 저장
-  Future<String> recordAttendance(AttendanceRecord record) async {
-    // 같은 학생, 같은 날표(YYYY-MM-DD)에 이미 기록이 있는지 확인하고 업데이트하거나 새로 생성
-    // 이 부분은 비즈니스 로직에 따라 다를 수 있음 (중복 허용 여부)
-    // 여기서는 단순히 추가하는 방식으로 구현
-    final docRef = await _firestore
+  /// 출결 기록 저장 (중복 방지를 위해 학생ID와 날짜 조합을 ID로 사용)
+  Future<void> saveAttendance(AttendanceRecord record) async {
+    final dateStr =
+        "${record.timestamp.year}${record.timestamp.month.toString().padLeft(2, '0')}${record.timestamp.day.toString().padLeft(2, '0')}";
+    final docId = "${record.studentId}_$dateStr";
+
+    await _firestore
         .collection(_collection)
-        .add(record.toFirestore());
-    return docRef.id;
+        .doc(docId)
+        .set(record.toFirestore());
   }
 
   /// 특정 학생의 출결 내역 조회

@@ -98,6 +98,9 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
 
       if (mounted) {
         if (success) {
+          // Navigator를 먼저 캡처해둡니다.
+          final navigator = Navigator.of(context);
+
           // 성공 시 다이얼로그 표시 (사용자 요청 반영: "수정 완료")
           await showDialog(
             context: context,
@@ -113,7 +116,9 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
               ],
             ),
           );
-          if (mounted) Navigator.pop(context, true);
+
+          // 다이얼로그가 닫힌 후 화면도 닫습니다.
+          navigator.pop(true);
         } else {
           // Provider에서 설정한 에러 메시지 표시
           await showDialog(

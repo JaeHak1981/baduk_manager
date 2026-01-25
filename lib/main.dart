@@ -10,6 +10,8 @@ import 'utils/seed_data.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_page.dart';
 
+import 'dart:ui';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -35,6 +37,14 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: '바둑 학원 관리',
         debugShowCheckedModeBanner: false,
+        scrollBehavior: const MaterialScrollBehavior().copyWith(
+          dragDevices: {
+            PointerDeviceKind.mouse,
+            PointerDeviceKind.touch,
+            PointerDeviceKind.stylus,
+            PointerDeviceKind.unknown,
+          },
+        ),
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,

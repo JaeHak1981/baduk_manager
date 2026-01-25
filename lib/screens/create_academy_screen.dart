@@ -156,10 +156,11 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              // 가장 확실한 방법: 다이얼로그를 닫고(1), 부모 화면도 닫습니다(2).
-              // Navigator.of(context)를 사용하여 부모 스택에 접근합니다.
-              Navigator.of(dContext).pop(); // 다이얼로그 닫기
-              Navigator.of(context).pop(true); // 원래 화면 닫기
+              // 가장 확실하게 다이얼로그와 화면을 동시에 닫는 플러터의 내장 기능을 사용합니다.
+              // 현재 내비게이터에서 '팝'을 두 번 연속 수행합니다.
+              Navigator.of(context)
+                ..pop() // 다이얼로그 닫기
+                ..pop(true); // 현재 화면 닫기 (true 결과 전달)
             },
             child: const Text('확인'),
           ),

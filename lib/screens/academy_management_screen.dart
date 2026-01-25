@@ -323,14 +323,7 @@ class _AcademyCard extends StatelessWidget {
                       builder: (context) =>
                           CreateAcademyScreen(academy: academy),
                     ),
-                  ).then((result) {
-                    if (result == true) {
-                      // 사실 Provider로 관리되므로 자동 반영되지만 확실하게 리로드
-                      context.read<AcademyProvider>().loadAcademiesByOwner(
-                        academy.ownerId,
-                      );
-                    }
-                  });
+                  );
                 },
                 tooltip: '기관 정보 수정',
               ),

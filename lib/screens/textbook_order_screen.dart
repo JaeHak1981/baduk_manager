@@ -8,6 +8,15 @@ import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
 import 'dart:math' as math;
 
+/// 학생별 교재 주문 상태를 관리하기 위한 임시 모델
+class _OrderEntry {
+  TextbookModel? textbook;
+  int volume;
+  bool isChanged; // 기본 추천값에서 변경되었는지 여부
+
+  _OrderEntry({this.textbook, this.volume = 1, this.isChanged = false});
+}
+
 class TextbookOrderScreen extends StatefulWidget {
   final AcademyModel academy;
 
@@ -17,12 +26,17 @@ class TextbookOrderScreen extends StatefulWidget {
   State<TextbookOrderScreen> createState() => _TextbookOrderScreenState();
 }
 
+class _OrderEntryController {
+  // State variables could go here if extracted, but for now we'll keep it in Screen State
+}
+
 class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
-  int? _selectedFilterSession; // null: 전체
-  final Set<String> _selectedStudentIds = {};
-  TextbookModel? _selectedTextbook;
-  int _targetVolume = 1; // 할당할 권호
+  int? _selectedFilterSession;
   String _searchQuery = '';
+
+  // 학생별 주문 설정을 저장하는 맵 (key: studentId)
+  final Map<String, _OrderEntry> _orderEntries = {};
+  bool _isInitialized = false;
 
   @override
   void initState() {
@@ -30,49 +44,66 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     _loadInitialData();
   }
 
-  void _loadInitialData() {
-    context.read<StudentProvider>().loadStudents(
+  void _loadInitialData() async {
+    final studentProvider = context.read<StudentProvider>();
+    final progressProvider = context.read<ProgressProvider>();
+
+    await studentProvider.loadStudents(
       widget.academy.id,
       ownerId: widget.academy.ownerId,
     );
-    context.read<ProgressProvider>().loadOwnerTextbooks(widget.academy.ownerId);
-    context.read<ProgressProvider>().loadAcademyProgress(widget.academy.id);
+    await progressProvider.loadOwnerTextbooks(widget.academy.ownerId);
+    await progressProvider.loadAcademyProgress(widget.academy.id);
+
+    _initializeEntries();
   }
 
-  // 선택된 학생들의 진도를 분석하여 다음 권호 추천
-  void _updateRecommendedVolume() {
-    if (_selectedTextbook == null || _selectedStudentIds.isEmpty) return;
+  // 데이터 로드 후 각 학생별로 기본 추천 진도 세팅
+  void _initializeEntries() {
+    if (_isInitialized) return;
 
+    final students = context.read<StudentProvider>().students;
+    final textbooks = context.read<ProgressProvider>().allOwnerTextbooks;
     final progressProvider = context.read<ProgressProvider>();
-    int maxLastVolume = 0;
 
-    for (var studentId in _selectedStudentIds) {
-      final currentProgress = progressProvider.getProgressForStudent(studentId);
-      final seriesProgress = currentProgress
-          .where((p) => p.textbookId == _selectedTextbook!.id)
-          .toList();
+    if (textbooks.isEmpty) return;
 
-      if (seriesProgress.isNotEmpty) {
-        int studentLastVolume = seriesProgress
-            .map((p) => p.volumeNumber)
-            .reduce(math.max);
-        if (studentLastVolume > maxLastVolume) {
-          maxLastVolume = studentLastVolume;
-        }
+    for (var student in students) {
+      final currentProgress = progressProvider.getProgressForStudent(
+        student.id,
+      );
+
+      TextbookModel? recommendedTextbook;
+      int recommendedVolume = 1;
+
+      if (currentProgress.isNotEmpty) {
+        // 마지막으로 진행한 교재 찾기
+        final lastP = currentProgress.first;
+        recommendedTextbook = textbooks.firstWhere(
+          (t) => t.id == lastP.textbookId,
+          orElse: () => textbooks.first,
+        );
+        recommendedVolume = (lastP.volumeNumber + 1).clamp(
+          1,
+          recommendedTextbook.totalVolumes,
+        );
+      } else {
+        recommendedTextbook = textbooks.first;
       }
+
+      _orderEntries[student.id] = _OrderEntry(
+        textbook: recommendedTextbook,
+        volume: recommendedVolume,
+      );
     }
 
     setState(() {
-      _targetVolume = (maxLastVolume + 1).clamp(
-        1,
-        _selectedTextbook!.totalVolumes,
-      );
+      _isInitialized = true;
     });
   }
 
   List<StudentModel> _getFilteredStudents(List<StudentModel> allStudents) {
     List<StudentModel> filtered = allStudents;
-
     if (_selectedFilterSession != null) {
       if (_selectedFilterSession == 0) {
         filtered = filtered
@@ -84,48 +115,21 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             .toList();
       }
     }
-
     if (_searchQuery.isNotEmpty) {
       filtered = filtered.where((s) => s.name.contains(_searchQuery)).toList();
     }
-
     return filtered;
   }
 
-  void _toggleSelectAll(List<StudentModel> filteredStudents) {
-    setState(() {
-      final allSelected =
-          filteredStudents.isNotEmpty &&
-          filteredStudents.every((s) => _selectedStudentIds.contains(s.id));
-
-      if (allSelected) {
-        for (var s in filteredStudents) {
-          _selectedStudentIds.remove(s.id);
-        }
-      } else {
-        _selectedStudentIds.addAll(filteredStudents.map((s) => s.id));
-      }
-    });
-    _updateRecommendedVolume();
-  }
-
-  Future<void> _handleOrderAndAssign() async {
-    if (_selectedStudentIds.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('학생을 선택해 주세요')));
-      return;
-    }
-    if (_selectedTextbook == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('교재를 선택해 주세요')));
-      return;
-    }
-
+  /// [주문 완료] - 실제 DB에 진도 기록 저장
+  Future<void> _handleOrderComplete() async {
     final progressProvider = context.read<ProgressProvider>();
-    int targetVol = _targetVolume;
-    int studentCount = _selectedStudentIds.length;
+    final filteredStudents = _getFilteredStudents(
+      context.read<StudentProvider>().students,
+    );
+
+    // 변경 사항이 있는 학생만 일괄 저장하거나, 전체 저장하거나 정책 결정 필요
+    // 여기서는 화면에 보이는(필터링된) 학생들의 현재 설정값을 모두 저장하는 것으로 구현
 
     showDialog(
       context: context,
@@ -134,74 +138,92 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     );
 
     try {
-      for (var studentId in _selectedStudentIds) {
-        // 1. 기존 진행 중인 교재 자동 완료 처리
-        final currentProgress = progressProvider.getProgressForStudent(
-          studentId,
-        );
-        for (var p in currentProgress) {
-          if (!p.isCompleted) {
-            await progressProvider.updateVolumeStatus(p.id, studentId, true);
+      for (var student in filteredStudents) {
+        final entry = _orderEntries[student.id];
+        if (entry != null && entry.textbook != null) {
+          // 1. 기존 진행 중 완료 처리
+          final currentP = progressProvider.getProgressForStudent(student.id);
+          for (var p in currentP) {
+            if (!p.isCompleted)
+              await progressProvider.updateVolumeStatus(p.id, student.id, true);
           }
+          // 2. 새 권호 할당
+          await progressProvider.assignVolume(
+            studentId: student.id,
+            academyId: widget.academy.id,
+            ownerId: widget.academy.ownerId,
+            textbook: entry.textbook!,
+            volumeNumber: entry.volume,
+          );
         }
-
-        // 2. 선택된 권호 할당 (인당 1권)
-        await progressProvider.assignVolume(
-          studentId: studentId,
-          academyId: widget.academy.id,
-          ownerId: widget.academy.ownerId,
-          textbook: _selectedTextbook!,
-          volumeNumber: targetVol,
-        );
       }
-
       if (mounted) {
-        Navigator.pop(context); // 로딩 다이얼로그 닫기
-        _showOrderSummaryDialog(targetVol, studentCount);
+        Navigator.pop(context);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('모든 학생의 진도 할당이 완료되었습니다.')));
+        Navigator.pop(context); // 화면 닫기
       }
     } catch (e) {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('오류 발생: $e')));
+        ).showSnackBar(SnackBar(content: Text('할당 중 오류: $e')));
       }
     }
   }
 
-  void _showOrderSummaryDialog(int volumeNumber, int count) {
-    final String textbookName = _selectedTextbook!.name;
+  /// [주문서 (문자)] - 문자 양식 생성 및 복사
+  void _handleGenerateOrderSheet() {
+    final filteredStudents = _getFilteredStudents(
+      context.read<StudentProvider>().students,
+    );
+    Map<String, Map<int, int>> summary = {}; // TextbookName -> {Volume: Count}
 
-    String orderSummary =
-        '[${widget.academy.name}] 주문 내역:\n'
-        '$textbookName ${volumeNumber}권 ($count명)\n'
-        '총 $count권 주문 요청합니다.';
+    for (var student in filteredStudents) {
+      final entry = _orderEntries[student.id];
+      if (entry != null && entry.textbook != null) {
+        final tName = entry.textbook!.name;
+        summary[tName] ??= {};
+        summary[tName]![entry.volume] =
+            (summary[tName]![entry.volume] ?? 0) + 1;
+      }
+    }
 
+    if (summary.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('주문할 내용이 없습니다.')));
+      return;
+    }
+
+    StringBuffer buffer = StringBuffer('[${widget.academy.name}] 주문 내역:\n');
+    int totalAll = 0;
+
+    summary.forEach((tName, volumes) {
+      List<int> sortedV = volumes.keys.toList()..sort();
+      String detailed = sortedV.map((v) => '${v}권(${volumes[v]})').join(', ');
+      buffer.writeln('$tName $detailed');
+      totalAll += volumes.values.fold(0, (sum, c) => sum + c);
+    });
+    buffer.write('총 $totalAll권 주문 요청합니다.');
+
+    _showOrderSummaryDialog(buffer.toString());
+  }
+
+  void _showOrderSummaryDialog(String message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('주문 및 할당 완료'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('지정된 권호로 할당이 완료되었습니다.'),
-            const SizedBox(height: 16),
-            const Text(
-              '출판사 전송용 주문 문구:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: SelectableText(orderSummary),
-            ),
-          ],
+        title: const Text('교재 주문서 생성'),
+        content: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: SelectableText(message),
         ),
         actions: [
           TextButton(
@@ -210,42 +232,49 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           ),
           ElevatedButton.icon(
             onPressed: () {
-              Clipboard.setData(ClipboardData(text: orderSummary));
+              Clipboard.setData(ClipboardData(text: message));
               ScaffoldMessenger.of(
                 context,
-              ).showSnackBar(const SnackBar(content: Text('클립보드에 복사되었습니다')));
+              ).showSnackBar(const SnackBar(content: Text('복사되었습니다.')));
             },
             icon: const Icon(Icons.copy),
-            label: const Text('문구 복사하기'),
+            label: const Text('복사하기'),
           ),
         ],
       ),
-    ).then((_) {
-      if (mounted) Navigator.pop(context);
-    });
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('교재 주문 및 할당'),
-        toolbarHeight: 48,
-      ), // 앱바 살짝 슬림하게
+      appBar: AppBar(title: const Text('교재 주문 명계표'), toolbarHeight: 48),
       body: Consumer2<StudentProvider, ProgressProvider>(
         builder: (context, studentProvider, progressProvider, child) {
+          if (!_isInitialized && studentProvider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
           final filteredStudents = _getFilteredStudents(
             studentProvider.students,
           );
+          final textbooks = progressProvider.allOwnerTextbooks;
+
           return Column(
             children: [
-              // 1. 학생 명단 영역 (공간 최대 확보)
-              _buildStudentSelectionArea(filteredStudents),
-
-              const Divider(height: 1, thickness: 1, color: Colors.grey),
-
-              // 2. 콤팩트한 하단 설정 영역
-              _buildCompactSettingsArea(progressProvider.allOwnerTextbooks),
+              _buildFilterArea(),
+              _buildTableHeader(),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: filteredStudents.length,
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final student = filteredStudents[index];
+                    return _buildOrderRow(student, textbooks);
+                  },
+                ),
+              ),
+              _buildBottomButtons(),
             ],
           );
         },
@@ -253,111 +282,196 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     );
   }
 
-  Widget _buildStudentSelectionArea(List<StudentModel> filteredStudents) {
-    return Expanded(
-      flex: 8, // 명단 노출 극대화 (80% 이상)
-      child: Column(
+  Widget _buildFilterArea() {
+    return Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12.0,
-              vertical: 8.0,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    decoration: const InputDecoration(
-                      hintText: '이름 검색',
-                      prefixIcon: Icon(Icons.search, size: 20),
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      isDense: true,
-                    ),
-                    onChanged: (val) => setState(() => _searchQuery = val),
-                  ),
+          Expanded(
+            child: TextField(
+              decoration: const InputDecoration(
+                hintText: '이름 검색',
+                prefixIcon: Icon(Icons.search, size: 20),
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
                 ),
-                const SizedBox(width: 8),
-                _buildSessionFilterDropdown(),
-              ],
+                isDense: true,
+              ),
+              onChanged: (val) => setState(() => _searchQuery = val),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '${_selectedStudentIds.length}명 선택됨',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue,
-                    fontSize: 13,
-                  ),
-                ),
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  onPressed: () => _toggleSelectAll(filteredStudents),
-                  icon: Icon(
-                    _selectedStudentIds.length == filteredStudents.length &&
-                            filteredStudents.isNotEmpty
-                        ? Icons.check_box
-                        : Icons.check_box_outline_blank,
-                    size: 18,
-                  ),
-                  label: Text(
-                    _selectedStudentIds.length == filteredStudents.length &&
-                            filteredStudents.isNotEmpty
-                        ? '전체 해제'
-                        : '전체 선택',
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                ),
-              ],
+          const SizedBox(width: 8),
+          _buildSessionFilterDropdown(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTableHeader() {
+    return Container(
+      color: Colors.grey.shade200,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: const [
+          Expanded(
+            flex: 2,
+            child: Text(
+              '학생 이름',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: filteredStudents.length,
-              itemBuilder: (context, index) {
-                final student = filteredStudents[index];
-                final isSelected = _selectedStudentIds.contains(student.id);
-                return CheckboxListTile(
-                  visualDensity: const VisualDensity(
-                    horizontal: 0,
-                    vertical: -4,
-                  ), // 간격 더 좁게
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  value: isSelected,
-                  title: Text(
-                    student.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
+            flex: 3,
+            child: Text(
+              '교재 선택',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              '권호',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderRow(StudentModel student, List<TextbookModel> textbooks) {
+    final entry = _orderEntries[student.id];
+    if (entry == null) return const SizedBox();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: [
+          // 1. 학생 이름
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  student.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
-                  subtitle: Text(
-                    student.session != null && student.session != 0
-                        ? '${student.session}부'
-                        : '부 미지정',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  onChanged: (val) {
-                    setState(() {
-                      if (val == true)
-                        _selectedStudentIds.add(student.id);
-                      else
-                        _selectedStudentIds.remove(student.id);
-                    });
-                    _updateRecommendedVolume();
-                  },
-                );
-              },
+                ),
+                Text(
+                  student.session != null && student.session != 0
+                      ? '${student.session}부'
+                      : '미지정',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          // 2. 교재 선택
+          Expanded(
+            flex: 3,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<TextbookModel>(
+                isExpanded: true,
+                value: entry.textbook,
+                style: const TextStyle(fontSize: 13, color: Colors.black),
+                items: textbooks
+                    .map(
+                      (t) => DropdownMenuItem(
+                        value: t,
+                        child: Text(t.name, overflow: TextOverflow.ellipsis),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (val) {
+                  setState(() {
+                    entry.textbook = val;
+                    entry.volume = 1; // 교재 바뀌면 1권으로 리셋
+                  });
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // 3. 권호 선택
+          Expanded(
+            flex: 2,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                isExpanded: true,
+                value: entry.volume,
+                style: const TextStyle(fontSize: 13, color: Colors.black),
+                items: (entry.textbook != null)
+                    ? List.generate(entry.textbook!.totalVolumes, (i) => i + 1)
+                          .map(
+                            (v) =>
+                                DropdownMenuItem(value: v, child: Text('$v권')),
+                          )
+                          .toList()
+                    : const [DropdownMenuItem(value: 1, child: Text('1권'))],
+                onChanged: (val) => setState(() => entry.volume = val!),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomButtons() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 4,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: const BorderSide(color: Colors.orange),
+                foregroundColor: Colors.orange,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: _handleGenerateOrderSheet,
+              icon: const Icon(Icons.description),
+              label: const Text(
+                '주문서 (문자)',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: _handleOrderComplete,
+              icon: const Icon(Icons.check_circle),
+              label: const Text(
+                '주문 완료',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ),
         ],
@@ -368,7 +482,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
   Widget _buildSessionFilterDropdown() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      height: 40,
+      height: 32,
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey.shade400),
         borderRadius: BorderRadius.circular(4),
@@ -376,7 +490,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int?>(
           value: _selectedFilterSession,
-          style: const TextStyle(fontSize: 13, color: Colors.black),
+          style: const TextStyle(fontSize: 12, color: Colors.black),
           items: [
             const DropdownMenuItem(value: null, child: Text('전체 부')),
             const DropdownMenuItem(value: 0, child: Text('미지정')),
@@ -387,117 +501,6 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           ],
           onChanged: (val) => setState(() => _selectedFilterSession = val),
         ),
-      ),
-    );
-  }
-
-  Widget _buildCompactSettingsArea(List<TextbookModel> textbooks) {
-    final int totalCount = _selectedStudentIds.length;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -5),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              // 교재 선택 (가로 배치)
-              Expanded(
-                flex: 3,
-                child: DropdownButtonFormField<TextbookModel>(
-                  value: _selectedTextbook,
-                  decoration: const InputDecoration(
-                    labelText: '교재',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 0,
-                    ),
-                    isDense: true,
-                  ),
-                  style: const TextStyle(fontSize: 14, color: Colors.black),
-                  items: textbooks
-                      .map(
-                        (t) => DropdownMenuItem(
-                          value: t,
-                          child: Text(t.name, overflow: TextOverflow.ellipsis),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (val) {
-                    setState(() => _selectedTextbook = val);
-                    _updateRecommendedVolume();
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              // 권호 선택 (가로 배치)
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<int>(
-                  value: _targetVolume,
-                  decoration: const InputDecoration(
-                    labelText: '권호',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 0,
-                    ),
-                    isDense: true,
-                  ),
-                  style: const TextStyle(fontSize: 14, color: Colors.black),
-                  items: (_selectedTextbook != null)
-                      ? List.generate(
-                              _selectedTextbook!.totalVolumes,
-                              (i) => i + 1,
-                            )
-                            .map(
-                              (v) => DropdownMenuItem(
-                                value: v,
-                                child: Text('$v권'),
-                              ),
-                            )
-                            .toList()
-                      : const [DropdownMenuItem(value: 1, child: Text('1권'))],
-                  onChanged: (val) => setState(() => _targetVolume = val!),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // 주문 버튼 (콤팩트하게 통합)
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: _handleOrderAndAssign,
-              child: Text(
-                totalCount > 0 ? '총 $totalCount권 주문 및 할당' : '주문 및 할당 실행',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

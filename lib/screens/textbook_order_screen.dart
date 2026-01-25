@@ -341,7 +341,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           Expanded(
             flex: 12,
             child: Text(
-              '권호',
+              '권',
               textAlign: TextAlign.center,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),

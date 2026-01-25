@@ -195,6 +195,39 @@ class AttendanceProvider with ChangeNotifier {
     await loadStudentAttendance(record.studentId);
   }
 
+  /// 기간별 출결 기록 로드 (시작 월 ~ 종료 월)
+  Future<List<AttendanceRecord>> getRecordsForPeriod({
+    required String academyId,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    List<Future<List<AttendanceRecord>>> futures = [];
+
+    // 시작 월부터 종료 월까지 반복
+    DateTime current = DateTime(start.year, start.month);
+    final endTime = DateTime(end.year, end.month);
+
+    while (!current.isAfter(endTime)) {
+      futures.add(
+        _attendanceService.getMonthlyAttendance(
+          academyId: academyId,
+          year: current.year,
+          month: current.month,
+        ),
+      );
+
+      // 다음 달로 이동
+      if (current.month == 12) {
+        current = DateTime(current.year + 1, 1);
+      } else {
+        current = DateTime(current.year, current.month + 1);
+      }
+    }
+
+    final results = await Future.wait(futures);
+    return results.expand((x) => x).toList();
+  }
+
   /// 출결 기록 삭제
   Future<void> deleteAttendance(String id, String studentId) async {
     await _attendanceService.deleteAttendance(id);

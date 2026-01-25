@@ -263,9 +263,9 @@ class _AcademyCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
                       children: [
                         Text(
                           academy.name,
@@ -274,46 +274,40 @@ class _AcademyCard extends StatelessWidget {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        if (academy.lessonDays.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '(${academy.lessonDays.map((d) {
-                                switch (d) {
-                                  case 1:
-                                    return '월요일';
-                                  case 2:
-                                    return '화요일';
-                                  case 3:
-                                    return '수요일';
-                                  case 4:
-                                    return '목요일';
-                                  case 5:
-                                    return '금요일';
-                                  case 6:
-                                    return '토요일';
-                                  case 7:
-                                    return '일요일';
-                                  default:
-                                    return '';
-                                }
-                              }).join(', ')})',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.blue.shade800,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                        if (academy.lessonDays.isNotEmpty)
+                          Text(
+                            academy.lessonDays
+                                .map((d) {
+                                  switch (d) {
+                                    case 1:
+                                      return '월요일';
+                                    case 2:
+                                      return '화요일';
+                                    case 3:
+                                      return '수요일';
+                                    case 4:
+                                      return '목요일';
+                                    case 5:
+                                      return '금요일';
+                                    case 6:
+                                      return '토요일';
+                                    case 7:
+                                      return '일요일';
+                                    default:
+                                      return '';
+                                  }
+                                })
+                                .join(', '),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.blue.shade800,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      academy.type.displayName,
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    ),
+                    Text(academy.type.displayName),
                   ],
                 ),
               ),

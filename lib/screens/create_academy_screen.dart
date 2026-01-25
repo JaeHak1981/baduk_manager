@@ -146,7 +146,8 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
 
     if (!mounted) return;
 
-    final shouldPop = await showDialog<bool>(
+    // 다이얼로그 표시
+    await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (dContext) => AlertDialog(
@@ -155,22 +156,16 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.of(dContext).pop(true); // 다이얼로그 닫기
+              // 가장 확실한 방법: 다이얼로그를 닫고(1), 부모 화면도 닫습니다(2).
+              // Navigator.of(context)를 사용하여 부모 스택에 접근합니다.
+              Navigator.of(dContext).pop(); // 다이얼로그 닫기
+              Navigator.of(context).pop(true); // 원래 화면 닫기
             },
             child: const Text('확인'),
           ),
         ],
       ),
     );
-
-    if (mounted && shouldPop == true) {
-      // 다이얼로그가 완전히 닫힐 수 있도록 다음 프레임에서 실행
-      Future.delayed(Duration.zero, () {
-        if (mounted) {
-          Navigator.of(context).pop(true); // 화면 닫기
-        }
-      });
-    }
   }
 
   @override

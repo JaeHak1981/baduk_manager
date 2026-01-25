@@ -98,26 +98,7 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
 
       if (mounted) {
         if (success) {
-          // 성공 시 다이얼로그 표시 (사용자 요청 반영: "수정 완료")
-          final shouldPop = await showDialog<bool>(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              title: const Text('완료'),
-              content: Text(widget.academy != null ? '수정 완료' : '등록 완료'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('확인'),
-                ),
-              ],
-            ),
-          );
-
-          // 다이얼로그 결과가 true(확인 클릭)이고 화면이 아직 붙어있다면 화면을 닫음
-          if (mounted && shouldPop == true) {
-            Navigator.pop(context, true);
-          }
+          await _handleSuccess();
         } else {
           // Provider에서 설정한 에러 메시지 표시
           await showDialog(
@@ -156,6 +137,39 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  // 성공 후 안전하게 화면을 닫는 로직 분리
+  Future<void> _handleSuccess() async {
+    setState(() => _isLoading = false); // 다이얼로그 전 로딩 먼저 해제
+
+    if (!mounted) return;
+
+    final shouldPop = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dContext) => AlertDialog(
+        title: const Text('완료'),
+        content: Text(widget.academy != null ? '수정 완료' : '등록 완료'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dContext).pop(true); // 다이얼로그 닫기
+            },
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+
+    if (mounted && shouldPop == true) {
+      // 다이얼로그가 완전히 닫힐 수 있도록 다음 프레임에서 실행
+      Future.delayed(Duration.zero, () {
+        if (mounted) {
+          Navigator.of(context).pop(true); // 화면 닫기
+        }
+      });
     }
   }
 

@@ -153,67 +153,7 @@ class _AcademyManagementScreenState extends State<AcademyManagementScreen> {
               itemCount: academyProvider.academies.length,
               itemBuilder: (context, index) {
                 final academy = academyProvider.academies[index];
-                return Dismissible(
-                  key: Key(academy.id),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: const Icon(Icons.delete, color: Colors.white),
-                  ),
-                  confirmDismiss: (direction) async {
-                    return await showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('기관 삭제'),
-                        content: Text('${academy.name}을(를) 삭제하시겠습니까?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('취소'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.red,
-                            ),
-                            child: const Text('삭제'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                  onDismissed: (direction) async {
-                    final success = await academyProvider.deleteAcademy(
-                      academy.id,
-                    );
-                    if (context.mounted) {
-                      if (success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('${academy.name}이(가) 삭제되었습니다'),
-                          ),
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              academyProvider.errorMessage ?? '삭제 실패',
-                            ),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                        _loadAcademies(); // 실패 시 목록 새로고침
-                      }
-                    }
-                  },
-                  child: _AcademyCard(academy: academy),
-                );
+                return _AcademyCard(academy: academy);
               },
             ),
           );
@@ -314,9 +254,6 @@ class _AcademyCard extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.edit, color: Colors.blueAccent),
                 onPressed: () {
-                  // 부모 State의 메서드를 호출하기 위해 context.findAncestorStateOfType 사용 또는
-                  // 단순히 Navigator를 직접 사용할 수 있으나 일관성을 위해
-                  // AcademyManagementScreen에서 제공하는 navigateToEdit 메서드 필요
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -327,11 +264,56 @@ class _AcademyCard extends StatelessWidget {
                 },
                 tooltip: '기관 정보 수정',
               ),
-              Icon(Icons.chevron_right, color: Colors.grey[400]),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                onPressed: () => _handleDelete(context),
+                tooltip: '기관 삭제',
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _handleDelete(BuildContext context) async {
+    final academyProvider = context.read<AcademyProvider>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('기관 삭제'),
+        content: Text('${academy.name}을(를) 삭제하시겠습니까?\n삭제된 정보는 복구할 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final success = await academyProvider.deleteAcademy(academy.id);
+      if (context.mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${academy.name}이(가) 삭제되었습니다')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(academyProvider.errorMessage ?? '삭제 실패'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 }

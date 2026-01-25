@@ -256,7 +256,14 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
           final filteredStudents = _getFilteredStudents(
             studentProvider.students,
           );
-          final textbooks = progressProvider.allOwnerTextbooks;
+          List<TextbookModel> textbooks = progressProvider.allOwnerTextbooks;
+
+          // 기관에 설정된 사용 교재가 있으면 필터링
+          if (widget.academy.usingTextbookIds.isNotEmpty) {
+            textbooks = textbooks
+                .where((t) => widget.academy.usingTextbookIds.contains(t.id))
+                .toList();
+          }
 
           return Column(
             children: [

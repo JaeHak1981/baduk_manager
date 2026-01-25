@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/academy_model.dart';
+import '../models/textbook_model.dart';
 import '../providers/academy_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/progress_provider.dart';
 import 'create_academy_screen.dart';
 
 /// 기관 관리 화면 (등록 및 삭제)
@@ -36,6 +38,12 @@ class _AcademyManagementScreenState extends State<AcademyManagementScreen> {
       await academyProvider.loadAllAcademies();
     } else {
       await academyProvider.loadAcademiesByOwner(currentUser.uid);
+    }
+
+    if (mounted) {
+      await context.read<ProgressProvider>().loadOwnerTextbooks(
+        currentUser.uid,
+      );
     }
   }
 
@@ -177,101 +185,160 @@ class _AcademyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: () {
-          // TODO: 기관 상세 화면으로 이동
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(8),
+      child: Consumer<ProgressProvider>(
+        builder: (context, progressProvider, child) {
+          final textbooks = progressProvider.allOwnerTextbooks;
+          String usingTextbooksStr = '';
+
+          if (academy.usingTextbookIds.isNotEmpty) {
+            final names = academy.usingTextbookIds.map((id) {
+              final t = textbooks.firstWhere(
+                (element) => element.id == id,
+                orElse: () => TextbookModel(
+                  id: id,
+                  name: '알수없음',
+                  ownerId: '',
+                  totalVolumes: 0,
+                  createdAt: DateTime.now(),
                 ),
-                child: Icon(
-                  academy.type.icon,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8,
+              );
+              return t.name;
+            }).toList();
+            usingTextbooksStr = names.join(', ');
+          }
+
+          return InkWell(
+            onTap: () {
+              // TODO: 기관 상세 화면으로 이동
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      academy.type.icon,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          academy.name,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (academy.lessonDays.isNotEmpty)
-                          Text(
-                            academy.lessonDays
-                                .map((d) {
-                                  switch (d) {
-                                    case 1:
-                                      return '월요일';
-                                    case 2:
-                                      return '화요일';
-                                    case 3:
-                                      return '수요일';
-                                    case 4:
-                                      return '목요일';
-                                    case 5:
-                                      return '금요일';
-                                    case 6:
-                                      return '토요일';
-                                    case 7:
-                                      return '일요일';
-                                    default:
-                                      return '';
-                                  }
-                                })
-                                .join(', '),
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.blue.shade800,
-                              fontWeight: FontWeight.w600,
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          children: [
+                            Text(
+                              academy.name,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
+                            if (academy.lessonDays.isNotEmpty)
+                              Text(
+                                academy.lessonDays
+                                    .map((d) {
+                                      switch (d) {
+                                        case 1:
+                                          return '월요일';
+                                        case 2:
+                                          return '화요일';
+                                        case 3:
+                                          return '수요일';
+                                        case 4:
+                                          return '목요일';
+                                        case 5:
+                                          return '금요일';
+                                        case 6:
+                                          return '토요일';
+                                        case 7:
+                                          return '일요일';
+                                        default:
+                                          return '';
+                                      }
+                                    })
+                                    .join(', '),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.blue.shade800,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            if (usingTextbooksStr.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade50,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: Colors.orange.shade200,
+                                  ),
+                                ),
+                                child: Text(
+                                  usingTextbooksStr,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.orange.shade900,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Text(
+                              academy.type.displayName,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(academy.type.displayName),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.edit, color: Colors.blueAccent),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          CreateAcademyScreen(academy: academy),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              CreateAcademyScreen(academy: academy),
+                        ),
+                      );
+                    },
+                    tooltip: '기관 정보 수정',
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: Colors.redAccent,
                     ),
-                  );
-                },
-                tooltip: '기관 정보 수정',
+                    onPressed: () => _handleDelete(context),
+                    tooltip: '기관 삭제',
+                  ),
+                ],
               ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                onPressed: () => _handleDelete(context),
-                tooltip: '기관 삭제',
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }

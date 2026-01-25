@@ -62,9 +62,29 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
                     provider.loadOwnerTextbooks(widget.academy.ownerId),
                 child: ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  itemCount: provider.allOwnerTextbooks.length,
+                  itemCount: () {
+                    var list = provider.allOwnerTextbooks;
+                    if (widget.academy.usingTextbookIds.isNotEmpty) {
+                      list = list
+                          .where(
+                            (t) =>
+                                widget.academy.usingTextbookIds.contains(t.id),
+                          )
+                          .toList();
+                    }
+                    return list.length;
+                  }(),
                   itemBuilder: (context, index) {
-                    final textbook = provider.allOwnerTextbooks[index];
+                    var list = provider.allOwnerTextbooks;
+                    if (widget.academy.usingTextbookIds.isNotEmpty) {
+                      list = list
+                          .where(
+                            (t) =>
+                                widget.academy.usingTextbookIds.contains(t.id),
+                          )
+                          .toList();
+                    }
+                    final textbook = list[index];
                     final isCustom = textbook.ownerId != 'common';
 
                     return Card(

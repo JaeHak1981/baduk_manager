@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../models/academy_model.dart';
 import '../providers/academy_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/progress_provider.dart';
+import '../models/textbook_model.dart';
 
 /// 기관 등록/수정 화면
 class CreateAcademyScreen extends StatefulWidget {
@@ -22,7 +24,10 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
   late AcademyType _selectedType;
   int _selectedSessions = 1;
   final List<int> _selectedDays = [];
+  final List<String> _selectedTextbookIds = [];
   bool _isLoading = false;
+  bool _isTextbooksLoading = false;
+  List<TextbookModel> _allTextbooks = [];
 
   final List<Map<String, dynamic>> _daysOfWeek = [
     {'id': 1, 'label': '월'},
@@ -44,7 +49,24 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
         (_selectedType == AcademyType.school ? 4 : 1);
     if (widget.academy != null) {
       _selectedDays.addAll(widget.academy!.lessonDays);
+      _selectedTextbookIds.addAll(widget.academy!.usingTextbookIds);
     }
+    _loadTextbooks();
+  }
+
+  Future<void> _loadTextbooks() async {
+    final authProvider = context.read<AuthProvider>();
+    final progressProvider = context.read<ProgressProvider>();
+    final currentUser = authProvider.currentUser;
+
+    if (currentUser == null) return;
+
+    setState(() => _isTextbooksLoading = true);
+    await progressProvider.loadOwnerTextbooks(currentUser.uid);
+    setState(() {
+      _allTextbooks = progressProvider.allOwnerTextbooks;
+      _isTextbooksLoading = false;
+    });
   }
 
   @override
@@ -83,6 +105,7 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
           type: _selectedType,
           totalSessions: _selectedSessions,
           lessonDays: List<int>.from(_selectedDays),
+          usingTextbookIds: List<String>.from(_selectedTextbookIds),
         );
         success = await academyProvider.updateAcademy(updatedAcademy);
       } else {
@@ -93,6 +116,7 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
           ownerId: currentUser.uid,
           totalSessions: _selectedSessions,
           lessonDays: List<int>.from(_selectedDays),
+          usingTextbookIds: List<String>.from(_selectedTextbookIds),
         );
       }
 
@@ -293,6 +317,51 @@ class _CreateAcademyScreenState extends State<CreateAcademyScreen> {
                     .toList(),
                 onChanged: (val) => setState(() => _selectedSessions = val!),
               ),
+
+              const SizedBox(height: 24),
+
+              // 사용 교재 선택
+              Text(
+                '사용 교재 (미선택 시 전체 노출)',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              if (_isTextbooksLoading)
+                const CircularProgressIndicator()
+              else if (_allTextbooks.isEmpty)
+                const Text(
+                  '등록된 교재가 없습니다. 교재 관리에서 먼저 등록해주세요.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 0,
+                  children: _allTextbooks.map((textbook) {
+                    final isSelected = _selectedTextbookIds.contains(
+                      textbook.id,
+                    );
+                    return FilterChip(
+                      label: Text(textbook.name),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        setState(() {
+                          if (selected) {
+                            _selectedTextbookIds.add(textbook.id);
+                          } else {
+                            _selectedTextbookIds.remove(textbook.id);
+                          }
+                        });
+                      },
+                      selectedColor: Theme.of(
+                        context,
+                      ).colorScheme.primary.withOpacity(0.2),
+                      checkmarkColor: Theme.of(context).colorScheme.primary,
+                    );
+                  }).toList(),
+                ),
 
               const SizedBox(height: 24),
 

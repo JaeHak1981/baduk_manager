@@ -868,66 +868,90 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                     mainAxisSize: MainAxisSize.min,
                     children: progressList.map((progress) {
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 6.0),
+                        padding: const EdgeInsets.only(bottom: 4.0),
                         child: InkWell(
                           onTap: () => _showEditVolumeDialog(context, progress),
-                          borderRadius: BorderRadius.circular(4),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      '${progress.textbookName} (${progress.volumeNumber}권)',
+                          borderRadius: BorderRadius.circular(6),
+                          // 터치 영역 시각화 및 확장
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: Colors.blue.withOpacity(0.1),
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${progress.textbookName} (${progress.volumeNumber}권)',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.black87,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${progress.progressPercentage.toInt()}%',
                                       style: const TextStyle(
                                         fontSize: 10,
-                                        fontWeight: FontWeight.w500,
+                                        color: Colors.blue,
+                                        fontWeight: FontWeight.bold,
                                       ),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${progress.progressPercentage.toInt()}%',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.blue,
-                                      fontWeight: FontWeight.bold,
+                                    const SizedBox(width: 8),
+                                    // 삭제 버튼 터치 영역 확보
+                                    Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: () => _confirmDeleteProgress(
+                                          context,
+                                          progress,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(4.0),
+                                          child: Icon(
+                                            Icons.close,
+                                            size: 14,
+                                            color: Colors.redAccent,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  InkWell(
-                                    onTap: () => _confirmDeleteProgress(
-                                      context,
-                                      progress,
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(2),
+                                  child: LinearProgressIndicator(
+                                    value: progress.progressPercentage / 100,
+                                    minHeight: 4,
+                                    backgroundColor: Colors.grey[200],
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      progress.isCompleted
+                                          ? Colors.green
+                                          : Colors.blue,
                                     ),
-                                    child: const Icon(
-                                      Icons.close,
-                                      size: 14,
-                                      color: Colors.redAccent,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(2),
-                                child: LinearProgressIndicator(
-                                  value: progress.progressPercentage / 100,
-                                  minHeight: 3,
-                                  backgroundColor: Colors.grey[200],
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    progress.isCompleted
-                                        ? Colors.green
-                                        : Colors.blue,
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       );

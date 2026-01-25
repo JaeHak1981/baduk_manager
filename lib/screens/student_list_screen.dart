@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/academy_model.dart';
 import '../models/student_model.dart';
-import '../models/student_progress_model.dart';
+
 import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
 import 'add_student_screen.dart';
@@ -659,18 +659,6 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
     );
   }
 
-  String _buildStudentTitle(List<StudentProgressModel> progressList) {
-    String base = '${widget.student.name} (${widget.student.levelDisplayName})';
-    if (progressList.isNotEmpty) {
-      final textbookInfo = progressList
-          .map((p) => '${p.textbookName} ${p.volumeNumber}권')
-          .join(', ');
-      return '$base - $textbookInfo';
-    } else {
-      return '$base - 교재 없음';
-    }
-  }
-
   String _buildStudentSubtitle() {
     final s = widget.student;
     List<String> parts = [];
@@ -770,7 +758,6 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ... (rest is same)
                         Row(
                           children: [
                             if (widget.student.session != null &&
@@ -822,10 +809,18 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                               ),
                             ],
                             Text(
-                              _buildStudentTitle(progressList),
+                              widget.student.name,
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '(${widget.student.levelDisplayName})',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
                               ),
                             ),
                           ],
@@ -834,125 +829,112 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                           _buildStudentSubtitle(),
                           style: TextStyle(
                             color: Colors.grey[600],
-                            fontSize: 12,
+                            fontSize: 11,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  if (activeProgress == null)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextButton.icon(
-                          onPressed: () => _navigateToStudentHistory(
-                            context,
-                            widget.student,
-                          ),
-                          icon: const Icon(Icons.assignment_ind, size: 16),
-                          label: const Text('정보'),
-                        ),
-                        TextButton.icon(
-                          onPressed: () => _navigateToAssignTextbook(context),
-                          icon: const Icon(Icons.add, size: 16),
-                          label: const Text('교재 할당'),
-                        ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.redAccent,
-                            size: 20,
-                          ),
-                          onPressed: () => _showDeleteConfirmation(context),
-                          tooltip: '학생 삭제',
-                        ),
-                      ],
-                    )
-                  else if (widget.student.parentPhone != null)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.assignment_ind,
-                            size: 20,
-                            color: Colors.blue,
-                          ),
-                          tooltip: '학생 정보',
-                          onPressed: () => _navigateToStudentHistory(
-                            context,
-                            widget.student,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.phone,
-                            size: 20,
-                            color: Colors.green,
-                          ),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  '${widget.student.parentPhone} 번호로 전화를 연결할 수 있습니다.',
+                  if (activeProgress != null)
+                    Expanded(
+                      flex: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${activeProgress.textbookName} (${activeProgress.volumeNumber}권)',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${activeProgress.progressPercentage}%',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(
+                                value: activeProgress.progressPercentage / 100,
+                                minHeight: 4,
+                                backgroundColor: Colors.grey[200],
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  activeProgress.isCompleted
+                                      ? Colors.green
+                                      : Colors.blue,
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.redAccent,
-                            size: 20,
-                          ),
-                          onPressed: () => _showDeleteConfirmation(context),
-                          tooltip: '학생 삭제',
-                        ),
-                      ],
-                    ),
-                  if (activeProgress != null)
-                    const Icon(Icons.chevron_right, color: Colors.grey),
-                ],
-              ),
-              if (activeProgress != null) ...[
-                const SizedBox(height: 12),
-                const Divider(height: 1),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '${activeProgress.textbookName} (${activeProgress.volumeNumber}권)',
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                          Text(
-                            '총 ${activeProgress.totalVolumes}권',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      LinearProgressIndicator(
-                        value: activeProgress.progressPercentage / 100,
-                        backgroundColor: Colors.grey[200],
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          activeProgress.isCompleted
-                              ? Colors.green
-                              : Colors.blue,
+                          ],
                         ),
+                      ),
+                    ),
+                  // 작업 버튼 영역 (기존 스타일 복구)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () =>
+                            _navigateToStudentHistory(context, widget.student),
+                        icon: const Icon(Icons.assignment_ind, size: 16),
+                        label: const Text('정보', style: TextStyle(fontSize: 11)),
+                      ),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => _navigateToAssignTextbook(context),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text(
+                          '교재 할당',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.redAccent,
+                          size: 18,
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        constraints: const BoxConstraints(),
+                        onPressed: () => _showDeleteConfirmation(context),
+                        tooltip: '학생 삭제',
                       ),
                     ],
                   ),
-                ),
-              ],
+                  if (activeProgress != null)
+                    const Icon(
+                      Icons.chevron_right,
+                      color: Colors.grey,
+                      size: 14,
+                    ),
+                ],
+              ),
             ],
           ),
         ),

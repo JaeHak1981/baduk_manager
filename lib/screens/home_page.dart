@@ -8,6 +8,7 @@ import '../models/academy_model.dart';
 import 'academy_management_screen.dart';
 import 'student_list_screen.dart';
 import 'textbook_center_screen.dart';
+import '../providers/progress_provider.dart';
 
 /// 홈 화면
 class HomePage extends StatefulWidget {
@@ -30,6 +31,7 @@ class _HomePageState extends State<HomePage> {
   void _loadInitialData() {
     final authProvider = context.read<AuthProvider>();
     final academyProvider = context.read<AcademyProvider>();
+    final progressProvider = context.read<ProgressProvider>();
     final user = authProvider.currentUser;
 
     if (user != null) {
@@ -38,6 +40,8 @@ class _HomePageState extends State<HomePage> {
       } else {
         academyProvider.loadAcademiesByOwner(user.uid);
       }
+      // 교재 목록 로드
+      progressProvider.loadOwnerTextbooks(user.uid);
     }
   }
 
@@ -45,6 +49,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
     final academyProvider = context.watch<AcademyProvider>();
+    final progressProvider = context.watch<ProgressProvider>();
     final user = authProvider.currentUser;
 
     return Scaffold(
@@ -52,28 +57,6 @@ class _HomePageState extends State<HomePage> {
         title: const Text('바둑 학원 관리 시스템'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.library_books),
-            tooltip: '내 교재 관리',
-            onPressed: () {
-              if (user != null) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TextbookCenterScreen(
-                      academy: AcademyModel(
-                        id: 'global',
-                        name: '내 교재 관리',
-                        type: AcademyType.academy,
-                        ownerId: user.uid,
-                        createdAt: DateTime.now(),
-                      ),
-                    ),
-                  ),
-                );
-              }
-            },
-          ),
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: '기관 관리',
@@ -136,57 +119,174 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
 
-                // 내 기관 목록 헤더
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                Expanded(
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '내 기관 목록',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+                      // 좌측: 내 기관 목록
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '내 기관 목록',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, size: 20),
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const AcademyManagementScreen(),
+                                        ),
+                                      );
+                                    },
+                                    tooltip: '기관 관리',
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: academyProvider.isLoading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(),
+                                    )
+                                  : academyProvider.errorMessage != null
+                                  ? _buildErrorState(
+                                      academyProvider.errorMessage!,
+                                    )
+                                  : academyProvider.academies.isEmpty
+                                  ? _buildEmptyState()
+                                  : RefreshIndicator(
+                                      onRefresh: () async => _loadInitialData(),
+                                      child: ListView.builder(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                        ),
+                                        itemCount:
+                                            academyProvider.academies.length,
+                                        itemBuilder: (context, index) {
+                                          final academy =
+                                              academyProvider.academies[index];
+                                          return _AcademySummaryCard(
+                                            academy: academy,
+                                          );
+                                        },
+                                      ),
+                                    ),
+                            ),
+                          ],
                         ),
                       ),
-                      TextButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const AcademyManagementScreen(),
+
+                      const VerticalDivider(width: 1),
+
+                      // 우측: 내 교재 목록
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '내 교재 목록',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.library_add,
+                                      size: 20,
+                                    ),
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              TextbookCenterScreen(
+                                                academy: AcademyModel(
+                                                  id: 'global',
+                                                  name: '내 교재 관리',
+                                                  type: AcademyType.academy,
+                                                  ownerId: user.uid,
+                                                  createdAt: DateTime.now(),
+                                                ),
+                                              ),
+                                        ),
+                                      ).then((_) => _loadInitialData());
+                                    },
+                                    tooltip: '교재 관리',
+                                  ),
+                                ],
+                              ),
                             ),
-                          );
-                        },
-                        icon: const Icon(Icons.edit, size: 16),
-                        label: const Text('관리'),
+                            Expanded(
+                              child: progressProvider.isLoading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(),
+                                    )
+                                  : progressProvider.errorMessage != null
+                                  ? _buildErrorState(
+                                      progressProvider.errorMessage!,
+                                    )
+                                  : progressProvider.allOwnerTextbooks.isEmpty
+                                  ? _buildTextbookEmptyState()
+                                  : RefreshIndicator(
+                                      onRefresh: () async => _loadInitialData(),
+                                      child: ListView.builder(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                        ),
+                                        itemCount: progressProvider
+                                            .allOwnerTextbooks
+                                            .length,
+                                        itemBuilder: (context, index) {
+                                          final textbook = progressProvider
+                                              .allOwnerTextbooks[index];
+                                          return _TextbookSummaryCard(
+                                            textbook: textbook,
+                                            userUid: user.uid,
+                                          );
+                                        },
+                                      ),
+                                    ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-
-                // 기관 목록
-                Expanded(
-                  child: academyProvider.isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : academyProvider.errorMessage != null
-                      ? _buildErrorState(academyProvider.errorMessage!)
-                      : academyProvider.academies.isEmpty
-                      ? _buildEmptyState()
-                      : RefreshIndicator(
-                          onRefresh: () async => _loadInitialData(),
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: academyProvider.academies.length,
-                            itemBuilder: (context, index) {
-                              final academy = academyProvider.academies[index];
-                              return _AcademySummaryCard(academy: academy);
-                            },
-                          ),
-                        ),
-                ),
               ],
             ),
+    );
+  }
+
+  Widget _buildTextbookEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.library_books_outlined, size: 48, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          const Text('등록된 교재가 없습니다.'),
+        ],
+      ),
     );
   }
 
@@ -265,6 +365,57 @@ class _HomePageState extends State<HomePage> {
       case UserRole.teacher:
         return '선생님';
     }
+  }
+}
+
+/// 홈 화면용 교재 요약 카드
+class _TextbookSummaryCard extends StatelessWidget {
+  final dynamic textbook; // TextbookModel
+  final String userUid;
+
+  const _TextbookSummaryCard({required this.textbook, required this.userUid});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: ListTile(
+        dense: true,
+        leading: Icon(
+          Icons.menu_book,
+          color: textbook.ownerId == 'common' ? Colors.orange : Colors.blue,
+          size: 20,
+        ),
+        title: Text(
+          textbook.name,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          '총 ${textbook.totalVolumes}권',
+          style: const TextStyle(fontSize: 11),
+        ),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TextbookCenterScreen(
+                academy: AcademyModel(
+                  id: 'global',
+                  name: '내 교재 관리',
+                  type: AcademyType.academy,
+                  ownerId: userUid,
+                  createdAt: DateTime.now(),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 

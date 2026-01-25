@@ -402,52 +402,41 @@ class _StudentListScreenState extends State<StudentListScreen> {
     final targetSession = await showDialog<int>(
       context: context,
       builder: (context) {
-        int? selected;
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('학생 부 이동'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+        return AlertDialog(
+          title: const Text('학생 부 이동'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('선택한 ${_selectedStudentIds.length}명의 학생을 어느 부로 이동하시겠습니까?'),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
                 children: [
-                  Text(
-                    '선택한 ${_selectedStudentIds.length}명의 학생을 어느 부로 이동하시겠습니까?',
+                  ChoiceChip(
+                    label: const Text('미배정'),
+                    selected: false,
+                    onSelected: (_) => Navigator.pop(context, 0),
                   ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: 200, // 최대 높이 제한
-                    width: double.maxFinite,
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: widget.academy.totalSessions,
-                      itemBuilder: (context, index) {
-                        final session = index + 1;
-                        return RadioListTile<int>(
-                          title: Text('$session부'),
-                          value: session,
-                          groupValue: selected,
-                          onChanged: (val) => setState(() => selected = val),
-                        );
-                      },
-                    ),
-                  ),
+                  ...List.generate(
+                    widget.academy.totalSessions,
+                    (i) => i + 1,
+                  ).map((s) {
+                    return ChoiceChip(
+                      label: Text('$s부'),
+                      selected: false,
+                      onSelected: (_) => Navigator.pop(context, s),
+                    );
+                  }),
                 ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('취소'),
-                ),
-                TextButton(
-                  onPressed: selected == null
-                      ? null
-                      : () => Navigator.pop(context, selected),
-                  child: const Text('이동'),
-                ),
-              ],
-            );
-          },
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('취소'),
+            ),
+          ],
         );
       },
     );

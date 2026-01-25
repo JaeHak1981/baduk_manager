@@ -57,10 +57,8 @@ class AttendanceProvider with ChangeNotifier {
 
     // 기존 기록 찾기
     AttendanceRecord? existing;
-    int existingIndex = -1;
 
-    for (int i = 0; i < _monthlyRecords.length; i++) {
-      final r = _monthlyRecords[i];
+    for (var r in _monthlyRecords) {
       final rDate = DateTime(
         r.timestamp.year,
         r.timestamp.month,
@@ -68,37 +66,39 @@ class AttendanceProvider with ChangeNotifier {
       );
       if (r.studentId == studentId && rDate.isAtSameMomentAs(targetDate)) {
         existing = r;
-        existingIndex = i;
         break;
       }
     }
 
     // --- 낙관적 업데이트 (Optimistic Update) ---
-    final List<AttendanceRecord> newList = List.from(_monthlyRecords);
-    if (type == null) {
-      if (existingIndex != -1) {
-        newList.removeAt(existingIndex);
-      }
-    } else {
+    // 리스트를 완벽히 새로운 객체로 복사하여 변경 감지를 보장함
+    final List<AttendanceRecord> newList = _monthlyRecords
+        .where(
+          (r) =>
+              !(r.studentId == studentId &&
+                  r.timestamp.year == targetDate.year &&
+                  r.timestamp.month == targetDate.month &&
+                  r.timestamp.day == targetDate.day),
+        )
+        .toList();
+
+    if (type != null) {
       final newRecord = AttendanceRecord(
         id: (existing?.id.isNotEmpty ?? false)
             ? existing!.id
-            : 'temp_${DateTime.now().millisecondsSinceEpoch}',
+            : 't_${DateTime.now().millisecondsSinceEpoch}',
         studentId: studentId,
         academyId: academyId,
         ownerId: ownerId,
         timestamp: targetDate,
         type: type,
       );
-      if (existingIndex != -1) {
-        newList[existingIndex] = newRecord;
-      } else {
-        newList.add(newRecord);
-      }
+      newList.add(newRecord);
     }
+
     _monthlyRecords = newList;
-    _stateCounter++; // 카운터 증가
-    notifyListeners(); // 즉시 UI 반영
+    _stateCounter++;
+    notifyListeners(); // 즉시 UI 반영 (네트워크 작업 전)
 
     try {
       if (type == null) {

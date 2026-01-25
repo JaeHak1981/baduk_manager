@@ -450,7 +450,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque, // 터치 영역 안정성 강화
       onTap: () {
-        HapticFeedback.lightImpact(); // 짧은 진동 추가
+        HapticFeedback.mediumImpact(); // 확실한 진동
 
         setState(() {
           _localStateCounter++;
@@ -464,18 +464,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           type: isSelected ? null : type,
         );
 
-        // 하단에 짧은 안내 메시지 표시 (이미 있으면 닫고 새로 띄움)
+        // 하단 안내 메시지
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               isSelected
-                  ? '출석 기록을 취소했습니다.'
-                  : '${label == "O" ? "출석" : "결석"}으로 표시했습니다.',
+                  ? '기록이 취소되었습니다.'
+                  : '${label == "O" ? "출석" : "결석"} 처리가 완료되었습니다.',
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            duration: const Duration(milliseconds: 700),
+            duration: const Duration(milliseconds: 600),
+            backgroundColor: isSelected
+                ? Colors.grey.shade800
+                : (label == "O" ? Colors.blue : Colors.red),
             behavior: SnackBarBehavior.floating,
-            width: 200,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            width: 250,
           ),
         );
       },

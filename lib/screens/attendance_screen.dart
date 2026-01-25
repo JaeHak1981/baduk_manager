@@ -520,17 +520,38 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     const Spacer(),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
+                        horizontal: 12,
+                        vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: Colors.blue.shade200),
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.grey.shade300),
                       ),
-                      child: const Text(
-                        'O: 파랑, X: 빨강',
-                        style: TextStyle(fontSize: 11, color: Colors.blue),
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(fontSize: 12),
+                          children: [
+                            TextSpan(
+                              text: 'O : 파랑',
+                              style: TextStyle(
+                                color: Colors.blue.shade700,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const TextSpan(
+                              text: '   ',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                            TextSpan(
+                              text: 'X : 빨강',
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],

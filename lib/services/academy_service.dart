@@ -59,12 +59,13 @@ class AcademyService {
     }
   }
 
-  /// 소유자별 기관 목록 조회
+  /// 소유자별 기관 목록 조회 (삭제되지 않은 것만)
   Future<List<AcademyModel>> getAcademiesByOwner(String ownerId) async {
     try {
       final querySnapshot = await _firestore
           .collection('academies')
           .where('ownerId', isEqualTo: ownerId)
+          .where('isDeleted', isEqualTo: false) // Soft Delete 필터링
           .get()
           .timeout(const Duration(seconds: 10));
 
@@ -77,10 +78,13 @@ class AcademyService {
     }
   }
 
-  /// 모든 기관 조회 (개발자용)
+  /// 모든 기관 조회 (개발자용) - 삭제된 것 포함 여부 선택 가능하면 좋으나, 기본은 활성만
   Future<List<AcademyModel>> getAllAcademies() async {
     try {
-      final querySnapshot = await _firestore.collection('academies').get();
+      final querySnapshot = await _firestore
+          .collection('academies')
+          .where('isDeleted', isEqualTo: false)
+          .get();
 
       return querySnapshot.docs
           .map((doc) => AcademyModel.fromFirestore(doc))
@@ -113,13 +117,73 @@ class AcademyService {
     }
   }
 
-  /// 기관 삭제
+  /// 기관 삭제 (Soft Delete)
   Future<void> deleteAcademy(String academyId) async {
     try {
-      await _firestore.collection('academies').doc(academyId).delete();
+      await _firestore.collection('academies').doc(academyId).update({
+        'isDeleted': true,
+        'deletedAt': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
       debugPrint('Error deleting academy: $e');
       throw Exception('기관 삭제 실패: $e');
+    }
+  }
+
+  /// --- 관리자 기능 ---
+
+  /// 삭제된 기관 목록 조회 (관리자용)
+  /// ownerId가 있으면 해당 유저 것만, date가 있으면 해당 날짜 삭제분만
+  Future<List<AcademyModel>> getDeletedAcademies({
+    String? ownerId,
+    DateTime? date,
+  }) async {
+    try {
+      Query query = _firestore
+          .collection('academies')
+          .where('isDeleted', isEqualTo: true)
+          .orderBy('deletedAt', descending: true);
+
+      if (ownerId != null && ownerId.isNotEmpty) {
+        query = query.where('ownerId', isEqualTo: ownerId);
+      }
+
+      // 날짜 필터링 (해당 날짜의 00:00 ~ 23:59)
+      if (date != null) {
+        final startOfDay = DateTime(date.year, date.month, date.day);
+        final endOfDay = startOfDay.add(const Duration(days: 1));
+        query = query
+            .where(
+              'deletedAt',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
+            )
+            .where('deletedAt', isLessThan: Timestamp.fromDate(endOfDay));
+      }
+
+      final snapshot = await query.get();
+      return snapshot.docs
+          .map(
+            (doc) => AcademyModel.fromFirestore(
+              doc as DocumentSnapshot<Map<String, dynamic>>,
+            ),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint('Error getting deleted academies: $e');
+      throw Exception('삭제된 기관 목록 조회 실패: $e');
+    }
+  }
+
+  /// 기관 복구 (Restore)
+  Future<void> restoreAcademy(String academyId) async {
+    try {
+      await _firestore.collection('academies').doc(academyId).update({
+        'isDeleted': false,
+        'deletedAt': null,
+      });
+    } catch (e) {
+      debugPrint('Error restoring academy: $e');
+      throw Exception('기관 복구 실패: $e');
     }
   }
 }

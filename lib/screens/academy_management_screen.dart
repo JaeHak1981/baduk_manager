@@ -5,6 +5,7 @@ import '../models/academy_model.dart';
 import '../providers/academy_provider.dart';
 import '../providers/auth_provider.dart';
 import 'create_academy_screen.dart';
+import 'admin_recovery_screen.dart';
 
 /// 기관 관리 화면 (등록 및 삭제)
 class AcademyManagementScreen extends StatefulWidget {
@@ -52,11 +53,27 @@ class _AcademyManagementScreenState extends State<AcademyManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = context.watch<AuthProvider>().currentUser;
+    final isDev = currentUser?.isDeveloper ?? false;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('기관 관리 및 등록'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          if (isDev)
+            IconButton(
+              icon: const Icon(Icons.auto_delete),
+              tooltip: '휴지통 (관리자)',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AdminRecoveryScreen(),
+                  ),
+                ).then((_) => _loadAcademies());
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.home),
             onPressed: () =>
@@ -283,7 +300,9 @@ class _AcademyCard extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('기관 삭제'),
-        content: Text('${academy.name}을(를) 삭제하시겠습니까?\n삭제된 정보는 복구할 수 없습니다.'),
+        content: Text(
+          '${academy.name}을(를) 삭제하시겠습니까?\n삭제된 정보는 휴지통으로 이동하며, 관리자가 복구할 수 있습니다.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

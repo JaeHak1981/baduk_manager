@@ -45,6 +45,8 @@ class AcademyModel {
   final List<int> lessonDays; // 수업 요일 (1:월, ..., 7:일)
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final bool isDeleted; // 삭제 여부 (Soft Delete)
+  final DateTime? deletedAt; // 삭제 일시
 
   AcademyModel({
     required this.id,
@@ -57,6 +59,8 @@ class AcademyModel {
     this.lessonDays = const [],
     required this.createdAt,
     this.updatedAt,
+    this.isDeleted = false,
+    this.deletedAt,
   });
 
   /// Firestore 문서로 변환
@@ -71,6 +75,8 @@ class AcademyModel {
       'lessonDays': lessonDays,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
+      'isDeleted': isDeleted,
+      'deletedAt': deletedAt != null ? Timestamp.fromDate(deletedAt!) : null,
     };
   }
 
@@ -97,6 +103,10 @@ class AcademyModel {
       updatedAt: data['updatedAt'] != null
           ? (data['updatedAt'] as Timestamp).toDate()
           : null,
+      isDeleted: data['isDeleted'] ?? false,
+      deletedAt: data['deletedAt'] != null
+          ? (data['deletedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -112,6 +122,8 @@ class AcademyModel {
     List<int>? lessonDays,
     DateTime? createdAt,
     DateTime? updatedAt,
+    bool? isDeleted,
+    DateTime? deletedAt,
   }) {
     return AcademyModel(
       id: id ?? this.id,
@@ -124,6 +136,8 @@ class AcademyModel {
       lessonDays: lessonDays ?? this.lessonDays,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 }

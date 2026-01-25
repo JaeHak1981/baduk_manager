@@ -210,9 +210,43 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('교재 주문 명계표'),
-        toolbarHeight: 48,
+        title: const Text(
+          '교재 주문 명계표',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        toolbarHeight: 56,
         elevation: 0,
+        actions: [
+          TextButton(
+            onPressed: _handleGenerateOrderSheet,
+            child: const Text(
+              '주문서',
+              style: TextStyle(
+                color: Colors.orange,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: ElevatedButton(
+              onPressed: _handleOrderComplete,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              child: const Text(
+                '저장',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Consumer2<StudentProvider, ProgressProvider>(
         builder: (context, studentProvider, progressProvider, child) {
@@ -243,7 +277,6 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                   },
                 ),
               ),
-              _buildBottomButtons(),
             ],
           );
         },
@@ -501,56 +534,6 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                 : FontWeight.bold,
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildBottomButtons() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                side: const BorderSide(color: Colors.orange),
-                foregroundColor: Colors.orange,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: _handleGenerateOrderSheet,
-              child: const Text(
-                '주문서 생성',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: _handleOrderComplete,
-              child: const Text(
-                '교재 저장',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

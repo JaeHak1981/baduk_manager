@@ -9,8 +9,7 @@ import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
 import 'add_student_screen.dart';
 import 'textbook_center_screen.dart';
-import 'attendance_screen.dart';
-// import 'progress_edit_screen.dart'; // Removed
+import 'attendance_tab_screen.dart';
 import 'batch_add_student_dialog.dart';
 import 'student_history_screen.dart'; // 학생 히스토리 화면 import
 
@@ -348,23 +347,33 @@ class _StudentListScreenState extends State<StudentListScreen> {
           ),
           const VerticalDivider(width: 1, indent: 10, endIndent: 10),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: OutlinedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        AttendanceScreen(academy: widget.academy),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AttendanceTabScreen(
+                          academy: widget.academy,
+                          initialIndex: 0,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.assignment_turned_in_outlined,
+                    size: 18,
                   ),
-                );
-              },
-              icon: const Icon(Icons.assignment_turned_in_outlined, size: 18),
-              label: const Text('출석부 명단', style: TextStyle(fontSize: 13)),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                side: BorderSide(color: Theme.of(context).primaryColor),
-              ),
+                  label: const Text('출석 관리', style: TextStyle(fontSize: 13)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    foregroundColor: Colors.blue.shade700,
+                    side: BorderSide(color: Colors.blue.shade300),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

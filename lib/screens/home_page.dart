@@ -10,7 +10,7 @@ import 'admin_recovery_screen.dart';
 import 'student_list_screen.dart';
 import 'textbook_center_screen.dart';
 import 'textbook_order_screen.dart';
-import 'attendance_screen.dart';
+import 'attendance_tab_screen.dart';
 import '../providers/progress_provider.dart';
 import 'components/enrollment_statistics_dialog.dart';
 
@@ -498,146 +498,161 @@ class _AcademySummaryCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(8),
+      child: Column(
+        children: [
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                academy.type.icon,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            title: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              children: [
+                Text(
+                  academy.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                if (academy.lessonDays.isNotEmpty)
+                  Text(
+                    academy.lessonDays
+                        .map((d) {
+                          switch (d) {
+                            case 1:
+                              return '월요일';
+                            case 2:
+                              return '화요일';
+                            case 3:
+                              return '수요일';
+                            case 4:
+                              return '목요일';
+                            case 5:
+                              return '금요일';
+                            case 6:
+                              return '토요일';
+                            case 7:
+                              return '일요일';
+                            default:
+                              return '';
+                          }
+                        })
+                        .join(', '),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.blue.shade800,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+            subtitle: Text(academy.type.displayName),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => StudentListScreen(academy: academy),
+                ),
+              );
+            },
           ),
-          child: Icon(
-            academy.type.icon,
-            color: Theme.of(context).colorScheme.primary,
+          // 버튼들 하단 배치
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AttendanceTabScreen(
+                          academy: academy,
+                          initialIndex: 0,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.assignment_turned_in_outlined,
+                    size: 16,
+                  ),
+                  label: const Text('출석부'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue.shade600,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 32),
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => EnrollmentStatisticsDialog(
+                        academy: academy,
+                        initialYear: DateTime.now().year,
+                        initialMonth: DateTime.now().month,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.bar_chart, size: 16),
+                  label: const Text('인원 통계'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 32),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    side: BorderSide(color: Colors.green.shade300),
+                    foregroundColor: Colors.green.shade700,
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            TextbookOrderScreen(academy: academy),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.shopping_cart_outlined, size: 16),
+                  label: const Text('교재 주문'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 32),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    side: BorderSide(color: Colors.orange.shade300),
+                    foregroundColor: Colors.orange.shade700,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        title: Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 8,
-          children: [
-            Text(
-              academy.name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            if (academy.lessonDays.isNotEmpty)
-              Text(
-                academy.lessonDays
-                    .map((d) {
-                      switch (d) {
-                        case 1:
-                          return '월요일';
-                        case 2:
-                          return '화요일';
-                        case 3:
-                          return '수요일';
-                        case 4:
-                          return '목요일';
-                        case 5:
-                          return '금요일';
-                        case 6:
-                          return '토요일';
-                        case 7:
-                          return '일요일';
-                        default:
-                          return '';
-                      }
-                    })
-                    .join(', '),
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.blue.shade800,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-          ],
-        ),
-        subtitle: Text(academy.type.displayName),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            OutlinedButton(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => EnrollmentStatisticsDialog(
-                    academy: academy,
-                    initialYear: DateTime.now().year,
-                    initialMonth: DateTime.now().month,
-                  ),
-                );
-              },
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                side: BorderSide(color: Colors.blue.shade300),
-                foregroundColor: Colors.blue.shade700,
-              ),
-              child: const Text(
-                '인원 통계',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(width: 4),
-            OutlinedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TextbookOrderScreen(academy: academy),
-                  ),
-                );
-              },
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                side: BorderSide(color: Colors.orange.shade300),
-                foregroundColor: Colors.orange.shade700,
-              ),
-              child: const Text(
-                '교재 주문',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(width: 4),
-            OutlinedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AttendanceScreen(academy: academy),
-                  ),
-                );
-              },
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text(
-                '출석부',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(width: 4),
-            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-          ],
-        ),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => StudentListScreen(academy: academy),
-            ),
-          );
-        },
+        ],
       ),
     );
   }

@@ -140,6 +140,108 @@ class AttendanceProvider with ChangeNotifier {
     );
   }
 
+  /// 순환 토글 방식 출결 업데이트 (null -> present -> absent -> null)
+  Future<void> toggleStatus({
+    required String studentId,
+    required String academyId,
+    required String ownerId,
+    required DateTime date,
+  }) async {
+    final targetDate = DateTime(date.year, date.month, date.day);
+    AttendanceRecord? existing;
+
+    for (var r in _monthlyRecords) {
+      final rDate = DateTime(
+        r.timestamp.year,
+        r.timestamp.month,
+        r.timestamp.day,
+      );
+      if (r.studentId == studentId && rDate.isAtSameMomentAs(targetDate)) {
+        existing = r;
+        break;
+      }
+    }
+
+    AttendanceType? nextType;
+    if (existing == null) {
+      nextType = AttendanceType.present;
+    } else if (existing.type == AttendanceType.present) {
+      nextType = AttendanceType.absent;
+    } else if (existing.type == AttendanceType.absent) {
+      nextType = null; // 초기화
+    } else {
+      nextType = AttendanceType.present; // late 등 다른 상태면 다시 처음으로
+    }
+
+    await updateStatus(
+      studentId: studentId,
+      academyId: academyId,
+      ownerId: ownerId,
+      date: date,
+      type: nextType,
+    );
+  }
+
+  /// 특정 기록의 비고(Note)만 업데이트
+  Future<void> updateNote({
+    required String studentId,
+    required String academyId,
+    required String ownerId,
+    required DateTime date,
+    required String note,
+  }) async {
+    final targetDate = DateTime(date.year, date.month, date.day);
+    final dateStr =
+        "${targetDate.year}${targetDate.month.toString().padLeft(2, '0')}${targetDate.day.toString().padLeft(2, '0')}";
+    final docId = "${studentId}_$dateStr";
+
+    // 로컬 상태 즉시 반영 (낙관적)
+    _monthlyRecords = _monthlyRecords.map((r) {
+      final rDate = DateTime(
+        r.timestamp.year,
+        r.timestamp.month,
+        r.timestamp.day,
+      );
+      if (r.studentId == studentId && rDate.isAtSameMomentAs(targetDate)) {
+        return r.copyWith(note: note);
+      }
+      return r;
+    }).toList();
+    notifyListeners();
+
+    try {
+      // 만약 기존 기록이 없는데 메모만 적는 경우, 우선 '출석'이나 기본 상태로 생성해야 함
+      // 하지만 기획상 보통 출결 상태와 함께 관리되므로, 기존 기록이 있을 때만 업데이트하거나
+      // 없을 경우 'present' 기본값으로 생성함. 여기서는 note 업데이트를 위해 saveAttendance 활용
+      AttendanceRecord? existing;
+      for (var r in _monthlyRecords) {
+        final rDate = DateTime(
+          r.timestamp.year,
+          r.timestamp.month,
+          r.timestamp.day,
+        );
+        if (r.studentId == studentId && rDate.isAtSameMomentAs(targetDate)) {
+          existing = r;
+          break;
+        }
+      }
+
+      final record = AttendanceRecord(
+        id: docId,
+        studentId: studentId,
+        academyId: academyId,
+        ownerId: ownerId,
+        timestamp: targetDate,
+        type: existing?.type ?? AttendanceType.present,
+        note: note,
+      );
+
+      await _attendanceService.saveAttendance(record);
+    } catch (e) {
+      debugPrint('Error updating note: $e');
+    }
+  }
+
   /// 특정 학생이 오늘 출석했는지 확인
   bool isStudentPresent(String studentId) {
     return _todayRecords.any(

@@ -118,13 +118,19 @@ class ProgressProvider with ChangeNotifier {
   }
 
   /// 기관의 모든 학생 진도 로드 (Bulk Load)
-  Future<void> loadAcademyProgress(String academyId) async {
-    // 이미 로딩 중이면 스킵? 아니면 강제 리로드? -> 강제 리로드 필요
-    // _isLoading = true; // 부분 로딩 시 UI 깜빡임 방지 위해 true로 설정 안 할 수도 있음
-    // notifyListeners();
+  Future<void> loadAcademyProgress(
+    String academyId, {
+    required String ownerId,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
 
     try {
-      final allProgress = await _progressService.getAcademyProgress(academyId);
+      final allProgress = await _progressService.getAcademyProgress(
+        academyId,
+        ownerId: ownerId,
+      );
 
       // Map 초기화
       final Map<String, List<StudentProgressModel>> newMap = {};
@@ -144,8 +150,9 @@ class ProgressProvider with ChangeNotifier {
       _studentProgressMap = newMap;
     } catch (e) {
       print('진도 데이터 로드 실패: $e');
-      // _errorMessage = ... (Global error triggers snackbar usually)
+      _errorMessage = '진도 데이터를 불러오지 못했습니다: $e';
     } finally {
+      _isLoading = false;
       notifyListeners();
     }
   }
@@ -186,26 +193,45 @@ class ProgressProvider with ChangeNotifier {
 
     try {
       print(
-        'DEBUG: assignVolume 시작 - studentId: $studentId, textbook: ${textbook.name}',
-      );
-      final progress = StudentProgressModel(
-        id: '',
-        studentId: studentId,
-        academyId: academyId,
-        ownerId: ownerId,
-        textbookId: textbook.id,
-        textbookName: textbook.name,
-        volumeNumber: volumeNumber,
-        totalVolumes: textbook.totalVolumes,
-        startDate: DateTime.now(),
-        updatedAt: DateTime.now(),
+        'DEBUG: assignVolume 시작 - studentId: $studentId, textbookId: ${textbook.id}, volume: $volumeNumber',
       );
 
-      await _progressService.startProgress(progress);
-      print('DEBUG: startProgress 성공');
+      // 1. 중복 체크: 동일한 교재/권수가 이미 있는지 확인 (완료 여부 상관없이)
+      final existingProgress = _studentProgressMap[studentId]
+          ?.where(
+            (p) =>
+                p.textbookId == textbook.id && p.volumeNumber == volumeNumber,
+          )
+          .toList();
 
+      if (existingProgress != null && existingProgress.isNotEmpty) {
+        print('DEBUG: 동일한 교재/권수가 이미 존재합니다. 할당을 건너뛰거나 시각적 정보만 업데이트합니다.');
+        // 이미 있으므로 신규 할당 없이 업데이트만 수행 (또는 그냥 반환)
+        await _progressService.updateVolume(
+          existingProgress.first.id,
+          volumeNumber,
+        );
+      } else {
+        // 2. 신규 할당
+        final progress = StudentProgressModel(
+          id: '',
+          studentId: studentId,
+          academyId: academyId,
+          ownerId: ownerId,
+          textbookId: textbook.id,
+          textbookName: textbook.name,
+          volumeNumber: volumeNumber,
+          totalVolumes: textbook.totalVolumes,
+          startDate: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        final newId = await _progressService.startProgress(progress);
+        print('DEBUG: startProgress 성공 - New ID: $newId');
+      }
+
+      // 3. 개별 학생 정보 즉시 리프레시
       await loadStudentProgress(studentId, ownerId: ownerId);
-      print('DEBUG: loadStudentProgress 성공');
 
       return true;
     } catch (e) {

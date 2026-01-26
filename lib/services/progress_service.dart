@@ -16,11 +16,13 @@ class ProgressService {
 
   /// 특정 기관의 모든 진도 기록 조회 (Bulk Load)
   Future<List<StudentProgressModel>> getAcademyProgress(
-    String academyId,
-  ) async {
+    String academyId, {
+    required String ownerId,
+  }) async {
     final snapshot = await _firestore
         .collection(_collection)
         .where('academyId', isEqualTo: academyId)
+        .where('ownerId', isEqualTo: ownerId)
         .get();
 
     return snapshot.docs

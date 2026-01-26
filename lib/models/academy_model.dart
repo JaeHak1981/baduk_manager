@@ -48,6 +48,7 @@ class AcademyModel {
   final DateTime? updatedAt;
   final bool isDeleted; // 삭제 여부 (Soft Delete)
   final DateTime? deletedAt; // 삭제 일시
+  final String? customMessageTemplate; // 맞춤 주문 메시지 템플릿
 
   AcademyModel({
     required this.id,
@@ -63,6 +64,7 @@ class AcademyModel {
     this.updatedAt,
     this.isDeleted = false,
     this.deletedAt,
+    this.customMessageTemplate,
   });
 
   /// Firestore 문서로 변환
@@ -80,6 +82,7 @@ class AcademyModel {
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       'isDeleted': isDeleted,
       'deletedAt': deletedAt != null ? Timestamp.fromDate(deletedAt!) : null,
+      'customMessageTemplate': customMessageTemplate,
     };
   }
 
@@ -111,6 +114,7 @@ class AcademyModel {
       deletedAt: data['deletedAt'] != null
           ? (data['deletedAt'] as Timestamp).toDate()
           : null,
+      customMessageTemplate: data['customMessageTemplate'] as String?,
     );
   }
 
@@ -129,6 +133,7 @@ class AcademyModel {
     DateTime? updatedAt,
     bool? isDeleted,
     DateTime? deletedAt,
+    String? customMessageTemplate,
   }) {
     return AcademyModel(
       id: id ?? this.id,
@@ -144,6 +149,8 @@ class AcademyModel {
       updatedAt: updatedAt ?? this.updatedAt,
       isDeleted: isDeleted ?? this.isDeleted,
       deletedAt: deletedAt ?? this.deletedAt,
+      customMessageTemplate:
+          customMessageTemplate ?? this.customMessageTemplate,
     );
   }
 }

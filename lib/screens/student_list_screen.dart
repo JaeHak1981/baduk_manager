@@ -43,7 +43,10 @@ class _StudentListScreenState extends State<StudentListScreen> {
       ownerId: widget.academy.ownerId,
     );
     // [Bulk Load] 전체 진도 한 번에 로드
-    context.read<ProgressProvider>().loadAcademyProgress(widget.academy.id);
+    context.read<ProgressProvider>().loadAcademyProgress(
+      widget.academy.id,
+      ownerId: widget.academy.ownerId,
+    );
   }
 
   void _toggleSelectionMode() {

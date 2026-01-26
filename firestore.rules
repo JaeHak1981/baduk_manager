@@ -48,5 +48,12 @@ service cloud.firestore {
       allow create: if isAuthenticated() && (request.resource.data.ownerId == request.auth.uid || isDeveloper());
       allow read, update, delete: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isDeveloper());
     }
+
+    // orders 컬렉션: 소유자 또는 개발자 접근 가능
+    match /orders/{orderId} {
+      allow create: if isAuthenticated() && (request.resource.data.ownerId == request.auth.uid || isDeveloper());
+      allow read, update, delete: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isDeveloper());
+    }
   }
 }
+

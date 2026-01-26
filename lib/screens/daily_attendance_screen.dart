@@ -5,6 +5,7 @@ import '../models/academy_model.dart';
 import '../models/attendance_model.dart';
 import '../models/student_model.dart';
 import '../providers/attendance_provider.dart';
+import 'components/remark_cell.dart';
 import '../providers/student_provider.dart';
 import '../providers/auth_provider.dart';
 
@@ -205,6 +206,35 @@ class _DailyAttendanceScreenState extends State<DailyAttendanceScreen>
       appBar: AppBar(
         title: Text('${_today.month}월 ${_today.day}일 출결 체크'),
         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+        actions: [
+          if (context.watch<AttendanceProvider>().hasPendingChanges)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                onPressed: () async {
+                  final success = await context
+                      .read<AttendanceProvider>()
+                      .savePendingChanges();
+                  if (success && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('출결 변경 사항이 저장되었습니다.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.save, color: Colors.blueAccent),
+                label: const Text(
+                  '저장하기',
+                  style: TextStyle(
+                    color: Colors.blueAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       body: body,
     );
@@ -260,30 +290,14 @@ class _DailyAttendanceScreenState extends State<DailyAttendanceScreen>
     Map<String, AttendanceRecord> attendanceMap,
   ) {
     final record = attendanceMap[studentId];
-    final controller = TextEditingController(text: record?.note ?? "");
 
-    return SizedBox(
-      width: 150,
-      child: TextField(
-        controller: controller,
-        style: const TextStyle(fontSize: 12),
-        decoration: const InputDecoration(
-          isDense: true,
-          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          border: InputBorder.none,
-          hintText: '비고 입력...',
-          hintStyle: TextStyle(fontSize: 10, color: Colors.grey),
-        ),
-        onSubmitted: (text) {
-          provider.updateNote(
-            studentId: studentId,
-            academyId: widget.academy.id,
-            ownerId: ownerId,
-            date: date,
-            note: text,
-          );
-        },
-      ),
+    return RemarkCell(
+      provider: provider,
+      studentId: studentId,
+      academyId: widget.academy.id,
+      ownerId: ownerId,
+      date: date,
+      initialNote: record?.note ?? "",
     );
   }
 

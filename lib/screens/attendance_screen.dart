@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../utils/holiday_helper.dart';
 import '../utils/file_download_helper.dart';
 import 'components/statistics_dialog.dart';
+import 'components/remark_cell.dart';
 
 class AttendanceScreen extends StatefulWidget {
   final AcademyModel academy;
@@ -652,6 +653,31 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                     icon: const Icon(Icons.chevron_right),
                   ),
                   const Spacer(),
+                  if (context.watch<AttendanceProvider>().hasPendingChanges)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final success = await context
+                              .read<AttendanceProvider>()
+                              .savePendingChanges();
+                          if (success && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('출결 변경 사항이 저장되었습니다.'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.save),
+                        label: const Text('저장하기'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -1079,30 +1105,14 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   ) {
     final key = "${studentId}_${date.year}_${date.month}_${date.day}";
     final record = attendanceMap[key];
-    final controller = TextEditingController(text: record?.note ?? "");
 
-    return SizedBox(
-      width: 150,
-      child: TextField(
-        controller: controller,
-        style: const TextStyle(fontSize: 12),
-        decoration: const InputDecoration(
-          isDense: true,
-          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          border: InputBorder.none,
-          hintText: '비고 입력...',
-          hintStyle: TextStyle(fontSize: 10, color: Colors.grey),
-        ),
-        onSubmitted: (text) {
-          provider.updateNote(
-            studentId: studentId,
-            academyId: widget.academy.id,
-            ownerId: ownerId,
-            date: date,
-            note: text,
-          );
-        },
-      ),
+    return RemarkCell(
+      provider: provider,
+      studentId: studentId,
+      academyId: widget.academy.id,
+      ownerId: ownerId,
+      date: date,
+      initialNote: record?.note ?? "",
     );
   }
 

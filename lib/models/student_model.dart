@@ -16,6 +16,8 @@ class StudentModel {
   final String? studentNumber; // 번호
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final bool isDeleted; // 삭제 여부
+  final DateTime? deletedAt; // 삭제 일시
 
   StudentModel({
     required this.id,
@@ -32,6 +34,8 @@ class StudentModel {
     this.studentNumber,
     required this.createdAt,
     this.updatedAt,
+    this.isDeleted = false,
+    this.deletedAt,
   });
 
   /// Firestore 문서로 변환
@@ -50,6 +54,8 @@ class StudentModel {
       'studentNumber': studentNumber,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
+      'isDeleted': isDeleted,
+      'deletedAt': deletedAt != null ? Timestamp.fromDate(deletedAt!) : null,
     };
   }
 
@@ -75,6 +81,10 @@ class StudentModel {
       updatedAt: data['updatedAt'] != null
           ? (data['updatedAt'] as Timestamp).toDate()
           : null,
+      isDeleted: data['isDeleted'] as bool? ?? false,
+      deletedAt: data['deletedAt'] != null
+          ? (data['deletedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -94,6 +104,8 @@ class StudentModel {
     String? studentNumber,
     DateTime? createdAt,
     DateTime? updatedAt,
+    bool? isDeleted,
+    DateTime? deletedAt,
   }) {
     return StudentModel(
       id: id ?? this.id,
@@ -110,6 +122,8 @@ class StudentModel {
       studentNumber: studentNumber ?? this.studentNumber,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 

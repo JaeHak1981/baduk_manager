@@ -205,14 +205,21 @@ class ProgressProvider with ChangeNotifier {
           .toList();
 
       if (existingProgress != null && existingProgress.isNotEmpty) {
-        print('DEBUG: 동일한 교재/권수가 이미 존재합니다. 할당을 건너뛰거나 시각적 정보만 업데이트합니다.');
-        // 이미 있으므로 신규 할당 없이 업데이트만 수행 (또는 그냥 반환)
-        await _progressService.updateVolume(
+        // 이미 있으므로 신규 할당 없이 업데이트만 수행 (상태 리셋 포함)
+        await _progressService.updateVolumeAndResetStatus(
           existingProgress.first.id,
           volumeNumber,
         );
       } else {
-        // 2. 신규 할당
+        // 2-1. 동일 시리즈 이전 권수 자동 완료 처리
+        await _progressService.completePreviousVolumes(
+          studentId,
+          textbook.id,
+          volumeNumber,
+          ownerId: ownerId,
+        );
+
+        // 2-2. 신규 할당
         final progress = StudentProgressModel(
           id: '',
           studentId: studentId,
@@ -263,7 +270,7 @@ class ProgressProvider with ChangeNotifier {
     }
   }
 
-  /// 진도 기록 삭제
+  /// 진도 기록 삭제 (Soft Delete)
   Future<bool> removeProgress(
     String progressId,
     String studentId, {
@@ -275,6 +282,24 @@ class ProgressProvider with ChangeNotifier {
       return true;
     } catch (e) {
       _errorMessage = '기록 삭제 실패: $e';
+      return false;
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// 진도 기록 복원 (완료 -> 진행 중)
+  Future<bool> restoreProgress(
+    String progressId,
+    String studentId, {
+    String? ownerId,
+  }) async {
+    try {
+      await _progressService.restoreProgress(progressId);
+      await loadStudentProgress(studentId, ownerId: ownerId);
+      return true;
+    } catch (e) {
+      _errorMessage = '진도 복원 실패: $e';
       return false;
     } finally {
       notifyListeners();

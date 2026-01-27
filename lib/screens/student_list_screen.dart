@@ -700,6 +700,7 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
       MaterialPageRoute(
         builder: (context) => StudentHistoryScreen(
           student: student,
+          academyId: widget.academy.id,
           ownerId: widget.academy.ownerId,
         ),
       ),
@@ -728,9 +729,11 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
   @override
   Widget build(BuildContext context) {
     final progressProvider = context.watch<ProgressProvider>();
-    final progressList = progressProvider.getProgressForStudent(
-      widget.student.id,
-    );
+    // 메인 화면에서는 완료되지 않은(진행 중인) 교재만 표시
+    final progressList = progressProvider
+        .getProgressForStudent(widget.student.id)
+        .where((p) => !p.isCompleted)
+        .toList();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -964,12 +967,11 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    // 삭제 버튼 터치 영역 확보
+                                    // 삭제/완료 버튼 터치 영역 확보
                                     Material(
                                       color: Colors.transparent,
                                       child: InkWell(
-                                        onTap: () => _confirmDeleteProgress(
+                                        onTap: () => _showProgressActionDialog(
                                           context,
                                           progress,
                                         ),
@@ -977,9 +979,10 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                                         child: const Padding(
                                           padding: EdgeInsets.all(4.0),
                                           child: Icon(
-                                            Icons.close,
+                                            Icons
+                                                .more_vert, // 아이콘 변경: 삭제 대신 옵션 메뉴
                                             size: 14,
-                                            color: Colors.redAccent,
+                                            color: Colors.blueGrey,
                                           ),
                                         ),
                                       ),
@@ -1062,11 +1065,14 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
           studentId: widget.student.id,
         ),
       ),
-    ).then(
-      (_) => context.read<ProgressProvider>().loadStudentProgress(
-        widget.student.id,
-      ),
-    );
+    ).then((_) {
+      if (mounted) {
+        context.read<ProgressProvider>().loadStudentProgress(
+          widget.student.id,
+          ownerId: widget.academy.ownerId,
+        );
+      }
+    });
   }
 
   // Method removed: _navigateToEditProgress
@@ -1107,6 +1113,60 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
     }
   }
 
+  Future<void> _showProgressActionDialog(
+    BuildContext context,
+    StudentProgressModel progress,
+  ) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${progress.textbookName} 관리'),
+        content: const Text('수행할 작업을 선택하세요.'),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _confirmCompleteProgress(context, progress);
+            },
+            icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+            label: const Text('학습 완료 (로그로 이전)'),
+          ),
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _confirmDeleteProgress(context, progress);
+            },
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            label: const Text('삭제 (휴지통으로 보관)'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmCompleteProgress(
+    BuildContext context,
+    StudentProgressModel progress,
+  ) async {
+    final success = await context.read<ProgressProvider>().updateVolumeStatus(
+      progress.id,
+      widget.student.id,
+      true, // 완료 처리
+      ownerId: widget.academy.ownerId,
+    );
+    if (mounted && success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('[${progress.textbookName}] 학습이 완료되어 로그로 이전되었습니다.'),
+        ),
+      );
+    }
+  }
+
   Future<void> _confirmDeleteProgress(
     BuildContext context,
     StudentProgressModel progress,
@@ -1116,7 +1176,7 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
       builder: (context) => AlertDialog(
         title: const Text('교재 할당 삭제'),
         content: Text(
-          '[${progress.textbookName} ${progress.volumeNumber}권] 할당을 삭제하시겠습니까?',
+          '[${progress.textbookName} ${progress.volumeNumber}권] 할당을 삭제하시겠습니까?\n이 데이터는 30일간 보관 후 자동 삭제됩니다.',
         ),
         actions: [
           TextButton(

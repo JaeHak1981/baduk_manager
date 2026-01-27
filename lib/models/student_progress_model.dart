@@ -16,6 +16,8 @@ class StudentProgressModel {
   final DateTime startDate; // 학습 시작일
   final DateTime? endDate; // 학습 완료일
   final DateTime updatedAt; // 마지막 기록일
+  final bool isDeleted; // 삭제 여부
+  final DateTime? deletedAt; // 삭제 일시
 
   StudentProgressModel({
     required this.id,
@@ -30,6 +32,8 @@ class StudentProgressModel {
     required this.startDate,
     this.endDate,
     required this.updatedAt,
+    this.isDeleted = false,
+    this.deletedAt,
   });
 
   // Calculate percentage based on Volumes
@@ -57,6 +61,8 @@ class StudentProgressModel {
       'startDate': Timestamp.fromDate(startDate),
       'endDate': endDate != null ? Timestamp.fromDate(endDate!) : null,
       'updatedAt': Timestamp.fromDate(updatedAt),
+      'isDeleted': isDeleted,
+      'deletedAt': deletedAt != null ? Timestamp.fromDate(deletedAt!) : null,
     };
   }
 
@@ -75,11 +81,21 @@ class StudentProgressModel {
         volumeNumber: data['volumeNumber'] as int? ?? 1,
         totalVolumes: data['totalVolumes'] as int? ?? 1,
         isCompleted: data['isCompleted'] as bool? ?? false,
-        startDate: (data['startDate'] as Timestamp).toDate(),
+        startDate: data['startDate'] != null
+            ? (data['startDate'] as Timestamp).toDate()
+            : DateTime.now(),
         endDate: data['endDate'] != null
             ? (data['endDate'] as Timestamp).toDate()
             : null,
-        updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+        updatedAt: data['updatedAt'] != null
+            ? (data['updatedAt'] as Timestamp).toDate()
+            : (data['startDate'] != null
+                  ? (data['startDate'] as Timestamp).toDate()
+                  : DateTime.now()),
+        isDeleted: data['isDeleted'] as bool? ?? false,
+        deletedAt: data['deletedAt'] != null
+            ? (data['deletedAt'] as Timestamp).toDate()
+            : null,
       );
     } catch (e) {
       print(
@@ -97,6 +113,7 @@ class StudentProgressModel {
         totalVolumes: 1,
         startDate: DateTime.now(),
         updatedAt: DateTime.now(),
+        isDeleted: false,
       );
     }
   }
@@ -121,6 +138,8 @@ class StudentProgressModel {
       startDate: startDate,
       endDate: endDate ?? this.endDate,
       updatedAt: updatedAt ?? this.updatedAt,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 }

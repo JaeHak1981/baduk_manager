@@ -365,16 +365,57 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
         } else {
           final errorMsg =
               context.read<ProgressProvider>().errorMessage ?? '할당에 실패했습니다.';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('오류: $errorMsg'),
-              duration: const Duration(seconds: 10),
-              backgroundColor: Colors.red,
-              action: SnackBarAction(
-                label: '확인',
-                textColor: Colors.white,
-                onPressed: () {},
+
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red),
+                  SizedBox(width: 8),
+                  Text('할당 오류 발생'),
+                ],
               ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('교재 할당 중 오류가 발생했습니다. 아래 내용을 복사하여 관리자에게 전달해 주세요.'),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    width: double.maxFinite,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: SelectableText(
+                      errorMsg,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: errorMsg));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('에러 내용이 복사되었습니다.')),
+                    );
+                  },
+                  icon: const Icon(Icons.copy, size: 18),
+                  label: const Text('에러 복사'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('닫기'),
+                ),
+              ],
             ),
           );
         }

@@ -337,6 +337,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                     _messageController.text = _generateDefaultMessage(
                       textbooks,
                       latestAcademy,
+                      progressProvider,
                     );
                   }
 
@@ -393,6 +394,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                                 children: [
                                   _buildAggregationDashboard(
                                     textbooks,
+                                    progressProvider,
                                     isWide: true,
                                   ),
                                   const Divider(height: 1),
@@ -412,7 +414,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                     // 세로형 레이아웃 (모바일)
                     return Column(
                       children: [
-                        _buildAggregationDashboard(textbooks),
+                        _buildAggregationDashboard(textbooks, progressProvider),
                         _buildFilterArea(latestAcademy),
                         _buildTableHeader(),
                         Expanded(
@@ -522,7 +524,8 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
 
   /// 실시간 집계 대시보드 (Matrix View)
   Widget _buildAggregationDashboard(
-    List<TextbookModel> textbooks, {
+    List<TextbookModel> textbooks,
+    ProgressProvider progressProvider, {
     bool isWide = false,
   }) {
     if (textbooks.isEmpty) return const SizedBox();
@@ -537,6 +540,30 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
         matrix[tName] ??= {};
         matrix[tName]![entry.volume] = (matrix[tName]![entry.volume] ?? 0) + 1;
         totalCount++;
+      } else if (entry.type == OrderType.extension) {
+        final currentProgress = progressProvider.getProgressForStudent(
+          studentId,
+        );
+        if (currentProgress.isNotEmpty) {
+          final lastP = currentProgress.first;
+          final textbook = progressProvider.allOwnerTextbooks.firstWhere(
+            (t) => t.id == lastP.textbookId,
+            orElse: () => TextbookModel(
+              id: '',
+              name: '알수없음',
+              ownerId: '',
+              totalVolumes: 0,
+              createdAt: DateTime.now(),
+            ),
+          );
+          if (textbook.id.isNotEmpty) {
+            final tName = textbook.name;
+            matrix[tName] ??= {};
+            matrix[tName]![lastP.volumeNumber] =
+                (matrix[tName]![lastP.volumeNumber] ?? 0) + 1;
+            totalCount++;
+          }
+        }
       }
     });
 
@@ -667,6 +694,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
   String _generateDefaultMessage(
     List<TextbookModel> textbooks,
     AcademyModel latestAcademy,
+    ProgressProvider progressProvider,
   ) {
     Map<String, Map<int, int>> summary = {};
     int totalAll = 0;
@@ -678,6 +706,30 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
         summary[tName]![entry.volume] =
             (summary[tName]![entry.volume] ?? 0) + 1;
         totalAll++;
+      } else if (entry.type == OrderType.extension) {
+        final currentProgress = progressProvider.getProgressForStudent(
+          studentId,
+        );
+        if (currentProgress.isNotEmpty) {
+          final lastP = currentProgress.first;
+          final textbook = progressProvider.allOwnerTextbooks.firstWhere(
+            (t) => t.id == lastP.textbookId,
+            orElse: () => TextbookModel(
+              id: '',
+              name: '알수없음',
+              ownerId: '',
+              totalVolumes: 0,
+              createdAt: DateTime.now(),
+            ),
+          );
+          if (textbook.id.isNotEmpty) {
+            final tName = textbook.name;
+            summary[tName] ??= {};
+            summary[tName]![lastP.volumeNumber] =
+                (summary[tName]![lastP.volumeNumber] ?? 0) + 1;
+            totalAll++;
+          }
+        }
       }
     });
 
@@ -1014,6 +1066,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                       _messageController.text = _generateDefaultMessage(
                         textbooks,
                         latestAcademy,
+                        context.read<ProgressProvider>(),
                       );
                     });
                   },

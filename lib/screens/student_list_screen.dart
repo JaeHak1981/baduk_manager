@@ -790,6 +790,10 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                       Padding(
                         padding: const EdgeInsets.only(right: 8.0),
                         child: Checkbox(
+                          side: BorderSide(
+                            color: Colors.grey.shade600,
+                            width: 1.5,
+                          ),
                           value: widget.isSelected,
                           onChanged: (_) => widget.onToggleSelection(),
                         ),

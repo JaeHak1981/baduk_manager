@@ -15,7 +15,9 @@ class AttendanceProvider with ChangeNotifier {
   // --- 수동 저장용 필드 ---
   // Key: studentId_YYYYMMDD, Value: AttendanceRecord
   final Map<String, AttendanceRecord> _pendingChanges = {};
-  bool get hasPendingChanges => _pendingChanges.isNotEmpty;
+  final Set<String> _pendingDeletions = {}; // 삭제할 ID 목록
+  bool get hasPendingChanges =>
+      _pendingChanges.isNotEmpty || _pendingDeletions.isNotEmpty;
   // -----------------------
 
   List<AttendanceRecord> get todayRecords => _todayRecords;
@@ -57,18 +59,24 @@ class AttendanceProvider with ChangeNotifier {
 
   /// 변경 사항 일괄 저장
   Future<bool> savePendingChanges() async {
-    if (_pendingChanges.isEmpty) return true;
+    if (_pendingChanges.isEmpty && _pendingDeletions.isEmpty) return true;
 
     _isLoading = true;
     notifyListeners();
 
     try {
-      // 순차적으로 혹은 파이어베이스 배치(Batch)를 사용하는 방식도 있지만,
-      // 여기서는 서비스의 기존 저장 로직을 루프 돌며 처리 (개수가 아주 많지 않으므로)
+      // 1. 삭제 먼저 처리
+      for (var docId in _pendingDeletions) {
+        await _attendanceService.deleteAttendance(docId);
+      }
+      _pendingDeletions.clear();
+
+      // 2. 추가/수정 처리
       for (var record in _pendingChanges.values) {
         await _attendanceService.saveAttendance(record);
       }
       _pendingChanges.clear();
+
       _isLoading = false;
       notifyListeners();
       return true;
@@ -83,59 +91,75 @@ class AttendanceProvider with ChangeNotifier {
   /// 보류 중인 변경 사항 취소 (원래대로 되돌리기)
   void discardPendingChanges() {
     _pendingChanges.clear();
+    _pendingDeletions.clear();
     _stateCounter++;
     notifyListeners();
-    // 실제로는 다시 loadMonthlyAttendance를 호출하는 것이 확실함
   }
 
-  /// 특정 날짜/학생의 출결 상태 직접 지정 (수동 저장 방식으로 변경)
+  /// 특정 날짜/학생의 출결 상태 직접 지정 (수동 저장 방식으로 개선)
   void updateStatus({
     required String studentId,
     required String academyId,
     required String ownerId,
     required DateTime date,
-    required AttendanceType? type, // null이면 기록 삭제 (펜딩 시스템에선 아직 삭제 미구현할 수도 있음)
+    required AttendanceType? type, // null이면 기록 삭제
   }) {
-    if (type == null) return; // 현재 수동 모드에선 상태 토글 위주로 처리
-
     final targetDate = DateTime(date.year, date.month, date.day);
     final dateStr =
         "${targetDate.year}${targetDate.month.toString().padLeft(2, '0')}${targetDate.day.toString().padLeft(2, '0')}";
     final docKey = "${studentId}_$dateStr";
 
-    // 1. 새 기록 객체 생성
-    final newRecord = AttendanceRecord(
-      id: docKey,
-      studentId: studentId,
-      academyId: academyId,
-      ownerId: ownerId,
-      timestamp: targetDate,
-      type: type,
-    );
+    if (type == null) {
+      // --- 삭제(초기화) 로직 ---
+      _pendingChanges.remove(docKey);
+      _pendingDeletions.add(docKey);
 
-    // 2. 펜딩 맵 업데이트
-    _pendingChanges[docKey] = newRecord;
+      // 로컬 리스트에서 제거
+      _monthlyRecords = _monthlyRecords
+          .where(
+            (r) =>
+                !(r.studentId == studentId &&
+                    r.timestamp.year == targetDate.year &&
+                    r.timestamp.month == targetDate.month &&
+                    r.timestamp.day == targetDate.day),
+          )
+          .toList();
+    } else {
+      // --- 추가/수정 로직 ---
+      _pendingDeletions.remove(docKey); // 혹시 삭제에 있었다면 제거
 
-    // 3. 로컬 리스트 즉시 반영 (UI 업데이트용)
-    bool found = false;
-    final List<AttendanceRecord> newList = _monthlyRecords.map((r) {
-      final rDate = DateTime(
-        r.timestamp.year,
-        r.timestamp.month,
-        r.timestamp.day,
+      final newRecord = AttendanceRecord(
+        id: docKey,
+        studentId: studentId,
+        academyId: academyId,
+        ownerId: ownerId,
+        timestamp: targetDate,
+        type: type,
       );
-      if (r.studentId == studentId && rDate.isAtSameMomentAs(targetDate)) {
-        found = true;
-        return newRecord.copyWith(note: r.note); // 기존 메모는 유지하며 상태만 업데이트
-      }
-      return r;
-    }).toList();
 
-    if (!found) {
-      newList.add(newRecord);
+      _pendingChanges[docKey] = newRecord;
+
+      // 로컬 리스트 반영
+      bool found = false;
+      final List<AttendanceRecord> newList = _monthlyRecords.map((r) {
+        final rDate = DateTime(
+          r.timestamp.year,
+          r.timestamp.month,
+          r.timestamp.day,
+        );
+        if (r.studentId == studentId && rDate.isAtSameMomentAs(targetDate)) {
+          found = true;
+          return newRecord.copyWith(note: r.note);
+        }
+        return r;
+      }).toList();
+
+      if (!found) {
+        newList.add(newRecord);
+      }
+      _monthlyRecords = newList;
     }
 
-    _monthlyRecords = newList;
     _stateCounter++;
     notifyListeners();
   }
@@ -168,8 +192,7 @@ class AttendanceProvider with ChangeNotifier {
     } else if (existing.type == AttendanceType.present) {
       nextType = AttendanceType.absent;
     } else if (existing.type == AttendanceType.absent) {
-      nextType = null; // 초기화 (펜딩 시스템에서 null 처리 필요시 보완)
-      return; // 현재는 토글만 지원
+      nextType = null; // 초기화 처리
     } else {
       nextType = AttendanceType.present;
     }

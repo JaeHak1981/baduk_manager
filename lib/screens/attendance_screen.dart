@@ -11,23 +11,24 @@ import '../providers/auth_provider.dart';
 import '../utils/holiday_helper.dart';
 import '../utils/file_download_helper.dart';
 import 'components/statistics_dialog.dart';
-import 'components/remark_cell.dart';
 
 class AttendanceScreen extends StatefulWidget {
   final AcademyModel academy;
   final bool isEmbedded;
+  final VoidCallback? onSelectionModeChanged;
 
   const AttendanceScreen({
     super.key,
     required this.academy,
     this.isEmbedded = false,
+    this.onSelectionModeChanged,
   });
 
   @override
-  State<AttendanceScreen> createState() => _AttendanceScreenState();
+  State<AttendanceScreen> createState() => AttendanceScreenState();
 }
 
-class _AttendanceScreenState extends State<AttendanceScreen>
+class AttendanceScreenState extends State<AttendanceScreen>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
@@ -442,54 +443,67 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     });
   }
 
-  // 선택된 학생 ID 목록
-  final Set<String> _selectedStudentIds = {};
-  bool _isSelectionMode = false; // 선택 모드 상태
-
-  void _toggleSelectionMode() {
-    setState(() {
-      _isSelectionMode = !_isSelectionMode;
-      if (!_isSelectionMode) {
-        _selectedStudentIds.clear();
-      }
-    });
+  List<StudentModel> getVisibleStudents(List<StudentModel> allStudents) {
+    if (_selectedSession == null) return allStudents;
+    if (_selectedSession == 0) {
+      return allStudents
+          .where((s) => s.session == null || s.session == 0)
+          .toList();
+    }
+    return allStudents.where((s) => s.session == _selectedSession).toList();
   }
 
-  void _toggleSelection(String id) {
-    setState(() {
-      if (_selectedStudentIds.contains(id)) {
-        _selectedStudentIds.remove(id);
-        if (_selectedStudentIds.isEmpty) {
-          // 선택된 학생이 없으면 자동으로 모드 해제할지는 기획에 따름.
-          // 여기선 유지하되 사용자 경험상 0명이면 모드 유지
-        }
-      } else {
-        _selectedStudentIds.add(id);
-      }
-    });
+  // 선택 모드 상태 전용 Notifier
+  final ValueNotifier<int> _selectionNotifier = ValueNotifier<int>(0);
+  final Set<String> selectedStudentIds = {};
+  bool isSelectionMode = false; // 선택 모드 상태
+
+  void toggleSelectionMode() {
+    isSelectionMode = !isSelectionMode;
+    if (!isSelectionMode) {
+      selectedStudentIds.clear();
+    }
+    _selectionNotifier.value++;
+    widget.onSelectionModeChanged?.call();
   }
 
-  void _toggleSelectAll(List<dynamic> students) {
-    setState(() {
-      if (_selectedStudentIds.length == students.length) {
-        _selectedStudentIds.clear();
-      } else {
-        _selectedStudentIds.addAll(students.map((s) => s.id));
-      }
-    });
+  void toggleSelection(String id) {
+    if (selectedStudentIds.contains(id)) {
+      selectedStudentIds.remove(id);
+    } else {
+      selectedStudentIds.add(id);
+    }
+    _selectionNotifier.value++;
+    widget.onSelectionModeChanged?.call(); // AppBar updates
   }
 
-  Future<void> _moveSelectedStudents(
+  void toggleSelectAll(List<dynamic> students) {
+    if (selectedStudentIds.length == students.length) {
+      selectedStudentIds.clear();
+    } else {
+      selectedStudentIds.addAll(students.map((s) => s.id));
+    }
+    _selectionNotifier.value++;
+    widget.onSelectionModeChanged?.call();
+  }
+
+  void clearSelection() {
+    selectedStudentIds.clear();
+    _selectionNotifier.value++;
+    widget.onSelectionModeChanged?.call();
+  }
+
+  Future<void> moveSelectedStudents(
     BuildContext context,
     String currentOwnerId,
   ) async {
-    if (_selectedStudentIds.isEmpty) return;
+    if (selectedStudentIds.isEmpty) return;
 
     int? targetSession;
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('${_selectedStudentIds.length}명 부 이동'),
+        title: Text('${selectedStudentIds.length}명 부 이동'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -538,7 +552,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
 
     final provider = context.read<StudentProvider>();
     final success = await provider.moveStudents(
-      _selectedStudentIds.toList(),
+      selectedStudentIds.toList(),
       targetSession!,
       academyId: widget.academy.id,
       ownerId: currentOwnerId,
@@ -553,24 +567,24 @@ class _AttendanceScreenState extends State<AttendanceScreen>
         ),
       );
       setState(() {
-        _isSelectionMode = false;
-        _selectedStudentIds.clear();
+        isSelectionMode = false;
+        selectedStudentIds.clear();
       });
     }
   }
 
-  Future<void> _deleteSelectedStudents(
+  Future<void> deleteSelectedStudents(
     BuildContext context,
     String currentOwnerId,
   ) async {
-    if (_selectedStudentIds.isEmpty) return;
+    if (selectedStudentIds.isEmpty) return;
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('학생 삭제'),
         content: Text(
-          '선택한 ${_selectedStudentIds.length}명의 학생을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.',
+          '선택한 ${selectedStudentIds.length}명의 학생을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.',
         ),
         actions: [
           TextButton(
@@ -591,7 +605,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
 
     final provider = context.read<StudentProvider>();
     final success = await provider.deleteStudents(
-      _selectedStudentIds.toList(),
+      selectedStudentIds.toList(),
       academyId: widget.academy.id,
       ownerId: currentOwnerId,
     );
@@ -601,8 +615,8 @@ class _AttendanceScreenState extends State<AttendanceScreen>
         context,
       ).showSnackBar(const SnackBar(content: Text('선택한 학생이 삭제되었습니다.')));
       setState(() {
-        _isSelectionMode = false;
-        _selectedStudentIds.clear();
+        isSelectionMode = false;
+        selectedStudentIds.clear();
       });
     }
   }
@@ -617,15 +631,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
         .watch<StudentProvider>(); // Watch to use filtered list in AppBar
 
     // 현재 화면에 보이는 학생 목록 (필터링 적용)
-    final visibleStudents = _selectedSession == null
-        ? studentProvider.students
-        : _selectedSession == 0
-        ? studentProvider.students
-              .where((s) => s.session == null || s.session == 0)
-              .toList()
-        : studentProvider.students
-              .where((s) => s.session == _selectedSession)
-              .toList();
+    final visibleStudents = getVisibleStudents(studentProvider.students);
 
     Widget body = Column(
       children: [
@@ -644,8 +650,9 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                   Text(
                     '$_currentYear년 $_currentMonth월',
                     style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 20, // 18에서 확대
+                      fontWeight: FontWeight.w900, // 더 두껍게
+                      color: Colors.black,
                     ),
                   ),
                   IconButton(
@@ -653,31 +660,49 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                     icon: const Icon(Icons.chevron_right),
                   ),
                   const Spacer(),
-                  if (context.watch<AttendanceProvider>().hasPendingChanges)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          final success = await context
-                              .read<AttendanceProvider>()
-                              .savePendingChanges();
-                          if (success && mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('출결 변경 사항이 저장되었습니다.'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.save),
-                        label: const Text('저장하기'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final provider = context.read<AttendanceProvider>();
+                        if (!provider.hasPendingChanges) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('저장할 변경 사항이 없습니다.'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                          return;
+                        }
+                        final success = await provider.savePendingChanges();
+                        if (success && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('출결 변경 사항이 저장되었습니다.'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.save, color: Colors.black),
+                      label: const Text(
+                        '저장하기',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
                         ),
                       ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        elevation: 2,
+                      ),
                     ),
+                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -755,285 +780,308 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                 'Rebuilding attendance table. Month: $_currentYear-$_currentMonth, Records: ${attendanceProvider.monthlyRecords.length}',
               );
 
-              return SingleChildScrollView(
-                key: const PageStorageKey('attendance_scroll_vertical'),
-                scrollDirection: Axis.vertical,
-                child: SingleChildScrollView(
-                  key: const PageStorageKey('attendance_scroll_horizontal'),
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    key: ValueKey(
-                      'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}_${_selectedStudentIds.length}_$_isSelectionMode',
-                    ),
-                    showCheckboxColumn: false, // 수동으로 만든 체크박스와 겹치지 않게 비활성화
-                    columnSpacing: 12, // 간격 대폭 축소
-                    horizontalMargin: 8,
-                    headingRowHeight: 50, // 헤더 높이 축소
-                    dataRowMinHeight: 45, // 데이터 행 높이 축소
-                    dataRowMaxHeight: 45,
-                    headingRowColor: WidgetStateProperty.all(
-                      _isSelectionMode
-                          ? Colors.red.shade50
-                          : Colors.grey.shade50,
-                    ),
-                    // 테두리 스타일 변경: 수직선 제거, 깔끔한 수평선 위주
-                    border: const TableBorder(
-                      horizontalInside: BorderSide(
-                        color: Colors.black12,
-                        width: 0.5,
-                      ),
-                      bottom: BorderSide(color: Colors.black12, width: 0.5),
-                    ),
-                    columns: [
-                      // 0. 체크박스 (전체 선택)
-                      if (_isSelectionMode)
-                        DataColumn(
-                          label: SizedBox(
-                            width: 30,
-                            child: Checkbox(
-                              value:
-                                  students.isNotEmpty &&
-                                  _selectedStudentIds.length == students.length,
-                              onChanged: (v) => _toggleSelectAll(students),
-                            ),
-                          ),
+              return ValueListenableBuilder<int>(
+                valueListenable: _selectionNotifier,
+                builder: (context, _, child) {
+                  return SingleChildScrollView(
+                    key: const PageStorageKey('attendance_scroll_vertical'),
+                    scrollDirection: Axis.vertical,
+                    child: SingleChildScrollView(
+                      key: const PageStorageKey('attendance_scroll_horizontal'),
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        key: ValueKey(
+                          'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}_$isSelectionMode',
                         ),
-                      // 1. 이름 (항상 고정)
-                      const DataColumn(
-                        label: SizedBox(
-                          width: 50,
-                          child: Text(
-                            '이름',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
+                        showCheckboxColumn: false, // 수동으로 만든 체크박스와 겹치지 않게 비활성화
+                        columnSpacing: 12, // 간격 대폭 축소
+                        horizontalMargin: 8,
+                        headingRowHeight: 50, // 헤더 높이 축소
+                        dataRowMinHeight: 45, // 데이터 행 높이 축소
+                        dataRowMaxHeight: 45,
+                        headingRowColor: WidgetStateProperty.all(
+                          isSelectionMode
+                              ? Colors.red.shade50
+                              : Colors.grey.shade50,
                         ),
-                      ),
-                      // 2. 날짜별 컬럼
-                      ...lessonDates.map((date) {
-                        final holidayName = HolidayHelper.getHolidayName(date);
-                        final isHoliday = holidayName != null;
-                        final isSunday = date.weekday == 7;
-                        final textPrimaryColor = (isHoliday || isSunday)
-                            ? Colors.red
-                            : Colors.black87;
-
-                        return DataColumn(
-                          label: SizedBox(
-                            width: 60, // 버튼 두 개가 들어갈 최소 너비
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '${date.day}',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: textPrimaryColor,
-                                  ),
-                                ),
-                                Text(
-                                  _getWeekdayName(date.weekday),
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: textPrimaryColor.withOpacity(0.7),
-                                  ),
-                                ),
-                              ],
-                            ),
+                        // 테두리 스타일 변경: 수직선 제거, 깔끔한 수평선 위주
+                        border: const TableBorder(
+                          horizontalInside: BorderSide(
+                            color: Colors.black12,
+                            width: 0.5,
                           ),
-                        );
-                      }),
-                      // 3. 출석율
-                      const DataColumn(
-                        label: SizedBox(
-                          width: 50,
-                          child: Text(
-                            '출석율',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              color: Colors.blueAccent,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
+                          bottom: BorderSide(color: Colors.black12, width: 0.5),
                         ),
-                      ),
-                      // 4. 비고 (추가)
-                      const DataColumn(
-                        label: SizedBox(
-                          width: 150,
-                          child: Text(
-                            '비고',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                    rows: students.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final student = entry.value;
-                      int presentCount = 0;
-                      int validLessonCount = 0;
-
-                      // 통계 계산
-                      for (var date in lessonDates) {
-                        final isHoliday = HolidayHelper.isHoliday(date);
-                        if (!isHoliday) {
-                          validLessonCount++;
-                          final key =
-                              "${student.id}_${date.year}_${date.month}_${date.day}";
-                          if (attendanceMap[key]?.type ==
-                              AttendanceType.present) {
-                            presentCount++;
-                          }
-                        }
-                      }
-
-                      // 출석률 계산
-                      Color rateColor =
-                          (validLessonCount > 0 &&
-                              (presentCount / validLessonCount) >= 0.8)
-                          ? Colors.blue
-                          : (presentCount > 0 ? Colors.orange : Colors.red);
-
-                      return DataRow(
-                        selected: _selectedStudentIds.contains(student.id),
-                        onSelectChanged: _isSelectionMode
-                            ? (val) {
-                                _toggleSelection(student.id);
-                              }
-                            : null,
-                        cells: [
-                          // 0. 체크박스
-                          if (_isSelectionMode)
-                            DataCell(
-                              SizedBox(
+                        columns: [
+                          // 0. 체크박스 (전체 선택)
+                          if (isSelectionMode)
+                            DataColumn(
+                              label: SizedBox(
                                 width: 30,
                                 child: Checkbox(
-                                  value: _selectedStudentIds.contains(
-                                    student.id,
+                                  side: BorderSide(
+                                    color: Colors.grey.shade600,
+                                    width: 1.5,
                                   ),
-                                  onChanged: (val) =>
-                                      _toggleSelection(student.id),
+                                  value:
+                                      students.isNotEmpty &&
+                                      selectedStudentIds.length ==
+                                          students.length,
+                                  onChanged: (v) => toggleSelectAll(students),
                                 ),
                               ),
                             ),
-                          // 1. 이름
-                          DataCell(
-                            InkWell(
-                              onLongPress: () {
-                                if (!_isSelectionMode) {
-                                  _toggleSelectionMode();
-                                  _toggleSelection(student.id);
-                                }
-                              },
-                              onTap: _isSelectionMode
-                                  ? () => _toggleSelection(student.id)
-                                  : null,
-                              child: Container(
-                                width: 50,
-                                height: double.infinity,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  student.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                          // 1. 이름 (항상 고정)
+                          const DataColumn(
+                            label: SizedBox(
+                              width: 50,
+                              child: Text(
+                                '이름',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
                                 ),
                               ),
                             ),
                           ),
-                          // 2. 날짜별 셀 (순환 토글 적용)
+                          // 2. 날짜별 컬럼
                           ...lessonDates.map((date) {
-                            final isHoliday = HolidayHelper.isHoliday(date);
+                            final holidayName = HolidayHelper.getHolidayName(
+                              date,
+                            );
+                            final isHoliday = holidayName != null;
+                            final isSunday = date.weekday == 7;
+                            final textPrimaryColor = (isHoliday || isSunday)
+                                ? Colors.red
+                                : Colors.black87;
 
-                            if (isHoliday) {
-                              final holidayName =
-                                  HolidayHelper.getHolidayName(date) ?? "";
-                              if (holidayName.isEmpty)
-                                return const DataCell(SizedBox());
-
-                              final totalRows = students.length;
-                              final textLength = holidayName.length;
-                              int startIndex = (totalRows - textLength) ~/ 2;
-                              if (startIndex < 0) startIndex = 0;
-
-                              final charIndex = index - startIndex;
-                              String charToDisplay = "";
-                              if (charIndex >= 0 && charIndex < textLength) {
-                                charToDisplay = holidayName[charIndex];
-                              }
-
-                              return DataCell(
-                                Center(
-                                  child: Text(
-                                    charToDisplay,
-                                    style: const TextStyle(
-                                      color: Colors.red,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
+                            return DataColumn(
+                              label: SizedBox(
+                                width: 60, // 버튼 두 개가 들어갈 최소 너비
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      '${date.day}',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: textPrimaryColor,
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              );
-                            }
-
-                            final key =
-                                "${student.id}_${date.year}_${date.month}_${date.day}";
-                            final record = attendanceMap[key];
-
-                            return DataCell(
-                              Center(
-                                child: _buildCircularToggleCell(
-                                  context,
-                                  attendanceProvider,
-                                  student.id,
-                                  ownerId,
-                                  date,
-                                  record,
+                                    Text(
+                                      _getWeekdayName(date.weekday),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: textPrimaryColor.withOpacity(
+                                          0.7,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             );
                           }),
                           // 3. 출석율
-                          DataCell(
-                            Container(
+                          const DataColumn(
+                            label: SizedBox(
                               width: 50,
-                              alignment: Alignment.center,
                               child: Text(
-                                '$presentCount/$validLessonCount',
+                                '출석율',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,
-                                  color: rateColor,
+                                  color: Colors.black,
                                 ),
+                                textAlign: TextAlign.center,
                               ),
                             ),
                           ),
                           // 4. 비고 (추가)
-                          DataCell(
-                            _buildRemarkCell(
-                              context,
-                              attendanceProvider,
-                              student.id,
-                              ownerId,
-                              DateTime(_currentYear, _currentMonth, 1),
-                              attendanceMap,
+                          const DataColumn(
+                            label: SizedBox(
+                              width: 150,
+                              child: Text(
+                                '비고',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ),
                           ),
                         ],
-                      );
-                    }).toList(),
-                  ),
-                ),
+                        rows: students.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final student = entry.value;
+                          int presentCount = 0;
+                          int validLessonCount = 0;
+
+                          // 통계 계산
+                          for (var date in lessonDates) {
+                            final isHoliday = HolidayHelper.isHoliday(date);
+                            if (!isHoliday) {
+                              validLessonCount++;
+                              final key =
+                                  "${student.id}_${date.year}_${date.month}_${date.day}";
+                              if (attendanceMap[key]?.type ==
+                                  AttendanceType.present) {
+                                presentCount++;
+                              }
+                            }
+                          }
+
+                          // 출석률 계산
+                          Color rateColor = Colors.black;
+
+                          return DataRow(
+                            selected: selectedStudentIds.contains(student.id),
+                            onSelectChanged: isSelectionMode
+                                ? (val) {
+                                    toggleSelection(student.id);
+                                  }
+                                : null,
+                            cells: [
+                              // 0. 체크박스
+                              if (isSelectionMode)
+                                DataCell(
+                                  SizedBox(
+                                    width: 30,
+                                    child: Checkbox(
+                                      side: BorderSide(
+                                        color: Colors.grey.shade600,
+                                        width: 1.5,
+                                      ),
+                                      value: selectedStudentIds.contains(
+                                        student.id,
+                                      ),
+                                      onChanged: (val) =>
+                                          toggleSelection(student.id),
+                                    ),
+                                  ),
+                                ),
+                              // 1. 이름
+                              DataCell(
+                                InkWell(
+                                  onLongPress: () {
+                                    if (!isSelectionMode) {
+                                      toggleSelectionMode();
+                                      toggleSelection(student.id);
+                                    }
+                                  },
+                                  onTap: isSelectionMode
+                                      ? () => toggleSelection(student.id)
+                                      : null,
+                                  child: Container(
+                                    width: 50,
+                                    height: double.infinity,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      student.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // 2. 날짜별 셀 (순환 토글 적용)
+                              ...lessonDates.map((date) {
+                                final isHoliday = HolidayHelper.isHoliday(date);
+
+                                if (isHoliday) {
+                                  final holidayName =
+                                      HolidayHelper.getHolidayName(date) ?? "";
+                                  if (holidayName.isEmpty)
+                                    return const DataCell(SizedBox());
+
+                                  final totalRows = students.length;
+                                  final textLength = holidayName.length;
+                                  int startIndex =
+                                      (totalRows - textLength) ~/ 2;
+                                  if (startIndex < 0) startIndex = 0;
+
+                                  final charIndex = index - startIndex;
+                                  String charToDisplay = "";
+                                  if (charIndex >= 0 &&
+                                      charIndex < textLength) {
+                                    charToDisplay = holidayName[charIndex];
+                                  }
+
+                                  return DataCell(
+                                    Center(
+                                      child: Text(
+                                        charToDisplay,
+                                        style: const TextStyle(
+                                          color: Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                final key =
+                                    "${student.id}_${date.year}_${date.month}_${date.day}";
+                                final record = attendanceMap[key];
+
+                                return DataCell(
+                                  Center(
+                                    child: _buildCircularToggleCell(
+                                      context,
+                                      attendanceProvider,
+                                      student.id,
+                                      ownerId,
+                                      date,
+                                      record,
+                                    ),
+                                  ),
+                                );
+                              }),
+                              // 3. 출석율
+                              DataCell(
+                                Container(
+                                  width: 50,
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    '$presentCount/$validLessonCount',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: rateColor,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // 4. 비고 (추가)
+                              DataCell(
+                                _buildRemarkCell(
+                                  context,
+                                  attendanceProvider,
+                                  student.id,
+                                  ownerId,
+                                  (_currentYear == DateTime.now().year &&
+                                          _currentMonth == DateTime.now().month)
+                                      ? DateTime.now()
+                                      : DateTime(
+                                          _currentYear,
+                                          _currentMonth,
+                                          1,
+                                        ),
+                                  attendanceMap,
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -1045,35 +1093,41 @@ class _AttendanceScreenState extends State<AttendanceScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: _isSelectionMode
-            ? Text('${_selectedStudentIds.length}명 선택됨')
-            : Text('${widget.academy.name} 출석부'),
-        backgroundColor: _isSelectionMode
+        title: isSelectionMode
+            ? Text(
+                '${selectedStudentIds.length}명 선택됨',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              )
+            : Text(
+                '${widget.academy.name} 출석부',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+        backgroundColor: isSelectionMode
             ? Colors.red.shade50
             : Theme.of(context).colorScheme.inversePrimary,
-        leading: _isSelectionMode
+        leading: isSelectionMode
             ? IconButton(
                 icon: const Icon(Icons.close),
-                onPressed: _toggleSelectionMode,
+                onPressed: toggleSelectionMode,
               )
             : null,
-        actions: _isSelectionMode
+        actions: isSelectionMode
             ? [
                 IconButton(
                   icon: const Icon(Icons.drive_file_move_outline),
                   tooltip: '부 이동',
-                  onPressed: () => _moveSelectedStudents(context, ownerId),
+                  onPressed: () => moveSelectedStudents(context, ownerId),
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.red),
                   tooltip: '삭제',
-                  onPressed: () => _deleteSelectedStudents(context, ownerId),
+                  onPressed: () => deleteSelectedStudents(context, ownerId),
                 ),
                 TextButton(
                   onPressed: () =>
-                      _toggleSelectAll(visibleStudents), // 필터링된 학생 전체 선택
+                      toggleSelectAll(visibleStudents), // 필터링된 학생 전체 선택
                   child: Text(
-                    _selectedStudentIds.length == visibleStudents.length &&
+                    selectedStudentIds.length == visibleStudents.length &&
                             visibleStudents.isNotEmpty
                         ? '해제'
                         : '전체',
@@ -1086,7 +1140,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                 IconButton(
                   icon: const Icon(Icons.check_box_outlined),
                   tooltip: '다중 선택',
-                  onPressed: _toggleSelectionMode,
+                  onPressed: toggleSelectionMode,
                 ),
               ],
       ),
@@ -1094,7 +1148,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     );
   }
 
-  // [추가] 비고란 셀 빌더
+  // [추가] 비고란 셀 빌더 - 월별 출석부용 (해당 월의 모든 비고 누적 표시)
   Widget _buildRemarkCell(
     BuildContext context,
     AttendanceProvider provider,
@@ -1103,16 +1157,34 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     DateTime date,
     Map<String, AttendanceRecord> attendanceMap,
   ) {
-    final key = "${studentId}_${date.year}_${date.month}_${date.day}";
-    final record = attendanceMap[key];
+    // 해당 학생의 이 달의 모든 기록 중 비고가 있는 것만 추출
+    final monthRecords = provider.monthlyRecords
+        .where(
+          (r) =>
+              r.studentId == studentId &&
+              r.timestamp.year == _currentYear &&
+              r.timestamp.month == _currentMonth &&
+              r.note != null &&
+              r.note!.trim().isNotEmpty,
+        )
+        .toList();
 
-    return RemarkCell(
-      provider: provider,
-      studentId: studentId,
-      academyId: widget.academy.id,
-      ownerId: ownerId,
-      date: date,
-      initialNote: record?.note ?? "",
+    // 날짜 연대순 정렬
+    monthRecords.sort((a, b) => a.timestamp.day.compareTo(b.timestamp.day));
+
+    // "일: 내용 / 일: 내용" 형식으로 변환
+    final combinedNotes = monthRecords
+        .map((r) => "${r.timestamp.day}일: ${r.note}")
+        .join(" / ");
+
+    return SizedBox(
+      width: 150,
+      child: Text(
+        combinedNotes.isEmpty ? "-" : combinedNotes,
+        style: const TextStyle(fontSize: 11, color: Colors.black87),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 
@@ -1161,7 +1233,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
         width: 35,
         height: 35,
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.withOpacity(0.1)),
+          border: Border.all(color: Colors.black26, width: 1.0),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Center(child: child),

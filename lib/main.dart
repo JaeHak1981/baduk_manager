@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'providers/academy_provider.dart';
@@ -21,6 +23,8 @@ void main() async {
 
   // 초기 데이터 시딩 (개발용) - 비동기로 실행하여 UI 차단 방지
   seedTextbooks();
+
+  Intl.defaultLocale = 'ko_KR';
 
   runApp(const MyApp());
 }
@@ -55,6 +59,13 @@ class MyApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
         ),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
+        locale: const Locale('ko', 'KR'),
         home: const AuthWrapper(),
       ),
     );

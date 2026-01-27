@@ -373,7 +373,7 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                               scrollDirection: Axis.horizontal,
                               child: DataTable(
                                 key: ValueKey(
-                                  'daily_at_table_${attendanceProvider.stateCounter}_${filteredStudents.length}_$isSelectionMode',
+                                  'daily_at_table_${attendanceProvider.stateCounter}_${filteredStudents.length}_${isSelectionMode}_$_localStateCounter',
                                 ),
                                 showCheckboxColumn: false,
                                 columnSpacing:

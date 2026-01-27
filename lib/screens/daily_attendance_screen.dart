@@ -52,6 +52,7 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
   final ValueNotifier<int> _selectionNotifier = ValueNotifier<int>(0);
   final Set<String> selectedStudentIds = {};
   bool isSelectionMode = false;
+  int _localStateCounter = 0; // UI 즉각 갱신을 위한 로컬 카운터
 
   void toggleSelectionMode() {
     isSelectionMode = !isSelectionMode;
@@ -253,7 +254,13 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
 
     Widget content = Consumer2<StudentProvider, AttendanceProvider>(
       builder: (context, studentProvider, attendanceProvider, child) {
-        if (studentProvider.isLoading && studentProvider.students.isEmpty) {
+        final bool isStudentsEmpty = studentProvider.students.isEmpty;
+        final bool isAttendanceEmpty =
+            attendanceProvider.monthlyRecords.isEmpty;
+
+        // 초기 로딩 중이거나 명확하게 로딩 중일 때 로딩 인디케이터 표시
+        if ((studentProvider.isLoading && isStudentsEmpty) ||
+            (attendanceProvider.isLoading && isAttendanceEmpty)) {
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -366,12 +373,13 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                               scrollDirection: Axis.horizontal,
                               child: DataTable(
                                 key: ValueKey(
-                                  'daily_at_table_${attendanceProvider.stateCounter}_${filteredStudents.length}_${isSelectionMode}_${_selectionNotifier.value}',
+                                  'daily_at_table_${attendanceProvider.stateCounter}_${filteredStudents.length}_$isSelectionMode',
                                 ),
                                 showCheckboxColumn: false,
-                                columnSpacing: 20,
-                                horizontalMargin: 0,
-                                headingRowHeight: 45,
+                                columnSpacing:
+                                    12, // 간격 최적화 (AttendanceScreen과 동일)
+                                horizontalMargin: 8, // 터치 영역 확보를 위해 0에서 8로 변경
+                                headingRowHeight: 50,
                                 dataRowMinHeight: 45,
                                 dataRowMaxHeight: 45,
                                 columns: [
@@ -757,6 +765,9 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
     return InkWell(
       onTap: () {
         HapticFeedback.lightImpact();
+        setState(() {
+          _localStateCounter++;
+        });
         provider.toggleStatus(
           studentId: studentId,
           academyId: widget.academy.id,

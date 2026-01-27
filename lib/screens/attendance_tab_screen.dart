@@ -97,38 +97,6 @@ class _AttendanceTabScreenState extends State<AttendanceTabScreen>
             return ValueListenableBuilder<bool>(
               valueListenable: _isFullSelection,
               builder: (context, isFullSelection, _) {
-                VoidCallback? toggleMode;
-                VoidCallback? moveStudents;
-                VoidCallback? deleteStudents;
-
-                if (_tabController.index == 0) {
-                  final state = _dailyKey.currentState;
-                  if (state != null) {
-                    toggleMode = state.toggleSelectionMode;
-                    moveStudents = () => state.moveSelectedStudents(
-                      context,
-                      widget.academy.ownerId,
-                    );
-                    deleteStudents = () => state.deleteSelectedStudents(
-                      context,
-                      widget.academy.ownerId,
-                    );
-                  }
-                } else {
-                  final state = _monthlyKey.currentState;
-                  if (state != null) {
-                    toggleMode = state.toggleSelectionMode;
-                    moveStudents = () => state.moveSelectedStudents(
-                      context,
-                      widget.academy.ownerId,
-                    );
-                    deleteStudents = () => state.deleteSelectedStudents(
-                      context,
-                      widget.academy.ownerId,
-                    );
-                  }
-                }
-
                 return Scaffold(
                   appBar: AppBar(
                     title: isSelectionMode
@@ -154,7 +122,20 @@ class _AttendanceTabScreenState extends State<AttendanceTabScreen>
                             IconButton(
                               icon: const Icon(Icons.drive_file_move_outline),
                               tooltip: '부 이동',
-                              onPressed: moveStudents,
+                              onPressed: () {
+                                if (_tabController.index == 0) {
+                                  _dailyKey.currentState?.moveSelectedStudents(
+                                    context,
+                                    widget.academy.ownerId,
+                                  );
+                                } else {
+                                  _monthlyKey.currentState
+                                      ?.moveSelectedStudents(
+                                        context,
+                                        widget.academy.ownerId,
+                                      );
+                                }
+                              },
                             ),
                             IconButton(
                               icon: const Icon(
@@ -162,7 +143,21 @@ class _AttendanceTabScreenState extends State<AttendanceTabScreen>
                                 color: Colors.red,
                               ),
                               tooltip: '삭제',
-                              onPressed: deleteStudents,
+                              onPressed: () {
+                                if (_tabController.index == 0) {
+                                  _dailyKey.currentState
+                                      ?.deleteSelectedStudents(
+                                        context,
+                                        widget.academy.ownerId,
+                                      );
+                                } else {
+                                  _monthlyKey.currentState
+                                      ?.deleteSelectedStudents(
+                                        context,
+                                        widget.academy.ownerId,
+                                      );
+                                }
+                              },
                             ),
                             const SizedBox(width: 8),
                           ]
@@ -170,7 +165,14 @@ class _AttendanceTabScreenState extends State<AttendanceTabScreen>
                             IconButton(
                               icon: const Icon(Icons.check_box_outlined),
                               tooltip: '다중 선택',
-                              onPressed: toggleMode,
+                              onPressed: () {
+                                if (_tabController.index == 0) {
+                                  _dailyKey.currentState?.toggleSelectionMode();
+                                } else {
+                                  _monthlyKey.currentState
+                                      ?.toggleSelectionMode();
+                                }
+                              },
                             ),
                           ],
                     bottom: TabBar(

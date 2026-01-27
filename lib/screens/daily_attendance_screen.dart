@@ -10,6 +10,7 @@ import '../providers/student_provider.dart';
 import '../providers/auth_provider.dart';
 import '../utils/holiday_helper.dart';
 import 'package:table_calendar/table_calendar.dart';
+import '../providers/schedule_provider.dart';
 
 class DailyAttendanceScreen extends StatefulWidget {
   final AcademyModel academy;
@@ -231,6 +232,11 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
         year: _selectedDate.year,
         month: _selectedDate.month,
       );
+      context.read<ScheduleProvider>().loadSchedule(
+        academyId: widget.academy.id,
+        year: _selectedDate.year,
+        month: _selectedDate.month,
+      );
       context.read<StudentProvider>().loadStudents(
         widget.academy.id,
         ownerId: ownerId,
@@ -243,6 +249,7 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
     super.build(context);
     final authProvider = context.read<AuthProvider>();
     final ownerId = authProvider.currentUser?.uid ?? '';
+    final scheduleProvider = context.watch<ScheduleProvider>();
 
     Widget content = Consumer2<StudentProvider, AttendanceProvider>(
       builder: (context, studentProvider, attendanceProvider, child) {
@@ -259,6 +266,30 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
               r.timestamp.day == _selectedDate.day) {
             attendanceMap[r.studentId] = r;
           }
+        }
+
+        if (scheduleProvider.isDateHoliday(_selectedDate)) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.event_busy, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  '${_selectedDate.month}월 ${_selectedDate.day}일은 학원 휴강일입니다.',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '출석 처리가 필요하지 않습니다.',
+                  style: TextStyle(color: Colors.grey, fontSize: 16),
+                ),
+              ],
+            ),
+          );
         }
 
         return Column(
@@ -502,57 +533,86 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
             color: Colors.grey.shade50,
             border: Border(right: BorderSide(color: Colors.grey.shade300)),
           ),
-          child: TableCalendar(
-            locale: 'ko_KR',
-            firstDay: DateTime(2020),
-            lastDay: DateTime(2030),
-            focusedDay: _focusedDay,
-            selectedDayPredicate: (day) => isSameDay(_selectedDate, day),
-            calendarFormat: CalendarFormat.month,
-            headerStyle: const HeaderStyle(
-              formatButtonVisible: false,
-              titleCentered: true,
-              titleTextStyle: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-              leftChevronIcon: Icon(Icons.chevron_left, size: 20),
-              rightChevronIcon: Icon(Icons.chevron_right, size: 20),
-              headerPadding: EdgeInsets.symmetric(vertical: 4),
-            ),
-            daysOfWeekStyle: const DaysOfWeekStyle(
-              weekendStyle: TextStyle(color: Colors.red),
-            ),
-            calendarStyle: CalendarStyle(
-              todayDecoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.3),
-                shape: BoxShape.circle,
-              ),
-              selectedDecoration: const BoxDecoration(
-                color: Colors.blue,
-                shape: BoxShape.circle,
-              ),
-              weekendTextStyle: const TextStyle(color: Colors.red),
-              holidayTextStyle: const TextStyle(color: Colors.red),
-              outsideDaysVisible: false,
-            ),
-            holidayPredicate: (day) => HolidayHelper.isHoliday(day),
-            onDaySelected: (selectedDay, focusedDay) {
-              setState(() {
-                final oldMonth = _selectedDate.month;
-                final oldYear = _selectedDate.year;
-                _selectedDate = selectedDay;
-                _focusedDay = focusedDay;
+          child: Column(
+            children: [
+              TableCalendar(
+                locale: 'ko_KR',
+                firstDay: DateTime(2020),
+                lastDay: DateTime(2030),
+                focusedDay: _focusedDay,
+                selectedDayPredicate: (day) => isSameDay(_selectedDate, day),
+                calendarFormat: CalendarFormat.month,
+                headerStyle: const HeaderStyle(
+                  formatButtonVisible: false,
+                  titleCentered: true,
+                  titleTextStyle: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  leftChevronIcon: Icon(Icons.chevron_left, size: 20),
+                  rightChevronIcon: Icon(Icons.chevron_right, size: 20),
+                  headerPadding: EdgeInsets.symmetric(vertical: 4),
+                ),
+                daysOfWeekStyle: const DaysOfWeekStyle(
+                  weekendStyle: TextStyle(color: Colors.red),
+                ),
+                calendarStyle: CalendarStyle(
+                  todayDecoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  selectedDecoration: const BoxDecoration(
+                    color: Colors.blue,
+                    shape: BoxShape.circle,
+                  ),
+                  weekendTextStyle: const TextStyle(color: Colors.red),
+                  holidayTextStyle: const TextStyle(color: Colors.red),
+                  outsideDaysVisible: false,
+                ),
+                holidayPredicate: (day) =>
+                    HolidayHelper.isHoliday(day) ||
+                    scheduleProvider.isDateHoliday(day),
+                onDaySelected: (selectedDay, focusedDay) {
+                  setState(() {
+                    final oldMonth = _selectedDate.month;
+                    final oldYear = _selectedDate.year;
+                    _selectedDate = selectedDay;
+                    _focusedDay = focusedDay;
 
-                if (oldMonth != _selectedDate.month ||
-                    oldYear != _selectedDate.year) {
-                  _loadData();
-                }
-              });
-            },
-            onPageChanged: (focusedDay) {
-              _focusedDay = focusedDay;
-            },
+                    if (oldMonth != _selectedDate.month ||
+                        oldYear != _selectedDate.year) {
+                      _loadData();
+                    }
+                  });
+                },
+                onPageChanged: (focusedDay) {
+                  _focusedDay = focusedDay;
+                },
+              ),
+              const Divider(),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                title: const Text('학원 휴강 설정', style: TextStyle(fontSize: 14)),
+                subtitle: const Text(
+                  '선택한 날짜를 휴강으로 지정합니다.',
+                  style: TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                trailing: Transform.scale(
+                  scale: 0.8,
+                  child: Switch(
+                    value: scheduleProvider.isDateHoliday(_selectedDate),
+                    onChanged: (value) {
+                      scheduleProvider.toggleHoliday(
+                        academyId: widget.academy.id,
+                        year: _selectedDate.year,
+                        month: _selectedDate.month,
+                        day: _selectedDate.day,
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         Expanded(

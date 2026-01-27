@@ -10,6 +10,7 @@ import 'providers/student_provider.dart';
 import 'providers/progress_provider.dart';
 import 'providers/attendance_provider.dart';
 import 'providers/order_provider.dart';
+import 'providers/schedule_provider.dart';
 import 'utils/seed_data.dart';
 
 import 'screens/login_screen.dart';
@@ -42,6 +43,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ProgressProvider()),
         ChangeNotifierProvider(create: (_) => AttendanceProvider()),
         ChangeNotifierProvider(create: (_) => OrderProvider()),
+        ChangeNotifierProvider(create: (_) => ScheduleProvider()),
       ],
 
       child: MaterialApp(

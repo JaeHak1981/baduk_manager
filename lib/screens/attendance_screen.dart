@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../utils/holiday_helper.dart';
 import '../utils/file_download_helper.dart';
 import 'components/statistics_dialog.dart';
+import '../providers/schedule_provider.dart';
 
 class AttendanceScreen extends StatefulWidget {
   final AcademyModel academy;
@@ -53,6 +54,11 @@ class AttendanceScreenState extends State<AttendanceScreen>
       context.read<AttendanceProvider>().loadMonthlyAttendance(
         academyId: widget.academy.id,
         ownerId: widget.academy.ownerId,
+        year: _currentYear,
+        month: _currentMonth,
+      );
+      context.read<ScheduleProvider>().loadSchedule(
+        academyId: widget.academy.id,
         year: _currentYear,
         month: _currentMonth,
       );
@@ -189,7 +195,8 @@ class AttendanceScreenState extends State<AttendanceScreen>
       for (int i = 1; i <= endOfMonth.day; i++) {
         DateTime d = DateTime(_currentYear, _currentMonth, i);
         if (widget.academy.lessonDays.contains(d.weekday) &&
-            !HolidayHelper.isHoliday(d)) {
+            !HolidayHelper.isHoliday(d) &&
+            !context.read<ScheduleProvider>().isDateHoliday(d)) {
           lessonDates.add(d);
         }
       }
@@ -627,6 +634,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
     final lessonDates = _getLessonDates();
     final authProvider = context.read<AuthProvider>();
     final ownerId = authProvider.currentUser?.uid ?? '';
+    final scheduleProvider = context.watch<ScheduleProvider>();
     final studentProvider = context
         .watch<StudentProvider>(); // Watch to use filtered list in AppBar
 
@@ -849,7 +857,10 @@ class AttendanceScreenState extends State<AttendanceScreen>
                             final holidayName = HolidayHelper.getHolidayName(
                               date,
                             );
-                            final isHoliday = holidayName != null;
+                            final isAcademyHoliday = scheduleProvider
+                                .isDateHoliday(date);
+                            final isHoliday =
+                                holidayName != null || isAcademyHoliday;
                             final isSunday = date.weekday == 7;
                             final textPrimaryColor = (isHoliday || isSunday)
                                 ? Colors.red
@@ -921,7 +932,9 @@ class AttendanceScreenState extends State<AttendanceScreen>
                           // 통계 계산
                           for (var date in lessonDates) {
                             final isHoliday = HolidayHelper.isHoliday(date);
-                            if (!isHoliday) {
+                            final isAcademyHoliday = scheduleProvider
+                                .isDateHoliday(date);
+                            if (!isHoliday && !isAcademyHoliday) {
                               validLessonCount++;
                               final key =
                                   "${student.id}_${date.year}_${date.month}_${date.day}";
@@ -991,10 +1004,14 @@ class AttendanceScreenState extends State<AttendanceScreen>
                               // 2. 날짜별 셀 (순환 토글 적용)
                               ...lessonDates.map((date) {
                                 final isHoliday = HolidayHelper.isHoliday(date);
+                                final isAcademyHoliday = scheduleProvider
+                                    .isDateHoliday(date);
 
-                                if (isHoliday) {
-                                  final holidayName =
-                                      HolidayHelper.getHolidayName(date) ?? "";
+                                if (isHoliday || isAcademyHoliday) {
+                                  final holidayName = isHoliday
+                                      ? (HolidayHelper.getHolidayName(date) ??
+                                            "")
+                                      : "휴강";
                                   if (holidayName.isEmpty)
                                     return const DataCell(SizedBox());
 

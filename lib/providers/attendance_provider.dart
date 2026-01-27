@@ -310,15 +310,15 @@ class AttendanceProvider with ChangeNotifier {
   }
 
   /// 출석률 계산 (Present + Late) / Total
-  double getAttendanceRate(List<AttendanceRecord> records) {
-    if (records.isEmpty) return 0;
+  double getAttendanceRate(List<AttendanceRecord> records, int totalClassDays) {
+    if (totalClassDays == 0) return 0;
     final presentOrLate = records
         .where(
           (r) =>
               r.type == AttendanceType.present || r.type == AttendanceType.late,
         )
         .length;
-    return (presentOrLate / records.length) * 100;
+    return (presentOrLate / totalClassDays) * 100;
   }
 
   /// 출결 기록 수정

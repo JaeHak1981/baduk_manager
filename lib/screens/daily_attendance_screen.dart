@@ -55,30 +55,39 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
   int _localStateCounter = 0; // UI 즉각 갱신을 위한 로컬 카운터
 
   void toggleSelectionMode() {
-    isSelectionMode = !isSelectionMode;
-    if (!isSelectionMode) {
-      selectedStudentIds.clear();
-    }
+    setState(() {
+      isSelectionMode = !isSelectionMode;
+      if (!isSelectionMode) {
+        selectedStudentIds.clear();
+      }
+      _localStateCounter++; // UI 강제 리빌드 트리거
+    });
     _selectionNotifier.value++; // 내부 리빌드 트리거
     widget.onSelectionModeChanged?.call(); // 외부(앱바) 리빌드 트리거
   }
 
   void toggleSelection(String id) {
-    if (selectedStudentIds.contains(id)) {
-      selectedStudentIds.remove(id);
-    } else {
-      selectedStudentIds.add(id);
-    }
+    setState(() {
+      if (selectedStudentIds.contains(id)) {
+        selectedStudentIds.remove(id);
+      } else {
+        selectedStudentIds.add(id);
+      }
+      _localStateCounter++; // UI 강제 리빌드 트리거
+    });
     _selectionNotifier.value++; // 내부 리빌드 트리거
     widget.onSelectionModeChanged?.call(); // 외부(앱바) 리빌드 트리거
   }
 
   void toggleSelectAll(List<StudentModel> students) {
-    if (selectedStudentIds.length == students.length) {
-      selectedStudentIds.clear();
-    } else {
-      selectedStudentIds.addAll(students.map((s) => s.id));
-    }
+    setState(() {
+      if (selectedStudentIds.length == students.length) {
+        selectedStudentIds.clear();
+      } else {
+        selectedStudentIds.addAll(students.map((s) => s.id));
+      }
+      _localStateCounter++; // UI 강제 리빌드 트리거
+    });
     _selectionNotifier.value++; // 내부 리빌드 트리거
     widget.onSelectionModeChanged?.call(); // 외부(앱바) 리빌드 트리거
   }

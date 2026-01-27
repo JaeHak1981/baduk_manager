@@ -83,18 +83,24 @@ class _EnrollmentStatisticsDialogState
         59,
       );
 
-      // 해당 월 말 기준 누적 인원
+      // 해당 월 말 기준 누적 인원 (미배정 학생 제외)
       final activeCount = _allStudents.where((s) {
-        return s.createdAt.isBefore(monthEnd) ||
+        final isAssigned = s.session != null && s.session != 0;
+        final wasCreatedBefore =
+            s.createdAt.isBefore(monthEnd) ||
             s.createdAt.isAtSameMomentAs(monthEnd);
+        return isAssigned && wasCreatedBefore;
       }).length;
 
-      // 해당 월 신규 인원
+      // 해당 월 신규 인원 (미배정 학생 제외)
       final newCount = _allStudents.where((s) {
-        return s.createdAt.isAfter(
+        final isAssigned = s.session != null && s.session != 0;
+        final wasCreatedInMonth =
+            s.createdAt.isAfter(
               monthStart.subtract(const Duration(seconds: 1)),
             ) &&
             s.createdAt.isBefore(monthEnd.add(const Duration(seconds: 1)));
+        return isAssigned && wasCreatedInMonth;
       }).length;
 
       stats.add(

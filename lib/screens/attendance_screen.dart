@@ -389,8 +389,9 @@ class AttendanceScreenState extends State<AttendanceScreen>
 
   void _showStatisticsDialog(List<dynamic> students) {
     // 현재 필터링된 학생 기준 통계 계산
+    // 미배정 학생(0부)은 다음달 수강 예정이므로 전체 통계에서 제외
     final filteredStudents = _selectedSession == null
-        ? students
+        ? students.where((s) => s.session != null && s.session != 0).toList()
         : _selectedSession == 0
         ? students.where((s) => s.session == null || s.session == 0).toList()
         : students.where((s) => s.session == _selectedSession).toList();
@@ -409,7 +410,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
         academy: widget.academy,
         currentYear: _currentYear,
         currentMonth: _currentMonth,
-        isSessionFiltered: _selectedSession != null,
+        isSessionFiltered: true, // 미배정 학생 제외 등 항상 필터링된 목록을 사용하므로 true 설정
       ),
     );
   }

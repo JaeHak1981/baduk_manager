@@ -114,7 +114,13 @@ class _AttendanceTabScreenState extends State<AttendanceTabScreen>
                     leading: isSelectionMode
                         ? IconButton(
                             icon: const Icon(Icons.close),
-                            onPressed: toggleMode,
+                            onPressed: () {
+                              if (_tabController.index == 0) {
+                                _dailyKey.currentState?.toggleSelectionMode();
+                              } else {
+                                _monthlyKey.currentState?.toggleSelectionMode();
+                              }
+                            },
                           )
                         : null,
                     actions: isSelectionMode

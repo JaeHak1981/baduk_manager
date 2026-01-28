@@ -29,7 +29,7 @@ jobs:
             os: macos-latest
             build_cmd: |
               flutter config --enable-macos-desktop
-              flutter build macos --release --no-codesign
+              flutter build macos --release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
             artifact_source_path: build/macos/Build/Products/Release/baduk_textbook_manager.app
             artifact_name: baduk-manager-${{ github.ref_name }}-macos.zip
 
@@ -95,6 +95,7 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
+    if: always() && (needs.build.result == 'success' || needs.build.result == 'failure')
     permissions:
       contents: write
     steps:
@@ -103,11 +104,12 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
+        continue-on-error: true
         with:
           files: |
-            */baduk-manager-*-android.apk
-            */baduk-manager-*-windows.zip
-            */baduk-manager-*-macos.zip
+            android-build/baduk-manager-*-android.apk
+            windows-build/baduk-manager-*-windows.zip
+            macos-build/baduk-manager-*-macos.zip
           body: |
             ## 새로운 버전(${{ github.ref_name }})이 출시되었습니다! 🚀
             현재 접속하신 기기에 맞는 파일을 다운로드하여 설치해 주세요.

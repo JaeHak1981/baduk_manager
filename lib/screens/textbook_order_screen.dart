@@ -494,9 +494,11 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                               _buildTableHeader(),
                               Expanded(
                                 child: ListView.separated(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 8,
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    8,
+                                    16,
+                                    100,
                                   ),
                                   itemCount: filteredStudents.length,
                                   separatorBuilder: (context, index) =>
@@ -556,10 +558,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                         _buildTableHeader(),
                         Expanded(
                           child: ListView.separated(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                             itemCount: filteredStudents.length,
                             separatorBuilder: (context, index) =>
                                 const Divider(height: 1, color: Colors.black12),
@@ -573,7 +572,9 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                             },
                           ),
                         ),
-                        _buildBottomSummary(textbooks, latestAcademy),
+                        SafeArea(
+                          child: _buildBottomSummary(textbooks, latestAcademy),
+                        ),
                       ],
                     );
                   }

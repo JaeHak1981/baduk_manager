@@ -238,6 +238,8 @@ class ProgressProvider with ChangeNotifier {
       }
 
       // 3. 개별 학생 정보 즉시 리프레시
+      // await loadStudentProgress(studentId, ownerId: ownerId);
+      // [FIX] 로컬 데이터 즉시 갱신 (네트워크 지연 대응)
       await loadStudentProgress(studentId, ownerId: ownerId);
 
       return true;
@@ -260,13 +262,34 @@ class ProgressProvider with ChangeNotifier {
   }) async {
     try {
       await _progressService.updateStatus(progressId, isCompleted);
-      await loadStudentProgress(studentId, ownerId: ownerId);
+
+      // [FIX] 로컬 데이터 즉시 업데이트
+      if (_studentProgressMap.containsKey(studentId)) {
+        final list = _studentProgressMap[studentId]!;
+        final index = list.indexWhere((p) => p.id == progressId);
+        if (index != -1) {
+          list[index] = list[index].copyWith(
+            isCompleted: isCompleted,
+            updatedAt: DateTime.now(),
+            endDate: isCompleted ? DateTime.now() : null,
+          );
+        }
+      }
+
+      notifyListeners();
+
+      // [FIX] 서버 데이터 동기화 지연 (레이스 컨디션 방지)
+      // Firestore 소프트 삭제 후 즉시 조회 시 간혹 이전 데이터가 오는 경우가 있음
+      Future.delayed(const Duration(milliseconds: 500), () {
+        loadStudentProgress(studentId, ownerId: ownerId);
+      });
+
       return true;
     } catch (e) {
+      print('DEBUG: updateVolumeStatus 실패: $e');
       _errorMessage = '진도 업데이트 실패: $e';
-      return false;
-    } finally {
       notifyListeners();
+      return false;
     }
   }
 
@@ -277,14 +300,42 @@ class ProgressProvider with ChangeNotifier {
     String? ownerId,
   }) async {
     try {
+      debugPrint('🔥🔥🔥 [SUPER_DEBUG] ProgressProvider.removeProgress START');
+      debugPrint('🔥🔥🔥 [SUPER_DEBUG] progressId: $progressId');
+      debugPrint('🔥🔥🔥 [SUPER_DEBUG] studentId: $studentId');
+      debugPrint('🔥🔥🔥 [SUPER_DEBUG] ownerId: $ownerId');
+
       await _progressService.deleteProgress(progressId);
-      await loadStudentProgress(studentId, ownerId: ownerId);
-      return true;
-    } catch (e) {
-      _errorMessage = '기록 삭제 실패: $e';
-      return false;
-    } finally {
+      debugPrint('🔥🔥🔥 [SUPER_DEBUG] ProgressService.deleteProgress SUCCESS');
+
+      // [FIX] 로컬 데이터에서 즉시 삭제
+      if (_studentProgressMap.containsKey(studentId)) {
+        final initialCount = _studentProgressMap[studentId]!.length;
+        _studentProgressMap[studentId]!.removeWhere((p) => p.id == progressId);
+        debugPrint(
+          '🔥🔥🔥 [SUPER_DEBUG] Local data removed. Count: $initialCount -> ${_studentProgressMap[studentId]!.length}',
+        );
+      } else {
+        debugPrint(
+          '🔥🔥🔥 [SUPER_DEBUG] NO studentId in local map: $studentId',
+        );
+      }
+
       notifyListeners();
+
+      // [FIX] 서버 데이터 동기화 지연
+      Future.delayed(const Duration(milliseconds: 800), () {
+        debugPrint('🔥🔥🔥 [SUPER_DEBUG] Running background refresh');
+        loadStudentProgress(studentId, ownerId: ownerId);
+      });
+
+      return true;
+    } catch (e, stack) {
+      debugPrint('❌❌❌ [SUPER_DEBUG] ProgressProvider.removeProgress ERROR: $e');
+      debugPrint('❌❌❌ [SUPER_DEBUG] STACK: $stack');
+      _errorMessage = '기록 삭제 실패: $e';
+      notifyListeners();
+      return false;
     }
   }
 
@@ -315,13 +366,26 @@ class ProgressProvider with ChangeNotifier {
   }) async {
     try {
       await _progressService.updateVolume(progressId, newVolume);
+
+      // [FIX] 로컬 데이터 즉시 업데이트
+      if (_studentProgressMap.containsKey(studentId)) {
+        final list = _studentProgressMap[studentId]!;
+        final index = list.indexWhere((p) => p.id == progressId);
+        if (index != -1) {
+          list[index] = list[index].copyWith(
+            volumeNumber: newVolume,
+            updatedAt: DateTime.now(),
+          );
+        }
+      }
+
+      notifyListeners();
       await loadStudentProgress(studentId, ownerId: ownerId);
       return true;
     } catch (e) {
       _errorMessage = '권수 수정 실패: $e';
-      return false;
-    } finally {
       notifyListeners();
+      return false;
     }
   }
 

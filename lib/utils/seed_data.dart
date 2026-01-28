@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// 초기 교재 데이터 시딩 함수
@@ -53,6 +54,11 @@ Future<void> seedTextbooks() async {
     }
     print('교재 데이터 시딩 완료!');
   } catch (e) {
-    print('교재 시딩 작업 건너뜀 (권한 없음 혹은 에러): $e');
+    if (e.toString().contains('permission-denied')) {
+      // 권한 오류는 로그만 남기고 조용히 처리 (로그인 전일 수 있음)
+      debugPrint('ℹ️ [seedTextbooks] 권한 대기 중 (로그인 후 다시 시도 권장)');
+    } else {
+      debugPrint('❌ [seedTextbooks] 에러 발생: $e');
+    }
   }
 }

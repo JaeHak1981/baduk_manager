@@ -225,6 +225,9 @@ class _StudentListScreenState extends State<StudentListScreen> {
             return _buildErrorState(studentProvider.errorMessage!);
           }
 
+          // [FIX] ProgressProvider 에러가 있어도 목록은 유지하고 스낵바로 표시하기 위해
+          // 여기서의 에러 체크는 student 데이터 로드 에러에만 집중합니다.
+
           if (studentProvider.students.isEmpty) {
             return _buildEmptyState();
           }
@@ -1126,7 +1129,7 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
           TextButton.icon(
             onPressed: () {
               Navigator.pop(context);
-              _confirmCompleteProgress(context, progress);
+              _confirmCompleteProgress(this.context, progress);
             },
             icon: const Icon(Icons.check_circle_outline, color: Colors.green),
             label: const Text('학습 완료 (로그로 이전)'),
@@ -1134,7 +1137,7 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
           TextButton.icon(
             onPressed: () {
               Navigator.pop(context);
-              _confirmDeleteProgress(context, progress);
+              _confirmDeleteProgress(this.context, progress);
             },
             icon: const Icon(Icons.delete_outline, color: Colors.red),
             label: const Text('삭제 (휴지통으로 보관)'),
@@ -1193,15 +1196,54 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
     );
 
     if (confirmed == true && mounted) {
-      final success = await context.read<ProgressProvider>().removeProgress(
-        progress.id,
-        widget.student.id,
-        ownerId: widget.academy.ownerId,
+      debugPrint(
+        '🚀🚀🚀 [_confirmDeleteProgress] User confirmed. Initializing delete...',
       );
-      if (mounted && success) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('교재 할당이 삭제되었습니다.')));
+      debugPrint('🚀🚀🚀 [target_progress_id]: ${progress.id}');
+      debugPrint('🚀🚀🚀 [student_id]: ${widget.student.id}');
+
+      try {
+        final provider = context.read<ProgressProvider>();
+        debugPrint(
+          '🚀🚀🚀 [provider_instance]: ${provider.runtimeType} (Hash: ${provider.hashCode})',
+        );
+
+        final success = await provider.removeProgress(
+          progress.id,
+          widget.student.id,
+          ownerId: widget.academy.ownerId,
+        );
+
+        debugPrint('🚀🚀🚀 [result_success]: $success');
+
+        if (mounted) {
+          if (success) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('교재 할당이 삭제되었습니다.')));
+          } else {
+            final error = provider.errorMessage;
+            debugPrint('❌❌❌ [delete_failed_message]: $error');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('삭제 실패: $error'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            provider.clearErrorMessage();
+          }
+        }
+      } catch (e, stack) {
+        debugPrint('❌❌❌ [EXCEPTION_DURING_DELETE]: $e');
+        debugPrint('❌❌❌ [STACK]: $stack');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('시스템 오류: $e'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
       }
     }
   }

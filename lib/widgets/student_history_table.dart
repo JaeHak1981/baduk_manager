@@ -59,12 +59,23 @@ class _StudentHistoryTableState extends State<StudentHistoryTable> {
 
     if (confirmed == true && mounted) {
       final provider = context.read<ProgressProvider>();
+      debugPrint(
+        '🚀🚀🚀 [StudentHistoryTable] Bulk delete started for ${_selectedIds.length} items',
+      );
+
       for (var id in _selectedIds) {
-        await provider.removeProgress(
-          id,
-          widget.studentId,
-          ownerId: widget.ownerId,
-        );
+        try {
+          final success = await provider.removeProgress(
+            id,
+            widget.studentId,
+            ownerId: widget.ownerId,
+          );
+          debugPrint(
+            '🚀🚀🚀 [StudentHistoryTable] Delete item $id result: $success',
+          );
+        } catch (e) {
+          debugPrint('❌❌❌ [StudentHistoryTable] ERROR deleting $id: $e');
+        }
       }
       setState(() => _selectedIds.clear());
     }

@@ -1,0 +1,104 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # v1.0.0 같은 태그가 푸시될 때 실행
+
+jobs:
+  build:
+    name: Build for ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - platform: android
+            os: ubuntu-latest
+            build_cmd: flutter build apk --release
+            artifact_path: build/app/outputs/flutter-apk/app-release.apk
+            asset_name: baduk-manager-android.apk
+          - platform: windows
+            os: windows-latest
+            build_cmd: |
+              flutter config --enable-windows-desktop
+              flutter build windows --release
+            artifact_path: build/windows/runner/Release/
+            asset_name: windows-release # 디렉토리이므로 나중에 압축 필요
+          - platform: macos
+            os: macos-latest
+            build_cmd: |
+              flutter config --enable-macos-desktop
+              flutter build macos --release --no-codesign
+            artifact_path: build/macos/Build/Products/Release/baduk_textbook_manager.app
+            asset_name: macos-release # 디렉토리이므로 나중에 압축 필요
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java (for Android)
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Project
+        run: ${{ matrix.build_cmd }}
+
+      # 윈도우/맥 디렉토리 압축
+      - name: Compress Windows Build
+        if: matrix.platform == 'windows'
+        run: Compress-Archive -Path ${{ matrix.artifact_path }}* -DestinationPath baduk-manager-windows.zip
+        shell: pwsh
+
+      - name: Compress macOS Build
+        if: matrix.platform == 'macos'
+        run: ditto -c -k --sequesterRsrc --keepParent ${{ matrix.artifact_path }} baduk-manager-macos.zip
+
+      # 빌드 결과물 임시 저장
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-build
+          path: |
+            ${{ matrix.platform == 'android' && matrix.artifact_path || 'baduk-manager-*.zip' }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: List Artifacts
+        run: ls -R
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            android-build/app-release.apk
+            windows-build/baduk-manager-windows.zip
+            macos-build/baduk-manager-macos.zip
+          body: |
+            ## 새로운 버전이 출시되었습니다! 🚀
+            현재 접속하신 기기에 맞는 파일을 다운로드하여 설치해 주세요.
+            
+            - **안드로이드**: `baduk-manager-android.apk`
+            - **윈도우**: `baduk-manager-windows.zip`
+            - **맥**: `baduk-manager-macos.zip`
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

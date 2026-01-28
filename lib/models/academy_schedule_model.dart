@@ -23,7 +23,8 @@ class AcademyScheduleModel {
       'academyId': academyId,
       'year': year,
       'month': month,
-      'holidays': holidays,
+      // Firestore 맵의 키는 반드시 String이어야 하므로 변환
+      'holidays': holidays.map((key, value) => MapEntry(key.toString(), value)),
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
     };
   }
@@ -32,12 +33,17 @@ class AcademyScheduleModel {
     DocumentSnapshot<Map<String, dynamic>> snapshot,
   ) {
     final data = snapshot.data()!;
+    final rawHolidays = data['holidays'] as Map<String, dynamic>? ?? {};
+
     return AcademyScheduleModel(
       id: snapshot.id,
       academyId: data['academyId'] as String,
       year: data['year'] as int,
       month: data['month'] as int,
-      holidays: Map<int, String>.from(data['holidays'] ?? {}),
+      // 문자열로 저장된 키를 다시 int로 복구
+      holidays: rawHolidays.map(
+        (key, value) => MapEntry(int.parse(key), value as String),
+      ),
       updatedAt: data['updatedAt'] != null
           ? (data['updatedAt'] as Timestamp).toDate()
           : null,

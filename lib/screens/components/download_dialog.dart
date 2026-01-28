@@ -96,58 +96,75 @@ class DownloadDialog extends StatelessWidget {
           // 추천 버튼 (가장 크게)
           _buildPlatformButton(
             context,
-            label: isUpdateRequired
-                ? '최신 버전으로 업데이트 설치'
-                : '$recommendedOSName용 설치 파일 다운로드',
+            label: downloadUrl.isEmpty
+                ? '$recommendedOSName 버전 준비 중'
+                : (isUpdateRequired
+                      ? '최신 버전으로 업데이트 설치'
+                      : '$recommendedOSName용 설치 파일 다운로드'),
             icon: _getIconForOS(recommendedOSName),
             onPressed: downloadUrl.isNotEmpty
                 ? () => _launchUrl(downloadUrl)
                 : () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('아직 해당 플랫폼의 파일이 준비되지 않았습니다.')),
+                    SnackBar(
+                      content: Text('현재 $recommendedOSName 버전은 준비 중입니다.'),
+                    ),
                   ),
-            isRecommended: true,
-            isUpdate: isUpdateRequired,
+            isRecommended: downloadUrl.isNotEmpty,
+            isUpdate: isUpdateRequired && downloadUrl.isNotEmpty,
+            isEnabled: downloadUrl.isNotEmpty,
           ),
 
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Divider(),
-          ),
-
-          const Text(
-            '다른 버전이 필요하신가요?',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-          const SizedBox(height: 8),
-
-          // 기타 플랫폼 버튼 (작게)
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (platformKey != 'android')
-                _buildSmallButton(
-                  context,
-                  '안드로이드',
-                  Icons.android,
-                  () => _launchUrl(systemProvider.getDownloadUrl('android')),
-                ),
-              if (platformKey != 'windows')
-                _buildSmallButton(
-                  context,
-                  '윈도우',
-                  Icons.window,
-                  () => _launchUrl(systemProvider.getDownloadUrl('windows')),
-                ),
-              if (platformKey != 'macos')
-                _buildSmallButton(
-                  context,
-                  '맥(macOS)',
-                  Icons.apple,
-                  () => _launchUrl(systemProvider.getDownloadUrl('macos')),
-                ),
-            ],
-          ),
+          // 기타 플랫폼 버튼 (데스크탑에서만 다른 버전 유도)
+          if (Theme.of(context).platform == TargetPlatform.windows ||
+              Theme.of(context).platform == TargetPlatform.macOS) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Divider(),
+            ),
+            const Text(
+              '다른 버전이 필요하신가요?',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (platformKey != 'android')
+                  _buildSmallButton(
+                    context,
+                    '안드로이드',
+                    Icons.android,
+                    systemProvider.getDownloadUrl('android').isNotEmpty
+                        ? () => _launchUrl(
+                            systemProvider.getDownloadUrl('android'),
+                          )
+                        : null,
+                  ),
+                if (platformKey != 'windows')
+                  _buildSmallButton(
+                    context,
+                    '윈도우',
+                    Icons.window,
+                    systemProvider.getDownloadUrl('windows').isNotEmpty
+                        ? () => _launchUrl(
+                            systemProvider.getDownloadUrl('windows'),
+                          )
+                        : null,
+                  ),
+                if (platformKey != 'macos')
+                  _buildSmallButton(
+                    context,
+                    '맥(macOS)',
+                    Icons.apple,
+                    systemProvider.getDownloadUrl('macos').isNotEmpty
+                        ? () =>
+                              _launchUrl(systemProvider.getDownloadUrl('macos'))
+                        : null,
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
       actions: [
@@ -166,21 +183,24 @@ class DownloadDialog extends StatelessWidget {
     required VoidCallback onPressed,
     bool isRecommended = false,
     bool isUpdate = false,
+    bool isEnabled = true,
   }) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: onPressed,
+        onPressed: isEnabled ? onPressed : null,
         icon: Icon(icon, size: 24),
         label: Text(
           label,
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: isUpdate
-              ? Colors.red
-              : (isRecommended ? Colors.blue : null),
-          foregroundColor: (isUpdate || isRecommended) ? Colors.white : null,
+          backgroundColor: isEnabled
+              ? (isUpdate ? Colors.red : (isRecommended ? Colors.blue : null))
+              : Colors.grey.shade300,
+          foregroundColor: isEnabled
+              ? ((isUpdate || isRecommended) ? Colors.white : null)
+              : Colors.grey.shade600,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -195,15 +215,22 @@ class DownloadDialog extends StatelessWidget {
     BuildContext context,
     String label,
     IconData icon,
-    VoidCallback onPressed,
+    VoidCallback? onPressed,
   ) {
     return OutlinedButton.icon(
       onPressed: onPressed,
       icon: Icon(icon, size: 16),
-      label: Text(label, style: const TextStyle(fontSize: 12)),
+      label: Text(
+        onPressed == null ? '$label(준비중)' : label,
+        style: const TextStyle(fontSize: 12),
+      ),
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        foregroundColor: onPressed == null ? Colors.grey : null,
+        side: onPressed == null
+            ? BorderSide(color: Colors.grey.shade300)
+            : null,
       ),
     );
   }

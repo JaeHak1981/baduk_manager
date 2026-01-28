@@ -14,6 +14,8 @@ import 'attendance_tab_screen.dart';
 import '../providers/progress_provider.dart';
 import '../models/textbook_model.dart';
 import 'components/enrollment_statistics_dialog.dart';
+import 'components/download_dialog.dart';
+import '../providers/system_provider.dart';
 
 /// 홈 화면
 class HomePage extends StatefulWidget {
@@ -30,6 +32,7 @@ class _HomePageState extends State<HomePage> {
     // 초기 데이터 로드
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
+      context.read<SystemProvider>().checkUpdate(); // 업데이트 체크 추가
     });
   }
 
@@ -64,9 +67,12 @@ class _HomePageState extends State<HomePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.file_download),
-            tooltip: '전체 데이터 추출',
+            tooltip: '앱 설치 파일 다운로드',
             onPressed: () {
-              // TODO: 전체 학생 데이터 또는 진도 현황 엑셀 추출 기능 구현 예정
+              showDialog(
+                context: context,
+                builder: (context) => const DownloadDialog(),
+              );
             },
           ),
           IconButton(

@@ -134,18 +134,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
             backgroundColor: Colors.blueAccent,
             onPressed: _isDownloading
                 ? null
-                : () {
-                    final filteredStudents = _selectedSession == null
-                        ? allStudents
-                        : _selectedSession == 0
-                        ? allStudents
-                              .where((s) => s.session == null || s.session == 0)
-                              .toList()
-                        : allStudents
-                              .where((s) => s.session == _selectedSession)
-                              .toList();
-                    _downloadAsExcel(filteredStudents);
-                  },
+                : () => _showDownloadSelectionDialog(allStudents),
           ),
           const SizedBox(width: 8),
           ActionChip(
@@ -227,10 +216,55 @@ class AttendanceScreenState extends State<AttendanceScreen>
         cell.cellStyle = headerStyle;
       }
 
-      // 4. 데이터 영역 채우기
-      for (var sIdx = 0; sIdx < students.length; sIdx++) {
-        final student = students[sIdx] as StudentModel;
-        final rowIndex = sIdx + 1;
+      // 4. 데이터 영역 채우기 (부별 그룹화)
+      // 부별로 정렬
+      final sortedStudents = List.from(students);
+      sortedStudents.sort((a, b) {
+        final sa = (a as StudentModel).session ?? 0;
+        final sb = (b as StudentModel).session ?? 0;
+        return sa.compareTo(sb);
+      });
+
+      int currentRowIndex = 1;
+      int? lastSession;
+
+      // 구분선 스타일 (연한 파란색 배경, 볼드)
+      var sessionGroupStyle = excel_lib.CellStyle(
+        backgroundColorHex: excel_lib.ExcelColor.fromHexString('#F0F7FF'),
+        fontFamily: excel_lib.getFontFamily(excel_lib.FontFamily.Arial),
+        bold: true,
+        horizontalAlign: excel_lib.HorizontalAlign.Left,
+      );
+
+      for (var sIdx = 0; sIdx < sortedStudents.length; sIdx++) {
+        final student = sortedStudents[sIdx] as StudentModel;
+        final currentSession = student.session ?? 0;
+
+        // 부가 바뀌면 구분선 추가
+        if (lastSession != currentSession) {
+          // 첫 번째 그룹이 아니면 빈 줄 하나 추가
+          if (lastSession != null) {
+            currentRowIndex++;
+          }
+
+          // 부 제목 행 추가
+          String sessionLabel = currentSession == 0
+              ? "미배정 학생 명단"
+              : "$currentSession부 명단";
+          var sessionCell = sheet.cell(
+            excel_lib.CellIndex.indexByColumnRow(
+              columnIndex: 0,
+              rowIndex: currentRowIndex,
+            ),
+          );
+          sessionCell.value = excel_lib.TextCellValue(sessionLabel);
+          sessionCell.cellStyle = sessionGroupStyle;
+
+          currentRowIndex++;
+          lastSession = currentSession;
+        }
+
+        final rowIndex = currentRowIndex;
 
         // 이름
         sheet
@@ -312,6 +346,8 @@ class AttendanceScreenState extends State<AttendanceScreen>
             .value = excel_lib.DoubleCellValue(
           rate,
         );
+
+        currentRowIndex++; // 다음 학생을 위해 인덱스 증가
       }
 
       // 5. 다운로드
@@ -414,6 +450,31 @@ class AttendanceScreenState extends State<AttendanceScreen>
         currentYear: _currentYear,
         currentMonth: _currentMonth,
         isSessionFiltered: true, // 미배정 학생 제외 등 항상 필터링된 목록을 사용하므로 true 설정
+      ),
+    );
+  }
+
+  void _showDownloadSelectionDialog(List<dynamic> allStudents) {
+    showDialog(
+      context: context,
+      builder: (context) => _DownloadSessionDialog(
+        totalSessions: widget.academy.totalSessions,
+        onConfirm: (selectedSessions) {
+          final filteredStudents = allStudents.where((s) {
+            final student = s as StudentModel;
+            final session = student.session ?? 0;
+            return selectedSessions.contains(session);
+          }).toList();
+
+          if (filteredStudents.isEmpty) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('선택한 부에 학생이 없습니다.')));
+            return;
+          }
+
+          _downloadAsExcel(filteredStudents);
+        },
       ),
     );
   }
@@ -1335,5 +1396,105 @@ class AttendanceScreenState extends State<AttendanceScreen>
       default:
         return '';
     }
+  }
+}
+
+class _DownloadSessionDialog extends StatefulWidget {
+  final int totalSessions;
+  final Function(Set<int>) onConfirm;
+
+  const _DownloadSessionDialog({
+    required this.totalSessions,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_DownloadSessionDialog> createState() => _DownloadSessionDialogState();
+}
+
+class _DownloadSessionDialogState extends State<_DownloadSessionDialog> {
+  final Set<int> _selectedSessions = {};
+
+  @override
+  void initState() {
+    super.initState();
+    // 기본값은 전체 미체크로 설정
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('다운로드할 부 선택'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CheckboxListTile(
+              title: const Text('전체 선택'),
+              value: _selectedSessions.length == widget.totalSessions + 1,
+              onChanged: (val) {
+                setState(() {
+                  if (val == true) {
+                    _selectedSessions.add(0);
+                    for (int i = 1; i <= widget.totalSessions; i++) {
+                      _selectedSessions.add(i);
+                    }
+                  } else {
+                    _selectedSessions.clear();
+                  }
+                });
+              },
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+            const Divider(),
+            CheckboxListTile(
+              title: const Text('미배정 학생'),
+              value: _selectedSessions.contains(0),
+              onChanged: (val) {
+                setState(() {
+                  if (val == true) {
+                    _selectedSessions.add(0);
+                  } else {
+                    _selectedSessions.remove(0);
+                  }
+                });
+              },
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+            ...List.generate(widget.totalSessions, (i) => i + 1).map((s) {
+              return CheckboxListTile(
+                title: Text('$s부'),
+                value: _selectedSessions.contains(s),
+                onChanged: (val) {
+                  setState(() {
+                    if (val == true) {
+                      _selectedSessions.add(s);
+                    } else {
+                      _selectedSessions.remove(s);
+                    }
+                  });
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+              );
+            }),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('취소'),
+        ),
+        ElevatedButton(
+          onPressed: _selectedSessions.isEmpty
+              ? null
+              : () {
+                  widget.onConfirm(_selectedSessions);
+                  Navigator.pop(context);
+                },
+          child: const Text('다운로드'),
+        ),
+      ],
+    );
   }
 }

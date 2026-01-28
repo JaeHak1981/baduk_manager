@@ -22,6 +22,11 @@ service cloud.firestore {
     match /academies/{academyId} {
       allow create: if isAuthenticated() && (request.resource.data.ownerId == request.auth.uid || isDeveloper());
       allow read, update, delete: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isDeveloper());
+
+      // 하위 schedules 컬렉션 규칙 추가
+      match /schedules/{scheduleId} {
+        allow read, write: if isAuthenticated() && (get(/databases/$(database)/documents/academies/$(academyId)).data.ownerId == request.auth.uid || isDeveloper());
+      }
     }
 
     // students 컬렉션: 소유자 또는 개발자 접근 가능

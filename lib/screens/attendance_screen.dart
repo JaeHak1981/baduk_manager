@@ -1145,13 +1145,24 @@ class AttendanceScreenState extends State<AttendanceScreen>
                   scale: 0.8,
                   child: Switch(
                     value: scheduleProvider.isDateHoliday(_selectedDate),
-                    onChanged: (value) {
-                      scheduleProvider.toggleHoliday(
+                    onChanged: (value) async {
+                      await scheduleProvider.toggleHoliday(
                         academyId: widget.academy.id,
                         year: _selectedDate.year,
                         month: _selectedDate.month,
                         day: _selectedDate.day,
                       );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              value ? '휴강으로 설정되었습니다.' : '휴강 설정이 해제되었습니다.',
+                            ),
+                            duration: const Duration(seconds: 1),
+                            backgroundColor: value ? Colors.red : Colors.blue,
+                          ),
+                        );
+                      }
                     },
                   ),
                 ),

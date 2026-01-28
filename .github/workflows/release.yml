@@ -29,7 +29,7 @@ jobs:
             os: macos-latest
             build_cmd: |
               flutter config --enable-macos-desktop
-              flutter build macos --release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" flutter build macos --release
             artifact_source_path: build/macos/Build/Products/Release/baduk_textbook_manager.app
             artifact_name: baduk-manager-${{ github.ref_name }}-macos.zip
 

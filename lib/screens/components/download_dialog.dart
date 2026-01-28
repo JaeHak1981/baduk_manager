@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../utils/platform_helper.dart';
@@ -21,19 +22,13 @@ class DownloadDialog extends StatelessWidget {
     final systemProvider = context.watch<SystemProvider>();
     final recommendedOSName = PlatformHelper.recommendedOSName;
 
-    // 플랫폼 판별
+    // 플랫폼 판별 (웹 환경에서도 추천 설치 파일을 보여주기 위해 defaultTargetPlatform 사용)
     String platformKey = '';
-    if (PlatformHelper.isAndroid ||
-        (PlatformHelper.isWeb &&
-            Theme.of(context).platform == TargetPlatform.android)) {
+    if (defaultTargetPlatform == TargetPlatform.android) {
       platformKey = 'android';
-    } else if (PlatformHelper.isWindows ||
-        (PlatformHelper.isWeb &&
-            Theme.of(context).platform == TargetPlatform.windows)) {
+    } else if (defaultTargetPlatform == TargetPlatform.windows) {
       platformKey = 'windows';
-    } else if (PlatformHelper.isMacOS ||
-        (PlatformHelper.isWeb &&
-            Theme.of(context).platform == TargetPlatform.macOS)) {
+    } else if (defaultTargetPlatform == TargetPlatform.macOS) {
       platformKey = 'macos';
     }
 

@@ -16,25 +16,22 @@ jobs:
           - platform: android
             os: ubuntu-latest
             build_cmd: flutter build apk --release
-            artifact_path: build/app/outputs/flutter-apk/app-release.apk
-            asset_prefix: baduk-manager
-            extension: apk
+            artifact_source_path: build/app/outputs/flutter-apk/app-release.apk
+            artifact_name: baduk-manager-${{ github.ref_name }}-android.apk
           - platform: windows
             os: windows-latest
             build_cmd: |
               flutter config --enable-windows-desktop
               flutter build windows --release
-            artifact_path: build/windows/runner/Release/
-            asset_prefix: baduk-manager
-            extension: zip
+            artifact_source_path: build/windows/x64/runner/Release/
+            artifact_name: baduk-manager-${{ github.ref_name }}-windows.zip
           - platform: macos
             os: macos-latest
             build_cmd: |
               flutter config --enable-macos-desktop
-              flutter build macos --release --no-bundle-sign
-            artifact_path: build/macos/Build/Products/Release/baduk_textbook_manager.app
-            asset_prefix: baduk-manager
-            extension: zip
+              flutter build macos --release --no-codesign
+            artifact_source_path: build/macos/Build/Products/Release/baduk_textbook_manager.app
+            artifact_name: baduk-manager-${{ github.ref_name }}-macos.zip
 
     steps:
       - name: Checkout code
@@ -76,23 +73,23 @@ jobs:
       # 윈도우/맥 디렉토리 압축
       - name: Compress Windows Build
         if: matrix.platform == 'windows'
-        run: Compress-Archive -Path ${{ matrix.artifact_path }}* -DestinationPath ${{ matrix.asset_prefix }}-${{ github.ref_name }}-windows.zip
+        run: Compress-Archive -Path ${{ matrix.artifact_source_path }}* -DestinationPath ${{ matrix.artifact_name }}
         shell: pwsh
 
       - name: Compress macOS Build
         if: matrix.platform == 'macos'
-        run: ditto -c -k --sequesterRsrc --keepParent ${{ matrix.artifact_path }} ${{ matrix.asset_prefix }}-${{ github.ref_name }}-macos.zip
+        run: ditto -c -k --sequesterRsrc --keepParent ${{ matrix.artifact_source_path }} ${{ matrix.artifact_name }}
 
       - name: Rename Android Build
         if: matrix.platform == 'android'
-        run: mv ${{ matrix.artifact_path }} ${{ matrix.asset_prefix }}-${{ github.ref_name }}-android.apk
+        run: mv ${{ matrix.artifact_source_path }} ${{ matrix.artifact_name }}
 
       # 빌드 결과물 임시 저장
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-build
-          path: ${{ matrix.asset_prefix }}-${{ github.ref_name }}-${{ matrix.platform }}.${{ matrix.extension }}
+          path: ${{ matrix.artifact_name }}
 
   release:
     name: Create Release

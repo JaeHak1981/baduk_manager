@@ -97,16 +97,18 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
-    if: always() && (needs.build.result == 'success' || needs.build.result == 'failure')
+    if: needs.build.result == 'success'
     permissions:
       contents: write
+    outputs:
+      release_tag: ${{ github.ref_name }}
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
 
       - name: Create GitHub Release
+        id: create_release
         uses: softprops/action-gh-release@v2
-        continue-on-error: true
         with:
           files: |
             android-build/baduk-manager-*-android.apk
@@ -116,8 +118,71 @@ jobs:
             ## 새로운 버전(${{ github.ref_name }})이 출시되었습니다! 🚀
             현재 접속하신 기기에 맞는 파일을 다운로드하여 설치해 주세요.
             
-            - **안드로이드**: `baduk-manager-${{ github.ref_name }}-android.apk`
-            - **윈도우**: `baduk-manager-${{ github.ref_name }}-windows.zip`
-            - **맥**: `baduk-manager-${{ github.ref_name }}-macos.zip`
+            - **안드로이드**: [직접 다운로드](https://github.com/JaeHak1981/baduk_manager/releases/download/${{ github.ref_name }}/baduk-manager-${{ github.ref_name }}-android.apk)
+            - **윈도우**: [직접 다운로드](https://github.com/JaeHak1981/baduk_manager/releases/download/${{ github.ref_name }}/baduk-manager-${{ github.ref_name }}-windows.zip)
+            - **맥**: [직접 다운로드](https://github.com/JaeHak1981/baduk_manager/releases/download/${{ github.ref_name }}/baduk-manager-${{ github.ref_name }}-macos.zip)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-web:
+    name: Deploy to Firebase Hosting
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Restore Firebase Options
+        env:
+          FIREBASE_OPTIONS: ${{ secrets.FIREBASE_OPTIONS_BASE64 }}
+        run: |
+          mkdir -p lib
+          echo "$FIREBASE_OPTIONS" | tr -d '[:space:]' | base64 --decode > lib/firebase_options.dart
+        shell: bash
+
+      - name: Build Web
+        run: flutter build web --release
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          channelId: live
+          projectId: badukmanager-7d15c
+
+  update-firestore:
+    name: Update Firestore Version Info
+    needs: [release, deploy-web]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Node dependencies
+        working-directory: scripts
+        run: npm install
+
+      - name: Update Firestore
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          node scripts/update_version.js \
+          "${{ github.ref_name }}" \
+          "https://github.com/JaeHak1981/baduk_manager/releases/download/${{ github.ref_name }}/baduk-manager-${{ github.ref_name }}-android.apk" \
+          "https://github.com/JaeHak1981/baduk_manager/releases/download/${{ github.ref_name }}/baduk-manager-${{ github.ref_name }}-windows.zip" \
+          "https://github.com/JaeHak1981/baduk_manager/releases/download/${{ github.ref_name }}/baduk-manager-${{ github.ref_name }}-macos.zip"

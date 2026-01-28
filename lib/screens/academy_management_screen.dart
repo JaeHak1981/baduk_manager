@@ -157,7 +157,7 @@ class _AcademyManagementScreenState extends State<AcademyManagementScreen> {
           return RefreshIndicator(
             onRefresh: _loadAcademies,
             child: ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
               itemCount: academyProvider.academies.length,
               itemBuilder: (context, index) {
                 final academy = academyProvider.academies[index];

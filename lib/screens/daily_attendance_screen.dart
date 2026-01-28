@@ -391,7 +391,7 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: studentChunks.map((chunk) {
                           return Padding(
-                            padding: const EdgeInsets.only(right: 24),
+                            padding: const EdgeInsets.fromLTRB(0, 0, 24, 100),
                             child: DataTable(
                               key: ValueKey(
                                 'daily_at_table_${attendanceProvider.stateCounter}_${chunk.length}_${isSelectionMode}_${chunk.first.id}',

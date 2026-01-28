@@ -777,333 +777,345 @@ class AttendanceScreenState extends State<AttendanceScreen>
                   return SingleChildScrollView(
                     key: const PageStorageKey('attendance_scroll_vertical'),
                     scrollDirection: Axis.vertical,
-                    child: SingleChildScrollView(
-                      key: const PageStorageKey('attendance_scroll_horizontal'),
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        key: ValueKey(
-                          'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}_$isSelectionMode',
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 100),
+                      child: SingleChildScrollView(
+                        key: const PageStorageKey(
+                          'attendance_scroll_horizontal',
                         ),
-                        showCheckboxColumn: false, // 수동으로 만든 체크박스와 겹치지 않게 비활성화
-                        columnSpacing: 8, // 12에서 8로 축소
-                        horizontalMargin: 8,
-                        headingRowHeight: 50, // 헤더 높이 축소
-                        dataRowMinHeight: 45, // 데이터 행 높이 축소
-                        dataRowMaxHeight: 45,
-                        headingRowColor: WidgetStateProperty.all(
-                          isSelectionMode
-                              ? Colors.red.shade50
-                              : Colors.grey.shade50,
-                        ),
-                        // 테두리 스타일 변경: 수직선 제거, 깔끔한 수평선 위주
-                        border: const TableBorder(
-                          horizontalInside: BorderSide(
-                            color: Colors.black12,
-                            width: 0.5,
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          key: ValueKey(
+                            'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}_$isSelectionMode',
                           ),
-                          bottom: BorderSide(color: Colors.black12, width: 0.5),
-                        ),
-                        columns: [
-                          // 0. 체크박스 (전체 선택)
-                          if (isSelectionMode)
-                            DataColumn(
+                          showCheckboxColumn:
+                              false, // 수동으로 만든 체크박스와 겹치지 않게 비활성화
+                          columnSpacing: 8, // 12에서 8로 축소
+                          horizontalMargin: 8,
+                          headingRowHeight: 50, // 헤더 높이 축소
+                          dataRowMinHeight: 45, // 데이터 행 높이 축소
+                          dataRowMaxHeight: 45,
+                          headingRowColor: WidgetStateProperty.all(
+                            isSelectionMode
+                                ? Colors.red.shade50
+                                : Colors.grey.shade50,
+                          ),
+                          // 테두리 스타일 변경: 수직선 제거, 깔끔한 수평선 위주
+                          border: const TableBorder(
+                            horizontalInside: BorderSide(
+                              color: Colors.black12,
+                              width: 0.5,
+                            ),
+                            bottom: BorderSide(
+                              color: Colors.black12,
+                              width: 0.5,
+                            ),
+                          ),
+                          columns: [
+                            // 0. 체크박스 (전체 선택)
+                            if (isSelectionMode)
+                              DataColumn(
+                                label: SizedBox(
+                                  width: 30,
+                                  child: Checkbox(
+                                    side: BorderSide(
+                                      color: Colors.grey.shade600,
+                                      width: 1.5,
+                                    ),
+                                    value:
+                                        students.isNotEmpty &&
+                                        selectedStudentIds.length ==
+                                            students.length,
+                                    onChanged: (v) => toggleSelectAll(students),
+                                  ),
+                                ),
+                              ),
+                            // 1. 번호 (가장 왼쪽 고정)
+                            const DataColumn(
                               label: SizedBox(
                                 width: 30,
-                                child: Checkbox(
-                                  side: BorderSide(
-                                    color: Colors.grey.shade600,
-                                    width: 1.5,
+                                child: Text(
+                                  '번호',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
                                   ),
-                                  value:
-                                      students.isNotEmpty &&
-                                      selectedStudentIds.length ==
-                                          students.length,
-                                  onChanged: (v) => toggleSelectAll(students),
+                                  textAlign: TextAlign.center,
                                 ),
                               ),
                             ),
-                          // 1. 번호 (가장 왼쪽 고정)
-                          const DataColumn(
-                            label: SizedBox(
-                              width: 30,
-                              child: Text(
-                                '번호',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                          // 2. 이름 (항상 고정)
-                          const DataColumn(
-                            label: SizedBox(
-                              width: 50,
-                              child: Text(
-                                '이름',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ),
-                          // 2. 날짜별 컬럼
-                          ...lessonDates.map((date) {
-                            final holidayName = HolidayHelper.getHolidayName(
-                              date,
-                            );
-                            final isAcademyHoliday = scheduleProvider
-                                .isDateHoliday(date);
-                            final isHoliday =
-                                holidayName != null || isAcademyHoliday;
-                            final isSunday = date.weekday == 7;
-                            final textPrimaryColor = (isHoliday || isSunday)
-                                ? Colors.red
-                                : Colors.black87;
-
-                            return DataColumn(
+                            // 2. 이름 (항상 고정)
+                            const DataColumn(
                               label: SizedBox(
-                                width: 45, // 60에서 45로 축소
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      '${date.day}',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: textPrimaryColor,
-                                      ),
-                                    ),
-                                    Text(
-                                      _getWeekdayName(date.weekday),
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: textPrimaryColor.withOpacity(
-                                          0.7,
+                                width: 50,
+                                child: Text(
+                                  '이름',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // 2. 날짜별 컬럼
+                            ...lessonDates.map((date) {
+                              final holidayName = HolidayHelper.getHolidayName(
+                                date,
+                              );
+                              final isAcademyHoliday = scheduleProvider
+                                  .isDateHoliday(date);
+                              final isHoliday =
+                                  holidayName != null || isAcademyHoliday;
+                              final isSunday = date.weekday == 7;
+                              final textPrimaryColor = (isHoliday || isSunday)
+                                  ? Colors.red
+                                  : Colors.black87;
+
+                              return DataColumn(
+                                label: SizedBox(
+                                  width: 45, // 60에서 45로 축소
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        '${date.day}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: textPrimaryColor,
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
-                          // 3. 출석율
-                          const DataColumn(
-                            label: SizedBox(
-                              width: 50,
-                              child: Text(
-                                '출석율',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: Colors.black,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                          // 4. 비고 (추가)
-                          const DataColumn(
-                            label: SizedBox(
-                              width: 150,
-                              child: Text(
-                                '비고',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                        rows: students.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final student = entry.value;
-                          int presentCount = 0;
-                          int validLessonCount = 0;
-
-                          // 통계 계산
-                          for (var date in lessonDates) {
-                            final isHoliday = HolidayHelper.isHoliday(date);
-                            final isAcademyHoliday = scheduleProvider
-                                .isDateHoliday(date);
-                            if (!isHoliday && !isAcademyHoliday) {
-                              validLessonCount++;
-                              final key =
-                                  "${student.id}_${date.year}_${date.month}_${date.day}";
-                              if (attendanceMap[key]?.type ==
-                                  AttendanceType.present) {
-                                presentCount++;
-                              }
-                            }
-                          }
-
-                          // 출석률 계산
-                          Color rateColor = Colors.black;
-
-                          return DataRow(
-                            selected: selectedStudentIds.contains(student.id),
-                            onSelectChanged: isSelectionMode
-                                ? (val) {
-                                    toggleSelection(student.id);
-                                  }
-                                : null,
-                            cells: [
-                              // 0. 체크박스
-                              if (isSelectionMode)
-                                DataCell(
-                                  SizedBox(
-                                    width: 30,
-                                    child: Checkbox(
-                                      side: BorderSide(
-                                        color: Colors.grey.shade600,
-                                        width: 1.5,
-                                      ),
-                                      value: selectedStudentIds.contains(
-                                        student.id,
-                                      ),
-                                      onChanged: (val) =>
-                                          toggleSelection(student.id),
-                                    ),
-                                  ),
-                                ),
-                              // 1. 번호
-                              DataCell(
-                                Container(
-                                  width: 30,
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    '${index + 1}',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // 2. 이름
-                              DataCell(
-                                InkWell(
-                                  onLongPress: () {
-                                    if (!isSelectionMode) {
-                                      toggleSelectionMode();
-                                      toggleSelection(student.id);
-                                    }
-                                  },
-                                  onTap: isSelectionMode
-                                      ? () => toggleSelection(student.id)
-                                      : null,
-                                  child: Container(
-                                    width: 50,
-                                    height: double.infinity,
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      student.name,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // 2. 날짜별 셀 (순환 토글 적용)
-                              ...lessonDates.map((date) {
-                                final isHoliday = HolidayHelper.isHoliday(date);
-                                final isAcademyHoliday = scheduleProvider
-                                    .isDateHoliday(date);
-
-                                if (isHoliday || isAcademyHoliday) {
-                                  final holidayName = isHoliday
-                                      ? (HolidayHelper.getHolidayName(date) ??
-                                            "")
-                                      : "휴강";
-
-                                  // 텍스트 배치: 상단부터 한 글자씩 (공백 포함 배경색 유지)
-                                  final charToDisplay =
-                                      (index < holidayName.length)
-                                      ? holidayName[index]
-                                      : "";
-
-                                  return DataCell(
-                                    Container(
-                                      width: double.infinity,
-                                      height: double.infinity,
-                                      color: Colors
-                                          .red
-                                          .shade50, // 휴강일 전체 컬럼 연한 빨강 배경
-                                      child: Center(
-                                        child: Text(
-                                          charToDisplay,
-                                          style: const TextStyle(
-                                            color: Colors.red,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13,
+                                      Text(
+                                        _getWeekdayName(date.weekday),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: textPrimaryColor.withOpacity(
+                                            0.7,
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  );
-                                }
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                            // 3. 출석율
+                            const DataColumn(
+                              label: SizedBox(
+                                width: 50,
+                                child: Text(
+                                  '출석율',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: Colors.black,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                            // 4. 비고 (추가)
+                            const DataColumn(
+                              label: SizedBox(
+                                width: 150,
+                                child: Text(
+                                  '비고',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          rows: students.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final student = entry.value;
+                            int presentCount = 0;
+                            int validLessonCount = 0;
 
+                            // 통계 계산
+                            for (var date in lessonDates) {
+                              final isHoliday = HolidayHelper.isHoliday(date);
+                              final isAcademyHoliday = scheduleProvider
+                                  .isDateHoliday(date);
+                              if (!isHoliday && !isAcademyHoliday) {
+                                validLessonCount++;
                                 final key =
                                     "${student.id}_${date.year}_${date.month}_${date.day}";
-                                final record = attendanceMap[key];
+                                if (attendanceMap[key]?.type ==
+                                    AttendanceType.present) {
+                                  presentCount++;
+                                }
+                              }
+                            }
 
-                                return DataCell(
-                                  Center(
-                                    child: _buildCircularToggleCell(
-                                      context,
-                                      attendanceProvider,
-                                      student.id,
-                                      ownerId,
-                                      date,
-                                      record,
-                                    ),
-                                  ),
-                                );
-                              }),
-                              // 3. 출석율
-                              DataCell(
-                                Container(
-                                  width: 50,
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    '$presentCount/$validLessonCount',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                      color: rateColor,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // 4. 비고 (추가)
-                              DataCell(
-                                _buildRemarkCell(
-                                  context,
-                                  attendanceProvider,
-                                  student.id,
-                                  ownerId,
-                                  (_currentYear == DateTime.now().year &&
-                                          _currentMonth == DateTime.now().month)
-                                      ? DateTime.now()
-                                      : DateTime(
-                                          _currentYear,
-                                          _currentMonth,
-                                          1,
+                            // 출석률 계산
+                            Color rateColor = Colors.black;
+
+                            return DataRow(
+                              selected: selectedStudentIds.contains(student.id),
+                              onSelectChanged: isSelectionMode
+                                  ? (val) {
+                                      toggleSelection(student.id);
+                                    }
+                                  : null,
+                              cells: [
+                                // 0. 체크박스
+                                if (isSelectionMode)
+                                  DataCell(
+                                    SizedBox(
+                                      width: 30,
+                                      child: Checkbox(
+                                        side: BorderSide(
+                                          color: Colors.grey.shade600,
+                                          width: 1.5,
                                         ),
-                                  attendanceMap,
+                                        value: selectedStudentIds.contains(
+                                          student.id,
+                                        ),
+                                        onChanged: (val) =>
+                                            toggleSelection(student.id),
+                                      ),
+                                    ),
+                                  ),
+                                // 1. 번호
+                                DataCell(
+                                  Container(
+                                    width: 30,
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      '${index + 1}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
+                                // 2. 이름
+                                DataCell(
+                                  InkWell(
+                                    onLongPress: () {
+                                      if (!isSelectionMode) {
+                                        toggleSelectionMode();
+                                        toggleSelection(student.id);
+                                      }
+                                    },
+                                    onTap: isSelectionMode
+                                        ? () => toggleSelection(student.id)
+                                        : null,
+                                    child: Container(
+                                      width: 50,
+                                      height: double.infinity,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        student.name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // 2. 날짜별 셀 (순환 토글 적용)
+                                ...lessonDates.map((date) {
+                                  final isHoliday = HolidayHelper.isHoliday(
+                                    date,
+                                  );
+                                  final isAcademyHoliday = scheduleProvider
+                                      .isDateHoliday(date);
+
+                                  if (isHoliday || isAcademyHoliday) {
+                                    final holidayName = isHoliday
+                                        ? (HolidayHelper.getHolidayName(date) ??
+                                              "")
+                                        : "휴강";
+
+                                    // 텍스트 배치: 상단부터 한 글자씩 (공백 포함 배경색 유지)
+                                    final charToDisplay =
+                                        (index < holidayName.length)
+                                        ? holidayName[index]
+                                        : "";
+
+                                    return DataCell(
+                                      Container(
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                        color: Colors
+                                            .red
+                                            .shade50, // 휴강일 전체 컬럼 연한 빨강 배경
+                                        child: Center(
+                                          child: Text(
+                                            charToDisplay,
+                                            style: const TextStyle(
+                                              color: Colors.red,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }
+
+                                  final key =
+                                      "${student.id}_${date.year}_${date.month}_${date.day}";
+                                  final record = attendanceMap[key];
+
+                                  return DataCell(
+                                    Center(
+                                      child: _buildCircularToggleCell(
+                                        context,
+                                        attendanceProvider,
+                                        student.id,
+                                        ownerId,
+                                        date,
+                                        record,
+                                      ),
+                                    ),
+                                  );
+                                }),
+                                // 3. 출석율
+                                DataCell(
+                                  Container(
+                                    width: 50,
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      '$presentCount/$validLessonCount',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                        color: rateColor,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // 4. 비고 (추가)
+                                DataCell(
+                                  _buildRemarkCell(
+                                    context,
+                                    attendanceProvider,
+                                    student.id,
+                                    ownerId,
+                                    (_currentYear == DateTime.now().year &&
+                                            _currentMonth ==
+                                                DateTime.now().month)
+                                        ? DateTime.now()
+                                        : DateTime(
+                                            _currentYear,
+                                            _currentMonth,
+                                            1,
+                                          ),
+                                    attendanceMap,
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
                       ),
                     ),
                   );

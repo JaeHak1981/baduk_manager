@@ -61,7 +61,7 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
                 onRefresh: () =>
                     provider.loadOwnerTextbooks(widget.academy.ownerId),
                 child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                   itemCount: () {
                     var list = provider.allOwnerTextbooks;
                     if (widget.academy.usingTextbookIds.isNotEmpty) {

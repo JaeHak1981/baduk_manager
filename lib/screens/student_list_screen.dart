@@ -255,7 +255,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                           _loadData();
                         },
                         child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                           itemCount: filteredStudents.length,
                           itemBuilder: (context, index) {
                             final student = filteredStudents[index];

@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../utils/holiday_helper.dart';
 import '../utils/file_download_helper.dart';
 import 'components/statistics_dialog.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../providers/schedule_provider.dart';
 
 class AttendanceScreen extends StatefulWidget {
@@ -35,6 +36,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
   bool get wantKeepAlive => true;
 
   DateTime _selectedDate = DateTime.now();
+  DateTime _focusedDay = DateTime.now(); // 달력 포커스용 추가
   late int _currentYear;
   late int _currentMonth;
   int? _selectedSession;
@@ -46,6 +48,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
     super.initState();
     _currentYear = _selectedDate.year;
     _currentMonth = _selectedDate.month;
+    _focusedDay = _selectedDate; // 초기값 설정
     _loadData();
   }
 
@@ -427,30 +430,6 @@ class AttendanceScreenState extends State<AttendanceScreen>
     return dates;
   }
 
-  void _nextMonth() {
-    setState(() {
-      if (_currentMonth == 12) {
-        _currentYear++;
-        _currentMonth = 1;
-      } else {
-        _currentMonth++;
-      }
-      _loadData();
-    });
-  }
-
-  void _prevMonth() {
-    setState(() {
-      if (_currentMonth == 1) {
-        _currentYear--;
-        _currentMonth = 12;
-      } else {
-        _currentMonth--;
-      }
-      _loadData();
-    });
-  }
-
   List<StudentModel> getVisibleStudents(List<StudentModel> allStudents) {
     if (_selectedSession == null) return allStudents;
     if (_selectedSession == 0) {
@@ -642,117 +621,97 @@ class AttendanceScreenState extends State<AttendanceScreen>
     // 현재 화면에 보이는 학생 목록 (필터링 적용)
     final visibleStudents = getVisibleStudents(studentProvider.students);
 
-    Widget body = Column(
+    Widget content = Column(
       children: [
-        // 년/월 선택 영역
+        // 상단 도구 모음 (저장, 통계 등)
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-          child: Column(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    onPressed: _prevMonth,
-                    icon: const Icon(Icons.chevron_left),
-                  ),
-                  Text(
-                    '$_currentYear년 $_currentMonth월',
-                    style: const TextStyle(
-                      fontSize: 20, // 18에서 확대
-                      fontWeight: FontWeight.w900, // 더 두껍게
-                      color: Colors.black,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _nextMonth,
-                    icon: const Icon(Icons.chevron_right),
-                  ),
-                  const Spacer(),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        final provider = context.read<AttendanceProvider>();
-                        if (!provider.hasPendingChanges) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('저장할 변경 사항이 없습니다.'),
-                              duration: Duration(seconds: 1),
-                            ),
-                          );
-                          return;
-                        }
-                        final success = await provider.savePendingChanges();
-                        if (success && mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('출결 변경 사항이 저장되었습니다.'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.save, color: Colors.black),
-                      label: const Text(
-                        '저장하기',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        elevation: 2,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: RichText(
-                      text: TextSpan(
-                        style: const TextStyle(fontSize: 12),
-                        children: [
-                          TextSpan(
-                            text: 'O : 파랑',
-                            style: TextStyle(
-                              color: Colors.blue.shade700,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const TextSpan(
-                            text: '   ',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                          TextSpan(
-                            text: 'X : 빨강',
-                            style: TextStyle(
-                              color: Colors.red.shade700,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+              Expanded(
+                child: Consumer<StudentProvider>(
+                  builder: (context, provider, _) =>
+                      _buildSessionFilter(provider.students),
+                ),
               ),
-              Consumer<StudentProvider>(
-                builder: (context, provider, _) =>
-                    _buildSessionFilter(provider.students),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final provider = context.read<AttendanceProvider>();
+                  if (!provider.hasPendingChanges) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('저장할 변경 사항이 없습니다.'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                    return;
+                  }
+                  final success = await provider.savePendingChanges();
+                  if (success && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('출결 변경 사항이 저장되었습니다.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.save, color: Colors.black),
+                label: const Text(
+                  '저장하기',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  elevation: 2,
+                ),
+              ),
+              const SizedBox(width: 12),
+              // 범례 표시
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: RichText(
+                  text: TextSpan(
+                    style: const TextStyle(fontSize: 12),
+                    children: [
+                      TextSpan(
+                        text: 'O : 파랑',
+                        style: TextStyle(
+                          color: Colors.blue.shade700,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const TextSpan(
+                        text: '   ',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                      TextSpan(
+                        text: 'X : 빨강',
+                        style: TextStyle(
+                          color: Colors.red.shade700,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -803,7 +762,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
                           'at_table_${attendanceProvider.stateCounter}_${attendanceProvider.monthlyRecords.length}_$isSelectionMode',
                         ),
                         showCheckboxColumn: false, // 수동으로 만든 체크박스와 겹치지 않게 비활성화
-                        columnSpacing: 12, // 간격 대폭 축소
+                        columnSpacing: 8, // 12에서 8로 축소
                         horizontalMargin: 8,
                         headingRowHeight: 50, // 헤더 높이 축소
                         dataRowMinHeight: 45, // 데이터 행 높이 축소
@@ -869,7 +828,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
 
                             return DataColumn(
                               label: SizedBox(
-                                width: 60, // 버튼 두 개가 들어갈 최소 너비
+                                width: 45, // 60에서 45로 축소
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
@@ -1013,30 +972,28 @@ class AttendanceScreenState extends State<AttendanceScreen>
                                       ? (HolidayHelper.getHolidayName(date) ??
                                             "")
                                       : "휴강";
-                                  if (holidayName.isEmpty)
-                                    return const DataCell(SizedBox());
 
-                                  final totalRows = students.length;
-                                  final textLength = holidayName.length;
-                                  int startIndex =
-                                      (totalRows - textLength) ~/ 2;
-                                  if (startIndex < 0) startIndex = 0;
-
-                                  final charIndex = index - startIndex;
-                                  String charToDisplay = "";
-                                  if (charIndex >= 0 &&
-                                      charIndex < textLength) {
-                                    charToDisplay = holidayName[charIndex];
-                                  }
+                                  // 텍스트 배치: 상단부터 한 글자씩 (공백 포함 배경색 유지)
+                                  final charToDisplay =
+                                      (index < holidayName.length)
+                                      ? holidayName[index]
+                                      : "";
 
                                   return DataCell(
-                                    Center(
-                                      child: Text(
-                                        charToDisplay,
-                                        style: const TextStyle(
-                                          color: Colors.red,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
+                                    Container(
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                      color: Colors
+                                          .red
+                                          .shade50, // 휴강일 전체 컬럼 연한 빨강 배경
+                                      child: Center(
+                                        child: Text(
+                                          charToDisplay,
+                                          style: const TextStyle(
+                                            color: Colors.red,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -1104,6 +1061,105 @@ class AttendanceScreenState extends State<AttendanceScreen>
             },
           ),
         ),
+      ],
+    );
+
+    Widget body = Row(
+      children: [
+        Container(
+          width: 260,
+          padding: const EdgeInsets.fromLTRB(20, 8, 4, 8),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            border: Border(right: BorderSide(color: Colors.grey.shade300)),
+          ),
+          child: Column(
+            children: [
+              TableCalendar(
+                locale: 'ko_KR',
+                firstDay: DateTime(2020),
+                lastDay: DateTime(2030),
+                focusedDay: _focusedDay,
+                selectedDayPredicate: (day) => isSameDay(_selectedDate, day),
+                calendarFormat: CalendarFormat.month,
+                headerStyle: const HeaderStyle(
+                  formatButtonVisible: false,
+                  titleCentered: true,
+                  titleTextStyle: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  leftChevronIcon: Icon(Icons.chevron_left, size: 20),
+                  rightChevronIcon: Icon(Icons.chevron_right, size: 20),
+                  headerPadding: EdgeInsets.symmetric(vertical: 4),
+                ),
+                daysOfWeekStyle: const DaysOfWeekStyle(
+                  weekendStyle: TextStyle(color: Colors.red),
+                ),
+                calendarStyle: CalendarStyle(
+                  todayDecoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  selectedDecoration: const BoxDecoration(
+                    color: Colors.blue,
+                    shape: BoxShape.circle,
+                  ),
+                  weekendTextStyle: const TextStyle(color: Colors.red),
+                  holidayTextStyle: const TextStyle(color: Colors.red),
+                  outsideDaysVisible: false,
+                ),
+                holidayPredicate: (day) =>
+                    HolidayHelper.isHoliday(day) ||
+                    scheduleProvider.isDateHoliday(day),
+                onDaySelected: (selectedDay, focusedDay) {
+                  setState(() {
+                    final oldMonth = _currentMonth;
+                    final oldYear = _currentYear;
+                    _selectedDate = selectedDay;
+                    _focusedDay = focusedDay;
+                    _currentYear = selectedDay.year;
+                    _currentMonth = selectedDay.month;
+
+                    if (oldMonth != _currentMonth || oldYear != _currentYear) {
+                      _loadData();
+                    }
+                  });
+                },
+                onPageChanged: (focusedDay) {
+                  setState(() {
+                    _focusedDay = focusedDay;
+                    // 페이지 변경 시 자동으로 해당 월 데이터 로드 여부는 선택(일일출결과 동일하게 유지)
+                  });
+                },
+              ),
+              const Divider(),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                title: const Text('학원 휴강 설정', style: TextStyle(fontSize: 14)),
+                subtitle: const Text(
+                  '선택한 날짜를 휴강으로 지정합니다.',
+                  style: TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                trailing: Transform.scale(
+                  scale: 0.8,
+                  child: Switch(
+                    value: scheduleProvider.isDateHoliday(_selectedDate),
+                    onChanged: (value) {
+                      scheduleProvider.toggleHoliday(
+                        academyId: widget.academy.id,
+                        year: _selectedDate.year,
+                        month: _selectedDate.month,
+                        day: _selectedDate.day,
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: content),
       ],
     );
 
@@ -1248,7 +1304,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
         );
       },
       child: Container(
-        width: 35,
+        width: 30, // 35에서 30으로 축소
         height: 35,
         decoration: BoxDecoration(
           border: Border.all(color: Colors.black26, width: 1.0),

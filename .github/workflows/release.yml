@@ -56,6 +56,16 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # Firebase 설정 파일 복구 단계 추가
+      - name: Restore Firebase Configuration
+        run: |
+          mkdir -p android/app
+          mkdir -p macos/Runner
+          echo "${{ secrets.FIREBASE_OPTIONS_BASE64 }}" | base64 --decode > lib/firebase_options.dart
+          echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > android/app/google-services.json
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}" | base64 --decode > macos/Runner/GoogleService-Info.plist
+        shell: bash
+
       - name: Build Project
         run: ${{ matrix.build_cmd }}
 

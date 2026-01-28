@@ -52,7 +52,7 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
   final ValueNotifier<int> _selectionNotifier = ValueNotifier<int>(0);
   final Set<String> selectedStudentIds = {};
   bool isSelectionMode = false;
-  int _localStateCounter = 0; // UI 즉각 갱신을 위한 로컬 카운터
+  // bool isSelectionMode = false; // 이 변수는 아래에 정의되어 있음
 
   void toggleSelectionMode() {
     setState(() {
@@ -60,7 +60,6 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
       if (!isSelectionMode) {
         selectedStudentIds.clear();
       }
-      _localStateCounter++; // UI 강제 리빌드 트리거
     });
     _selectionNotifier.value++; // 내부 리빌드 트리거
     widget.onSelectionModeChanged?.call(); // 외부(앱바) 리빌드 트리거
@@ -73,7 +72,6 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
       } else {
         selectedStudentIds.add(id);
       }
-      _localStateCounter++; // UI 강제 리빌드 트리거
     });
     _selectionNotifier.value++; // 내부 리빌드 트리거
     widget.onSelectionModeChanged?.call(); // 외부(앱바) 리빌드 트리거
@@ -86,7 +84,6 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
       } else {
         selectedStudentIds.addAll(students.map((s) => s.id));
       }
-      _localStateCounter++; // UI 강제 리빌드 트리거
     });
     _selectionNotifier.value++; // 내부 리빌드 트리거
     widget.onSelectionModeChanged?.call(); // 외부(앱바) 리빌드 트리거
@@ -366,146 +363,172 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
               child: ValueListenableBuilder<int>(
                 valueListenable: _selectionNotifier,
                 builder: (context, _, child) {
-                  return filteredStudents.isEmpty
-                      ? const Center(child: Text('표시할 학생이 없습니다.'))
-                      : Align(
-                          alignment: Alignment.topLeft,
-                          child: SingleChildScrollView(
-                            key: const PageStorageKey(
-                              'daily_attendance_scroll_vertical',
-                            ),
-                            scrollDirection: Axis.vertical,
-                            child: SingleChildScrollView(
-                              key: const PageStorageKey(
-                                'daily_attendance_scroll_horizontal',
+                  if (filteredStudents.isEmpty) {
+                    return const Center(child: Text('표시할 학생이 없습니다.'));
+                  }
+
+                  // 10명씩 학생 데이터를 분할(Chunking)
+                  final List<List<StudentModel>> studentChunks = [];
+                  for (var i = 0; i < filteredStudents.length; i += 10) {
+                    studentChunks.add(
+                      filteredStudents.sublist(
+                        i,
+                        i + 10 > filteredStudents.length
+                            ? filteredStudents.length
+                            : i + 10,
+                      ),
+                    );
+                  }
+
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: SingleChildScrollView(
+                      key: const PageStorageKey(
+                        'daily_attendance_scroll_horizontal',
+                      ),
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: studentChunks.map((chunk) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 24),
+                            child: DataTable(
+                              key: ValueKey(
+                                'daily_at_table_${attendanceProvider.stateCounter}_${chunk.length}_${isSelectionMode}_${chunk.first.id}',
                               ),
-                              scrollDirection: Axis.horizontal,
-                              child: DataTable(
-                                key: ValueKey(
-                                  'daily_at_table_${attendanceProvider.stateCounter}_${filteredStudents.length}_${isSelectionMode}_$_localStateCounter',
-                                ),
-                                showCheckboxColumn: false,
-                                columnSpacing:
-                                    12, // 간격 최적화 (AttendanceScreen과 동일)
-                                horizontalMargin: 8, // 터치 영역 확보를 위해 0에서 8로 변경
-                                headingRowHeight: 50,
-                                dataRowMinHeight: 45,
-                                dataRowMaxHeight: 45,
-                                columns: [
-                                  if (isSelectionMode)
-                                    DataColumn(
-                                      label: SizedBox(
-                                        width: 30,
-                                        child: Checkbox(
-                                          side: BorderSide(
-                                            color: Colors.grey.shade600,
-                                            width: 1.5,
-                                          ),
-                                          value:
-                                              filteredStudents.isNotEmpty &&
-                                              filteredStudents.every(
-                                                (s) => selectedStudentIds
-                                                    .contains(s.id),
-                                              ),
-                                          onChanged: (v) =>
-                                              toggleSelectAll(filteredStudents),
-                                        ),
-                                      ),
-                                    ),
-                                  const DataColumn(
-                                    label: Text(
-                                      '번호',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  const DataColumn(
-                                    label: Text(
-                                      '이름',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  const DataColumn(
+                              showCheckboxColumn: false,
+                              columnSpacing: 12,
+                              horizontalMargin: 8,
+                              headingRowHeight: 45,
+                              dataRowMinHeight: 40,
+                              dataRowMaxHeight: 40,
+                              columns: [
+                                if (isSelectionMode)
+                                  DataColumn(
                                     label: SizedBox(
-                                      width: 60,
-                                      child: Text(
-                                        '출결',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
+                                      width: 30,
+                                      child: Checkbox(
+                                        side: BorderSide(
+                                          color: Colors.grey.shade600,
+                                          width: 1.5,
                                         ),
-                                        textAlign: TextAlign.center,
+                                        value:
+                                            chunk.isNotEmpty &&
+                                            chunk.every(
+                                              (s) => selectedStudentIds
+                                                  .contains(s.id),
+                                            ),
+                                        onChanged: (v) =>
+                                            toggleSelectAll(chunk),
                                       ),
                                     ),
                                   ),
+                                const DataColumn(
+                                  label: Text(
+                                    '번호',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                                const DataColumn(
+                                  label: Text(
+                                    '이름',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                                const DataColumn(
+                                  label: SizedBox(
+                                    width: 60,
+                                    child: Text(
+                                      '출결',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                                if (_selectedSession != null)
                                   const DataColumn(
                                     label: Text(
                                       '비고',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
+                                        fontSize: 13,
                                       ),
                                     ),
                                   ),
-                                ],
-                                rows: filteredStudents.asMap().entries.map((
-                                  entry,
-                                ) {
-                                  final index = entry.key;
-                                  final student = entry.value;
-                                  final record = attendanceMap[student.id];
-                                  final isSelected = selectedStudentIds
-                                      .contains(student.id);
+                              ],
+                              rows: chunk.map((student) {
+                                final overallIndex = filteredStudents.indexOf(
+                                  student,
+                                );
+                                final record = attendanceMap[student.id];
+                                final isSelected = selectedStudentIds.contains(
+                                  student.id,
+                                );
 
-                                  return DataRow(
-                                    selected: isSelected,
-                                    onSelectChanged: isSelectionMode
-                                        ? (val) => toggleSelection(student.id)
-                                        : null,
-                                    cells: [
-                                      if (isSelectionMode)
-                                        DataCell(
-                                          SizedBox(
-                                            width: 30,
-                                            child: Checkbox(
-                                              side: BorderSide(
-                                                color: Colors.grey.shade600,
-                                                width: 1.5,
-                                              ),
-                                              value: isSelected,
-                                              onChanged: (val) =>
-                                                  toggleSelection(student.id),
-                                            ),
-                                          ),
-                                        ),
-                                      DataCell(Text('${index + 1}')),
+                                return DataRow(
+                                  selected: isSelected,
+                                  onSelectChanged: isSelectionMode
+                                      ? (val) => toggleSelection(student.id)
+                                      : null,
+                                  cells: [
+                                    if (isSelectionMode)
                                       DataCell(
-                                        InkWell(
-                                          onLongPress: () {
-                                            if (!isSelectionMode) {
-                                              toggleSelectionMode();
-                                              toggleSelection(student.id);
-                                            }
-                                          },
-                                          onTap: isSelectionMode
-                                              ? () =>
-                                                    toggleSelection(student.id)
-                                              : null,
-                                          child: SizedBox(
-                                            width: 60,
-                                            child: Text(
-                                              student.name,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                        SizedBox(
+                                          width: 30,
+                                          child: Checkbox(
+                                            side: BorderSide(
+                                              color: Colors.grey.shade600,
+                                              width: 1.5,
                                             ),
+                                            value: isSelected,
+                                            onChanged: (val) =>
+                                                toggleSelection(student.id),
                                           ),
                                         ),
                                       ),
-                                      DataCell(
-                                        Center(
+                                    DataCell(
+                                      Text(
+                                        '${overallIndex + 1}',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      InkWell(
+                                        onLongPress: () {
+                                          if (!isSelectionMode) {
+                                            toggleSelectionMode();
+                                            toggleSelection(student.id);
+                                          }
+                                        },
+                                        onTap: isSelectionMode
+                                            ? () => toggleSelection(student.id)
+                                            : null,
+                                        child: SizedBox(
+                                          width: 60,
+                                          child: Text(
+                                            student.name,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Center(
+                                        child: Transform.scale(
+                                          scale: 0.8,
                                           child: _buildCircularToggleCell(
                                             context,
                                             attendanceProvider,
@@ -516,23 +539,30 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                                           ),
                                         ),
                                       ),
+                                    ),
+                                    if (_selectedSession != null)
                                       DataCell(
-                                        _buildRemarkCell(
-                                          context,
-                                          attendanceProvider,
-                                          student.id,
-                                          ownerId,
-                                          _selectedDate,
-                                          attendanceMap,
+                                        SizedBox(
+                                          width: 100, // 부별 명단에서는 너비를 더 줄임
+                                          child: _buildRemarkCell(
+                                            context,
+                                            attendanceProvider,
+                                            student.id,
+                                            ownerId,
+                                            _selectedDate,
+                                            attendanceMap,
+                                          ),
                                         ),
                                       ),
-                                    ],
-                                  );
-                                }).toList(),
-                              ),
+                                  ],
+                                );
+                              }).toList(),
                             ),
-                          ),
-                        );
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  );
                 },
               ),
             ),
@@ -785,9 +815,6 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
     return InkWell(
       onTap: () {
         HapticFeedback.lightImpact();
-        setState(() {
-          _localStateCounter++;
-        });
         provider.toggleStatus(
           studentId: studentId,
           academyId: widget.academy.id,

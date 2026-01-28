@@ -675,44 +675,6 @@ class AttendanceScreenState extends State<AttendanceScreen>
                   elevation: 2,
                 ),
               ),
-              const SizedBox(width: 12),
-              // 범례 표시
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: RichText(
-                  text: TextSpan(
-                    style: const TextStyle(fontSize: 12),
-                    children: [
-                      TextSpan(
-                        text: 'O : 파랑',
-                        style: TextStyle(
-                          color: Colors.blue.shade700,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const TextSpan(
-                        text: '   ',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                      TextSpan(
-                        text: 'X : 빨강',
-                        style: TextStyle(
-                          color: Colors.red.shade700,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ],
           ),
         ),

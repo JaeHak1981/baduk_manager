@@ -799,7 +799,21 @@ class AttendanceScreenState extends State<AttendanceScreen>
                                 ),
                               ),
                             ),
-                          // 1. 이름 (항상 고정)
+                          // 1. 번호 (가장 왼쪽 고정)
+                          const DataColumn(
+                            label: SizedBox(
+                              width: 30,
+                              child: Text(
+                                '번호',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                          // 2. 이름 (항상 고정)
                           const DataColumn(
                             label: SizedBox(
                               width: 50,
@@ -934,7 +948,21 @@ class AttendanceScreenState extends State<AttendanceScreen>
                                     ),
                                   ),
                                 ),
-                              // 1. 이름
+                              // 1. 번호
+                              DataCell(
+                                Container(
+                                  width: 30,
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // 2. 이름
                               DataCell(
                                 InkWell(
                                   onLongPress: () {

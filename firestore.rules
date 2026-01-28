@@ -75,6 +75,12 @@ service cloud.firestore {
         isDeveloper()
       );
     }
+
+    // system_config 컬렉션: 모든 인증된 사용자 읽기 가능, 개발자만 수정 가능
+    match /system_config/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if isDeveloper();
+    }
   }
 }
 

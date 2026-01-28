@@ -12,7 +12,8 @@ class DownloadDialog extends StatelessWidget {
   Future<void> _launchUrl(String url) async {
     if (url.isEmpty) return;
     final Uri uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    // 웹에서는 platformDefault가 더 안정적일 수 있으며, 모바일 브라우저에서 다운로드를 잘 유도함
+    if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
       throw Exception('Could not launch $url');
     }
   }
@@ -22,13 +23,19 @@ class DownloadDialog extends StatelessWidget {
     final systemProvider = context.watch<SystemProvider>();
     final recommendedOSName = PlatformHelper.recommendedOSName;
 
-    // 플랫폼 판별 (웹 환경에서도 추천 설치 파일을 보여주기 위해 defaultTargetPlatform 사용)
+    // 플랫폼 판별 (더 넓은 범위의 감지를 위해 Theme.of(context).platform 포함)
     String platformKey = '';
-    if (defaultTargetPlatform == TargetPlatform.android) {
+    final platform = defaultTargetPlatform;
+    final themePlatform = Theme.of(context).platform;
+
+    if (platform == TargetPlatform.android ||
+        themePlatform == TargetPlatform.android) {
       platformKey = 'android';
-    } else if (defaultTargetPlatform == TargetPlatform.windows) {
+    } else if (platform == TargetPlatform.windows ||
+        themePlatform == TargetPlatform.windows) {
       platformKey = 'windows';
-    } else if (defaultTargetPlatform == TargetPlatform.macOS) {
+    } else if (platform == TargetPlatform.macOS ||
+        themePlatform == TargetPlatform.macOS) {
       platformKey = 'macos';
     }
 

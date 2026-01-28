@@ -16,21 +16,24 @@ jobs:
             os: ubuntu-latest
             build_cmd: flutter build apk --release
             artifact_path: build/app/outputs/flutter-apk/app-release.apk
-            asset_name: baduk-manager-android.apk
+            asset_prefix: baduk-manager
+            extension: apk
           - platform: windows
             os: windows-latest
             build_cmd: |
               flutter config --enable-windows-desktop
               flutter build windows --release
             artifact_path: build/windows/runner/Release/
-            asset_name: windows-release # 디렉토리이므로 나중에 압축 필요
+            asset_prefix: baduk-manager
+            extension: zip
           - platform: macos
             os: macos-latest
             build_cmd: |
               flutter config --enable-macos-desktop
               flutter build macos --release --no-codesign
             artifact_path: build/macos/Build/Products/Release/baduk_textbook_manager.app
-            asset_name: macos-release # 디렉토리이므로 나중에 압축 필요
+            asset_prefix: baduk-manager
+            extension: zip
 
     steps:
       - name: Checkout code
@@ -58,20 +61,23 @@ jobs:
       # 윈도우/맥 디렉토리 압축
       - name: Compress Windows Build
         if: matrix.platform == 'windows'
-        run: Compress-Archive -Path ${{ matrix.artifact_path }}* -DestinationPath baduk-manager-windows.zip
+        run: Compress-Archive -Path ${{ matrix.artifact_path }}* -DestinationPath ${{ matrix.asset_prefix }}-${{ github.ref_name }}-windows.zip
         shell: pwsh
 
       - name: Compress macOS Build
         if: matrix.platform == 'macos'
-        run: ditto -c -k --sequesterRsrc --keepParent ${{ matrix.artifact_path }} baduk-manager-macos.zip
+        run: ditto -c -k --sequesterRsrc --keepParent ${{ matrix.artifact_path }} ${{ matrix.asset_prefix }}-${{ github.ref_name }}-macos.zip
+
+      - name: Rename Android Build
+        if: matrix.platform == 'android'
+        run: mv ${{ matrix.artifact_path }} ${{ matrix.asset_prefix }}-${{ github.ref_name }}-android.apk
 
       # 빌드 결과물 임시 저장
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-build
-          path: |
-            ${{ matrix.platform == 'android' && matrix.artifact_path || 'baduk-manager-*.zip' }}
+          path: ${{ matrix.asset_prefix }}-${{ github.ref_name }}-${{ matrix.platform }}.${{ matrix.extension }}
 
   release:
     name: Create Release
@@ -83,22 +89,19 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
 
-      - name: List Artifacts
-        run: ls -R
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            android-build/app-release.apk
-            windows-build/baduk-manager-windows.zip
-            macos-build/baduk-manager-macos.zip
+            */baduk-manager-*-android.apk
+            */baduk-manager-*-windows.zip
+            */baduk-manager-*-macos.zip
           body: |
-            ## 새로운 버전이 출시되었습니다! 🚀
+            ## 새로운 버전(${{ github.ref_name }})이 출시되었습니다! 🚀
             현재 접속하신 기기에 맞는 파일을 다운로드하여 설치해 주세요.
             
-            - **안드로이드**: `baduk-manager-android.apk`
-            - **윈도우**: `baduk-manager-windows.zip`
-            - **맥**: `baduk-manager-macos.zip`
+            - **안드로이드**: `baduk-manager-${{ github.ref_name }}-android.apk`
+            - **윈도우**: `baduk-manager-${{ github.ref_name }}-windows.zip`
+            - **맥**: `baduk-manager-${{ github.ref_name }}-macos.zip`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

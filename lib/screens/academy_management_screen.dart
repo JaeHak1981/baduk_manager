@@ -62,7 +62,7 @@ class _AcademyManagementScreenState extends State<AcademyManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('기관 관리 및 등록'),
+        title: const Text('기관 등록 및 설정'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(

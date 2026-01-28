@@ -64,7 +64,7 @@ class _HomePageState extends State<HomePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
-            tooltip: '기관 관리',
+            tooltip: '기관 등록 및 설정',
             onPressed: () {
               Navigator.push(
                 context,
@@ -194,7 +194,7 @@ class _HomePageState extends State<HomePage> {
                                       ).then((_) => _loadInitialData());
                                     },
                                     icon: const Icon(Icons.settings),
-                                    label: const Text('기관 관리 및 등록'),
+                                    label: const Text('기관 등록 및 설정'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Theme.of(
                                         context,

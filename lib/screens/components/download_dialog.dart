@@ -113,58 +113,6 @@ class DownloadDialog extends StatelessWidget {
             isUpdate: isUpdateRequired && downloadUrl.isNotEmpty,
             isEnabled: downloadUrl.isNotEmpty,
           ),
-
-          // 기타 플랫폼 버튼 (데스크탑에서만 다른 버전 유도)
-          if (Theme.of(context).platform == TargetPlatform.windows ||
-              Theme.of(context).platform == TargetPlatform.macOS) ...[
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Divider(),
-            ),
-            const Text(
-              '다른 버전이 필요하신가요?',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (platformKey != 'android')
-                  _buildSmallButton(
-                    context,
-                    '안드로이드',
-                    Icons.android,
-                    systemProvider.getDownloadUrl('android').isNotEmpty
-                        ? () => _launchUrl(
-                            systemProvider.getDownloadUrl('android'),
-                          )
-                        : null,
-                  ),
-                if (platformKey != 'windows')
-                  _buildSmallButton(
-                    context,
-                    '윈도우',
-                    Icons.window,
-                    systemProvider.getDownloadUrl('windows').isNotEmpty
-                        ? () => _launchUrl(
-                            systemProvider.getDownloadUrl('windows'),
-                          )
-                        : null,
-                  ),
-                if (platformKey != 'macos')
-                  _buildSmallButton(
-                    context,
-                    '맥(macOS)',
-                    Icons.apple,
-                    systemProvider.getDownloadUrl('macos').isNotEmpty
-                        ? () =>
-                              _launchUrl(systemProvider.getDownloadUrl('macos'))
-                        : null,
-                  ),
-              ],
-            ),
-          ],
         ],
       ),
       actions: [
@@ -207,30 +155,6 @@ class DownloadDialog extends StatelessWidget {
           ),
           elevation: (isUpdate || isRecommended) ? 4 : 1,
         ),
-      ),
-    );
-  }
-
-  Widget _buildSmallButton(
-    BuildContext context,
-    String label,
-    IconData icon,
-    VoidCallback? onPressed,
-  ) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 16),
-      label: Text(
-        onPressed == null ? '$label(준비중)' : label,
-        style: const TextStyle(fontSize: 12),
-      ),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        foregroundColor: onPressed == null ? Colors.grey : null,
-        side: onPressed == null
-            ? BorderSide(color: Colors.grey.shade300)
-            : null,
       ),
     );
   }

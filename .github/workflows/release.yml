@@ -56,14 +56,18 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # Firebase 설정 파일 복구 단계 보완 (공백/줄바꿈 제거 로직 추가)
+      # Firebase 설정 파일 복구 단계 (환경 변수 활용으로 더 안전하게)
       - name: Restore Firebase Configuration
+        env:
+          FIREBASE_OPTIONS: ${{ secrets.FIREBASE_OPTIONS_BASE64 }}
+          GOOGLE_SERVICES: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+          GOOGLE_SERVICE_INFO: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
         run: |
           mkdir -p android/app
           mkdir -p macos/Runner
-          echo "${{ secrets.FIREBASE_OPTIONS_BASE64 }}" | tr -d '[:space:]' | base64 --decode > lib/firebase_options.dart
-          echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | tr -d '[:space:]' | base64 --decode > android/app/google-services.json
-          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}" | tr -d '[:space:]' | base64 --decode > macos/Runner/GoogleService-Info.plist
+          echo "$FIREBASE_OPTIONS" | tr -d '[:space:]' | base64 --decode > lib/firebase_options.dart
+          echo "$GOOGLE_SERVICES" | tr -d '[:space:]' | base64 --decode > android/app/google-services.json
+          echo "$GOOGLE_SERVICE_INFO" | tr -d '[:space:]' | base64 --decode > macos/Runner/GoogleService-Info.plist
         shell: bash
 
       - name: Build Project

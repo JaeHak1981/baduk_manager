@@ -22,43 +22,53 @@ class PlatformHelper {
   /// 접속 환경에 따른 권장 안내 명칭
   static String get recommendedOSName {
     if (kIsWeb) {
-      // 웹 브라우저의 경우 UserAgent를 통해 상세 체크가 필요할 수 있으나
-      // 기본적으로 defaultTargetPlatform이 어느 정도 판별해줌
-      switch (defaultTargetPlatform) {
-        case TargetPlatform.android:
-          return '안드로이드 태블릿/폰';
-        case TargetPlatform.iOS:
-          return '아이폰/아이패드';
-        case TargetPlatform.windows:
-          return '윈도우 PC';
-        case TargetPlatform.macOS:
-          return '맥(macOS)';
-        default:
-          return '기기 전용 앱';
-      }
+      // 웹의 경우 상세 판별 시도
+      return _getWebRecommendedOS();
     }
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'Android';
+        return '안드로이드 태블릿/폰';
       case TargetPlatform.windows:
-        return 'Windows';
+        return '윈도우 PC';
       case TargetPlatform.macOS:
-        return 'macOS';
+        return '맥(macOS)';
       default:
-        return '시스템';
+        return '기기';
     }
   }
 
-  /// 현재 플랫폼이 안드로이드인지 확인
-  static bool get isAndroid =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  static String _getWebRecommendedOS() {
+    // 1. TargetPlatform 기반 기본 판별
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return '안드로이드 태블릿/폰';
+      case TargetPlatform.iOS:
+        return '아이폰/아이패드';
+      case TargetPlatform.windows:
+        return '윈도우 PC';
+      case TargetPlatform.macOS:
+        return '맥(macOS)';
+      default:
+        return '기기';
+    }
+  }
 
-  /// 현재 플랫폼이 윈도우인지 확인
-  static bool get isWindows =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+  /// 현재 플랫폼이 안드로이드(또는 안드로이드 기반 웹)인지 확인
+  static bool get isAndroid {
+    if (defaultTargetPlatform == TargetPlatform.android) return true;
+    return false;
+  }
 
-  /// 현재 플랫폼이 맥인지 확인
-  static bool get isMacOS =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+  /// 현재 플랫폼이 윈도우(또는 윈도우 기반 웹)인지 확인
+  static bool get isWindows {
+    if (defaultTargetPlatform == TargetPlatform.windows) return true;
+    return false;
+  }
+
+  /// 현재 플랫폼이 맥(또는 맥 기반 웹)인지 확인
+  static bool get isMacOS {
+    if (defaultTargetPlatform == TargetPlatform.macOS) return true;
+    return false;
+  }
 }

@@ -108,6 +108,45 @@ class DownloadDialog extends StatelessWidget {
             isUpdate: isUpdateRequired && downloadUrl.isNotEmpty,
             isEnabled: downloadUrl.isNotEmpty,
           ),
+
+          // 폴백 섹션: 기기 판별이 안 되었거나 다른 버전이 필요할 수 있는 경우를 위해 모든 링크 제공
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Divider(),
+          ),
+          const Text(
+            '혹시 버튼이 작동하지 않거나 다른 기기용이 필요하신가요?',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 10,
+            children: [
+              _buildSmallButton(
+                context,
+                '안드로이드 (.apk)',
+                Icons.android,
+                systemProvider.getDownloadUrl('android'),
+              ),
+              _buildSmallButton(
+                context,
+                '윈도우 (.zip)',
+                Icons.window,
+                systemProvider.getDownloadUrl('windows'),
+              ),
+              _buildSmallButton(
+                context,
+                '맥 (.zip)',
+                Icons.apple,
+                systemProvider.getDownloadUrl('macos'),
+              ),
+            ],
+          ),
         ],
       ),
       actions: [
@@ -149,6 +188,48 @@ class DownloadDialog extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
           ),
           elevation: (isUpdate || isRecommended) ? 4 : 1,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmallButton(
+    BuildContext context,
+    String label,
+    IconData icon,
+    String url,
+  ) {
+    final bool isEnabled = url.isNotEmpty;
+    return InkWell(
+      onTap: isEnabled ? () => _launchUrl(url) : null,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isEnabled ? Colors.grey.shade100 : Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isEnabled ? Colors.grey.shade300 : Colors.grey.shade200,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isEnabled ? Colors.black87 : Colors.grey,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: isEnabled ? Colors.black87 : Colors.grey,
+                fontWeight: isEnabled ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
         ),
       ),
     );

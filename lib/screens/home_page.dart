@@ -63,15 +63,10 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
-            tooltip: '기관 등록 및 설정',
+            icon: const Icon(Icons.file_download),
+            tooltip: '전체 데이터 추출',
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AcademyManagementScreen(),
-                ),
-              );
+              // TODO: 전체 학생 데이터 또는 진도 현황 엑셀 추출 기능 구현 예정
             },
           ),
           IconButton(

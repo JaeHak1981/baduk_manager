@@ -54,6 +54,22 @@ service cloud.firestore {
       allow create: if isAuthenticated() && (request.resource.data.ownerId == request.auth.uid || isDeveloper());
       allow read, update, delete: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isDeveloper());
     }
+
+    // temporaryOrders 컬렉션: 학원 소유자, 소속 선생님 또는 개발자 접근 가능
+    match /temporaryOrders/{academyId} {
+      allow read, delete: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.academyId == academyId) ||
+        isDeveloper()
+      );
+      allow create, update: if isAuthenticated() && (
+        request.resource.data.ownerId == request.auth.uid || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.academyId == academyId) ||
+        isDeveloper()
+      );
+    }
   }
 }
 

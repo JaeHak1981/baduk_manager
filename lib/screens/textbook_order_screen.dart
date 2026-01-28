@@ -8,7 +8,9 @@ import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
 import '../providers/academy_provider.dart';
 import '../providers/order_provider.dart';
+import '../providers/temporary_order_provider.dart';
 import '../models/order_model.dart';
+import '../models/temporary_order_model.dart';
 
 /// 주문 상태타입 (없음, 선택, 연장)
 enum OrderType { none, select, extension }
@@ -70,32 +72,74 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
 
     // 데이터 로드가 확실히 끝난 후 초기화 호출
     if (mounted) {
-      _initializeEntries();
+      await _initializeEntries();
     }
   }
 
-  void _initializeEntries() {
+  Future<void> _initializeEntries() async {
     if (_isInitialized) return;
 
     final studentProvider = context.read<StudentProvider>();
     final progressProvider = context.read<ProgressProvider>();
+    final tempProvider = context.read<TemporaryOrderProvider>();
 
     // 로딩 중이면 초기화를 미룸
     if (studentProvider.isLoading || progressProvider.isLoading) return;
 
     final students = studentProvider.students;
-    if (students.isEmpty) return; // 학생이 없으면 아직 데이터가 안 온 것으로 간주
+    if (students.isEmpty) return;
 
-    for (var student in students) {
-      final currentP = progressProvider.getProgressForStudent(student.id);
-      final hasActiveProgress = currentP.any((p) => !p.isCompleted);
+    // 1. 임시 저장 데이터 로드 시도
+    await tempProvider.loadTemporaryOrder(widget.academy.id);
+    final tempOrder = tempProvider.tempOrder;
 
-      // 현재 학습 중인 교재가 있으면 기본값을 '연장'으로 설정
-      _orderEntries[student.id] = _OrderEntry(
-        type: hasActiveProgress ? OrderType.extension : OrderType.none,
-        textbook: null,
-        volume: 1,
-      );
+    if (tempOrder != null) {
+      debugPrint('ℹ️ [TextbookOrderScreen] 임시 저장 데이터 발견. 복원 중...');
+      for (var item in tempOrder.items) {
+        _orderEntries[item.studentId] = _OrderEntry(
+          type: OrderType.values.firstWhere(
+            (e) => e.name == item.type,
+            orElse: () => OrderType.none,
+          ),
+          textbook: item.textbookId != null
+              ? progressProvider.allOwnerTextbooks
+                    .cast<TextbookModel?>()
+                    .firstWhere(
+                      (t) => t?.id == item.textbookId,
+                      orElse: () => null,
+                    )
+              : null,
+          volume: item.volume,
+        );
+      }
+
+      // 혹시 임시 저장 데이터에 없는 학생이 있다면 기본값 설정
+      for (var student in students) {
+        if (!_orderEntries.containsKey(student.id)) {
+          final currentP = progressProvider.getProgressForStudent(student.id);
+          final hasActiveProgress = currentP.any((p) => !p.isCompleted);
+          _orderEntries[student.id] = _OrderEntry(
+            type: hasActiveProgress ? OrderType.extension : OrderType.none,
+          );
+        }
+      }
+
+      if (tempOrder.message.isNotEmpty) {
+        _messageController.text = tempOrder.message;
+        _isManualEdit = true;
+      }
+    } else {
+      // 2. 임시 저장 데이터가 없으면 기존 로직대로 초기화
+      for (var student in students) {
+        final currentP = progressProvider.getProgressForStudent(student.id);
+        final hasActiveProgress = currentP.any((p) => !p.isCompleted);
+
+        _orderEntries[student.id] = _OrderEntry(
+          type: hasActiveProgress ? OrderType.extension : OrderType.none,
+          textbook: null,
+          volume: 1,
+        );
+      }
     }
 
     setState(() {
@@ -205,11 +249,16 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
       }
 
       if (mounted) {
+        // [NEW] 최종 주문 성공 시 임시 저장 데이터 삭제
+        await context.read<TemporaryOrderProvider>().deleteTemporaryOrder(
+          widget.academy.id,
+        );
+
         Navigator.pop(context); // 로딩 다이얼로그 닫기
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '${entriesToAssign.length}명의 진도 반영 및 주문 기록이 완료되었습니다.',
+              '${entriesToAssign.length}명의 진도 반영 및 주문 기록이 완료되었습니다. (임시 저장 초기화됨)',
             ),
           ),
         );
@@ -217,6 +266,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
         setState(() {
           _isInitialized = false; // 진도 정보를 다시 불러오기 위해 초기화 플래그 리셋
           _orderEntries.clear(); // 현재 선택 목록 초기화
+          _isManualEdit = false;
         });
       }
     } catch (e) {
@@ -225,6 +275,93 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('할당 중 오류: $e')));
+      }
+    }
+  }
+
+  /// [NEW] 임시 저장 실행
+  Future<void> _handleSaveTemporary() async {
+    final tempProvider = context.read<TemporaryOrderProvider>();
+
+    final items = _orderEntries.entries.map((e) {
+      return TemporaryOrderItem(
+        studentId: e.key,
+        type: e.value.type.name,
+        textbookId: e.value.textbook?.id,
+        textbookName: e.value.textbook?.name,
+        volume: e.value.volume,
+      );
+    }).toList();
+
+    final tempOrder = TemporaryOrderModel(
+      academyId: widget.academy.id,
+      ownerId: widget.academy.ownerId,
+      items: items,
+      message: _messageController.text,
+      updatedAt: DateTime.now(),
+    );
+
+    final success = await tempProvider.saveTemporaryOrder(tempOrder);
+
+    if (mounted) {
+      if (success) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('현재 입력 상태가 임시 저장되었습니다.')));
+      } else {
+        final errorMsg = tempProvider.errorMessage ?? '알 수 없는 오류가 발생했습니다.';
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red),
+                SizedBox(width: 8),
+                Text('임시 저장 실패'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('임시 저장 중 오류가 발생했습니다. 아래 내용을 복사하여 보내주세요.'),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  width: double.maxFinite,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: SelectableText(
+                    errorMsg,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: errorMsg));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('에러 내용이 복사되었습니다.')),
+                  );
+                },
+                icon: const Icon(Icons.copy, size: 18),
+                label: const Text('에러 복사'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('닫기'),
+              ),
+            ],
+          ),
+        );
       }
     }
   }
@@ -1240,24 +1377,45 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _handleOrderComplete,
-              icon: const Icon(Icons.check_circle),
-              label: const Text(
-                '진도 반영 및 주문 (이력 기록)',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _handleSaveTemporary,
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('임시 저장'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.blue,
+                    side: const BorderSide(color: Colors.blue),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton.icon(
+                  onPressed: _handleOrderComplete,
+                  icon: const Icon(Icons.check_circle),
+                  label: const Text(
+                    '진도 반영 및 주문',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

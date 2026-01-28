@@ -11,6 +11,7 @@ import 'providers/progress_provider.dart';
 import 'providers/attendance_provider.dart';
 import 'providers/order_provider.dart';
 import 'providers/schedule_provider.dart';
+import 'package:baduk_textbook_manager/providers/temporary_order_provider.dart';
 import 'utils/seed_data.dart';
 
 import 'screens/login_screen.dart';
@@ -44,6 +45,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AttendanceProvider()),
         ChangeNotifierProvider(create: (_) => OrderProvider()),
         ChangeNotifierProvider(create: (_) => ScheduleProvider()),
+        ChangeNotifierProvider(create: (_) => TemporaryOrderProvider()),
       ],
 
       child: MaterialApp(

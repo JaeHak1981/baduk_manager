@@ -12,6 +12,16 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'developer';
     }
 
+    // 학원 소속 멤버십 또는 소유권 확인 (데이터 조회 시)
+    function isMember(acaId) {
+      let userDoc = /databases/$(database)/documents/users/$(request.auth.uid);
+      let academyDoc = /databases/$(database)/documents/academies/$(acaId);
+      return isAuthenticated() && acaId != null && (
+        (exists(userDoc) && get(userDoc).data.academyId == acaId) ||
+        (exists(academyDoc) && get(academyDoc).data.ownerId == request.auth.uid)
+      );
+    }
+
     // users 컬렉션: 본인 정보만 접근 가능 (개발자는 전체 조회 가능)
     match /users/{userId} {
       allow create: if isAuthenticated() && request.auth.uid == userId;
@@ -72,6 +82,35 @@ service cloud.firestore {
         request.resource.data.ownerId == request.auth.uid || 
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.academyId == academyId) ||
+        isDeveloper()
+      );
+    }
+
+    // educationReports 컬렉션: 소유자, 멤버(선생님), 개발자 접근 가능
+    match /educationReports/{reportId} {
+      allow read: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid || 
+        isMember(resource.data.academyId) || 
+        isDeveloper()
+      );
+      allow create, update, delete: if isAuthenticated() && (
+        request.resource.data.ownerId == request.auth.uid || 
+        isMember(request.resource.data.academyId) || 
+        isDeveloper()
+      );
+    }
+
+    // commentTemplates 컬렉션: 소유자, 멤버(선생님), 개발자 접근 가능
+    match /commentTemplates/{templateId} {
+      allow read: if isAuthenticated() && (
+        resource.data.academyId == 'system' || // 시스템 공용 템플릿
+        resource.data.ownerId == request.auth.uid || 
+        isMember(resource.data.academyId) || 
+        isDeveloper()
+      );
+      allow create, update, delete: if isAuthenticated() && (
+        request.resource.data.ownerId == request.auth.uid || 
+        isMember(request.resource.data.academyId) || 
         isDeveloper()
       );
     }

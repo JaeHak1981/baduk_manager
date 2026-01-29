@@ -369,37 +369,40 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     }
   }
 
-  /// 저장 전 현재 교재 목록 부분을 {items} 태그로 치환
+  /// 저장 전 현재 교재 목록, 월, 학원명을 템플릿 태그로 치환
   String _convertToTemplate(String message, String currentItemsText) {
-    if (message.contains('{items}')) return message;
+    String template = message;
 
-    // 공백 및 줄바꿈 차이 무시를 위한 처리
-    final normalizedMessage = message.trim();
-    final normalizedItems = currentItemsText.trim();
+    // 1. {items} 치환 (교재 목록)
+    if (!template.contains('{items}')) {
+      final normalizedItems = currentItemsText.trim();
+      final header = '[현재 주문 내역]';
+      final itemsWithHeader = '$header\n$normalizedItems';
 
-    // 1. [현재 주문 내역] 헤더와 함께 있는 경우 찾기
-    final header = '[현재 주문 내역]';
-    if (normalizedMessage.contains(header) &&
-        normalizedMessage.contains(normalizedItems)) {
-      // 헤더부터 아이템 끝까지를 {items}로 치환 시도
-      // 좀 더 단순하게, 아이템 블록을 {items}로 바꾸고 주변 헤더는 유지함
-      if (message.contains(normalizedItems)) {
-        String result = message.replaceFirst(normalizedItems, '{items}');
-        // 바로 앞의 헤더도 포함되어 있다면 함께 치환하거나 {items}가 헤더를 포함하도록 유도
-        final itemsWithHeader = '$header\n$normalizedItems';
-        if (message.contains(itemsWithHeader)) {
-          return message.replaceFirst(itemsWithHeader, '{items}');
+      if (normalizedItems.isNotEmpty) {
+        if (template.contains(itemsWithHeader)) {
+          template = template.replaceFirst(itemsWithHeader, '{items}');
+        } else if (template.contains(normalizedItems)) {
+          template = template.replaceFirst(normalizedItems, '{items}');
         }
-        return result;
       }
     }
 
-    // 2. 헤더 없이 내용만 있는 경우
-    if (normalizedItems.isNotEmpty && message.contains(normalizedItems)) {
-      return message.replaceFirst(normalizedItems, '{items}');
+    // 2. {month} 치환 (현재 월 자동 태깅)
+    // 예: "1월" -> "{month}월"
+    // 단순 replaceAll 사용 (11월 등과의 충돌 주의 필요하나, 사용성 편의를 위해 적용)
+    final now = DateTime.now();
+    final monthStr = '${now.month}월';
+    if (template.contains(monthStr)) {
+      template = template.replaceAll(monthStr, '{month}월');
     }
 
-    return message;
+    // 3. {academyName} 치환 (학원명 자동 태깅)
+    if (template.contains(widget.academy.name)) {
+      template = template.replaceAll(widget.academy.name, '{academyName}');
+    }
+
+    return template;
   }
 
   /// 교재 주문 내역 (목록 팝업)
@@ -893,19 +896,34 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
 
     // 2. 템플릿 적용 로직
     String finalMessage = '';
+    final now = DateTime.now();
+
     if (latestAcademy.customMessageTemplate != null &&
         latestAcademy.customMessageTemplate!.isNotEmpty) {
       finalMessage = latestAcademy.customMessageTemplate!;
-      // {items} 태그가 있으면 교재 목록으로 치환
+
+      // {items} 태그 치환
       if (finalMessage.contains('{items}')) {
         finalMessage = finalMessage.replaceAll('{items}', itemsText);
       } else {
         // 태그가 없으면 현재 메시지 끝에 교재 목록을 강제로 덧붙임
         finalMessage = '$finalMessage\n\n[현재 주문 내역]\n$itemsText';
       }
+
+      // {month} 태그 치환 (자동 월 표기)
+      if (finalMessage.contains('{month}')) {
+        finalMessage = finalMessage.replaceAll('{month}', now.month.toString());
+      }
+
+      // {academyName} 태그 치환
+      if (finalMessage.contains('{academyName}')) {
+        finalMessage = finalMessage.replaceAll(
+          '{academyName}',
+          latestAcademy.name,
+        );
+      }
     } else {
       // 템플릿이 없는 경우 기본 생성
-      final now = DateTime.now();
       finalMessage =
           '안녕하세요. [${latestAcademy.name}] ${now.month}월 교재 주문 내역입니다.\n\n[현재 주문 내역]\n$itemsText';
     }

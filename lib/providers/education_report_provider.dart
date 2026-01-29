@@ -110,6 +110,7 @@ class EducationReportProvider with ChangeNotifier {
 
     return EducationReportModel(
       id: const Uuid().v4(),
+
       academyId: academyId,
       ownerId: ownerId,
       studentId: studentId,

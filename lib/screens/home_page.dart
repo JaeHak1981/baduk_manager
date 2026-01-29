@@ -11,6 +11,7 @@ import 'student_list_screen.dart';
 import 'textbook_center_screen.dart';
 import 'textbook_order_screen.dart';
 import 'attendance_tab_screen.dart';
+import 'education_report_screen.dart';
 import '../providers/progress_provider.dart';
 import '../models/textbook_model.dart';
 import 'components/enrollment_statistics_dialog.dart';
@@ -692,6 +693,28 @@ class _AcademySummaryCard extends StatelessWidget {
                         ),
                         side: BorderSide(color: Colors.orange.shade300),
                         foregroundColor: Colors.orange.shade700,
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                EducationReportScreen(academy: academy),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.assignment_outlined, size: 16),
+                      label: const Text('통지표'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        minimumSize: const Size(0, 32),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        side: BorderSide(color: Colors.purple.shade300),
+                        foregroundColor: Colors.purple.shade700,
                       ),
                     ),
                   ],

@@ -44,18 +44,22 @@ class RadarChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = min(size.width, size.height) / 2 * 0.8;
+    final radius = min(size.width, size.height) / 2 * 0.75;
     final angleStep = (2 * pi) / 5;
 
     final labels = ['집중력', '응용력', '정확도', '과제수행', '창의성'];
 
-    // 1. 가이드 라인 (그리드) 그리기
+    // 1. 배경 그리드 (다각형 쉐이드)
     final gridPaint = Paint()
-      ..color = Colors.grey.withOpacity(0.2)
+      ..color = Colors.indigo.withOpacity(0.03)
+      ..style = PaintingStyle.fill;
+
+    final gridStrokePaint = Paint()
+      ..color = Colors.indigo.withOpacity(0.1)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
 
-    for (var i = 1; i <= 5; i++) {
+    for (var i = 5; i >= 1; i--) {
       final r = radius * (i / 5);
       final path = Path();
       for (var j = 0; j < 5; j++) {
@@ -70,37 +74,24 @@ class RadarChartPainter extends CustomPainter {
           path.lineTo(point.dx, point.dy);
       }
       path.close();
-      canvas.drawPath(path, gridPaint);
+      if (i % 2 == 0) canvas.drawPath(path, gridPaint);
+      canvas.drawPath(path, gridStrokePaint);
     }
 
-    // 축 라인 및 라벨
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    // 축 라인
     for (var i = 0; i < 5; i++) {
       final angle = i * angleStep - pi / 2;
-      final outerPoint = Offset(
-        center.dx + radius * cos(angle),
-        center.dy + radius * sin(angle),
-      );
-      canvas.drawLine(center, outerPoint, gridPaint);
-
-      // 라벨 그리기
-      textPainter.text = TextSpan(
-        text: labels[i],
-        style: const TextStyle(
-          color: Colors.black54,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
+      canvas.drawLine(
+        center,
+        Offset(
+          center.dx + radius * cos(angle),
+          center.dy + radius * sin(angle),
         ),
+        gridStrokePaint,
       );
-      textPainter.layout();
-      final labelOffset = Offset(
-        center.dx + (radius + 15) * cos(angle) - textPainter.width / 2,
-        center.dy + (radius + 15) * sin(angle) - textPainter.height / 2,
-      );
-      textPainter.paint(canvas, labelOffset);
     }
 
-    // 2. 과거 데이터 (있을 경우) 그리기 - 연한 회색/점선 느낌
+    // 2. 과거 데이터 (있을 경우)
     if (previousScores != null) {
       _drawScorePath(
         canvas,
@@ -108,31 +99,107 @@ class RadarChartPainter extends CustomPainter {
         radius,
         angleStep,
         previousScores!,
-        Colors.grey.withOpacity(0.3),
+        Colors.grey.withOpacity(0.2),
         isFilled: true,
       );
     }
 
-    // 3. 현재 데이터 그리기 - 메인 색상
-    _drawScorePath(
-      canvas,
-      center,
-      radius,
-      angleStep,
-      scores,
-      Colors.purple.withOpacity(0.6),
-      isFilled: true,
-    );
-    _drawScorePath(
-      canvas,
-      center,
-      radius,
-      angleStep,
-      scores,
-      Colors.purple,
-      isFilled: false,
-      strokeWidth: 2,
-    );
+    // 3. 현재 데이터 (그라데이션 필 및 강조)
+    final values = [
+      scores.focus,
+      scores.application,
+      scores.accuracy,
+      scores.task,
+      scores.creativity,
+    ];
+    final scorePath = Path();
+    for (var i = 0; i < 5; i++) {
+      final angle = i * angleStep - pi / 2;
+      final value = (values[i] / 100.0).clamp(0.1, 1.0);
+      final point = Offset(
+        center.dx + radius * value * cos(angle),
+        center.dy + radius * value * sin(angle),
+      );
+      if (i == 0)
+        scorePath.moveTo(point.dx, point.dy);
+      else
+        scorePath.lineTo(point.dx, point.dy);
+    }
+    scorePath.close();
+
+    // 그라데이션 필 (농도 대폭 축소: 0.3/0.2 -> 0.15/0.1)
+    final fillPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [Colors.indigo.withOpacity(0.15), Colors.teal.withOpacity(0.1)],
+      ).createShader(Rect.fromCircle(center: center, radius: radius))
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(scorePath, fillPaint);
+
+    // 스트로크 강조 (더 연하게: 2.0 -> 1.5, 0.5 -> 0.25)
+    final strokePaint = Paint()
+      ..color = Colors.indigo.withOpacity(0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(scorePath, strokePaint);
+
+    // 데이터 포인트 (점)
+    final pointPaint = Paint()..color = Colors.white;
+    final pointShadowPaint = Paint()..color = Colors.indigo.withOpacity(0.25);
+    for (var i = 0; i < 5; i++) {
+      final angle = i * angleStep - pi / 2;
+      final value = (values[i] / 100.0).clamp(0.1, 1.0);
+      final point = Offset(
+        center.dx + radius * value * cos(angle),
+        center.dy + radius * value * sin(angle),
+      );
+      canvas.drawCircle(point, 3, pointShadowPaint);
+      canvas.drawCircle(point, 1.5, pointPaint);
+    }
+
+    // 4. 라벨 (Chip 스타일)
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    for (var i = 0; i < 5; i++) {
+      final angle = i * angleStep - pi / 2;
+
+      textPainter.text = TextSpan(
+        text: labels[i],
+        style: TextStyle(
+          color: Colors.indigo.shade900.withOpacity(0.6),
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+      textPainter.layout();
+
+      final labelRadius = radius + 25;
+      final labelCenter = Offset(
+        center.dx + labelRadius * cos(angle),
+        center.dy + labelRadius * sin(angle),
+      );
+
+      // Chip 배경 (더 투명하게: 0.7 -> 0.15)
+      final chipRect = Rect.fromCenter(
+        center: labelCenter,
+        width: textPainter.width + 16,
+        height: textPainter.height + 8,
+      );
+      final chipPaint = Paint()
+        ..color = Colors.indigo.withOpacity(0.15)
+        ..style = PaintingStyle.fill;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(chipRect, const Radius.circular(12)),
+        chipPaint,
+      );
+
+      // 텍스트 위치
+      final textOffset = Offset(
+        labelCenter.dx - textPainter.width / 2,
+        labelCenter.dy - textPainter.height / 2,
+      );
+      textPainter.paint(canvas, textOffset);
+    }
   }
 
   void _drawScorePath(
@@ -143,39 +210,28 @@ class RadarChartPainter extends CustomPainter {
     AchievementScores s,
     Color color, {
     bool isFilled = true,
-    double strokeWidth = 1,
   }) {
     final values = [s.focus, s.application, s.accuracy, s.task, s.creativity];
     final path = Path();
-
     for (var i = 0; i < 5; i++) {
       final angle = i * angleStep - pi / 2;
-      final value = values[i] / 100.0;
+      final value = (values[i] / 100.0).clamp(0.1, 1.0);
       final point = Offset(
         center.dx + radius * value * cos(angle),
         center.dy + radius * value * sin(angle),
       );
-
       if (i == 0)
         path.moveTo(point.dx, point.dy);
       else
         path.lineTo(point.dx, point.dy);
     }
     path.close();
-
     final paint = Paint()
       ..color = color
-      ..style = isFilled ? PaintingStyle.fill : PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
+      ..style = isFilled ? PaintingStyle.fill : PaintingStyle.stroke;
     canvas.drawPath(path, paint);
   }
 
   @override
-  bool shouldRepaint(covariant RadarChartPainter oldDelegate) {
-    return oldDelegate.scores != scores ||
-        oldDelegate.previousScores != previousScores;
-  }
+  bool shouldRepaint(covariant RadarChartPainter oldDelegate) => true;
 }

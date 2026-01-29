@@ -48,7 +48,6 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
     // 0. 학생 진도 데이터 명시적 로드 (보안 필터 포함)
     await progressProvider.loadStudentProgress(
       widget.student.id,
-      academyId: widget.academy.id,
       ownerId: widget.academy.ownerId,
     );
 

@@ -127,9 +127,12 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
       if (tempOrder.message.isNotEmpty) {
         _messageController.text = tempOrder.message;
         _isManualEdit = true;
+      } else {
+        _isManualEdit = false;
       }
     } else {
       // 2. 임시 저장 데이터가 없으면 기존 로직대로 초기화
+      _isManualEdit = false;
       for (var student in students) {
         final currentP = progressProvider.getProgressForStudent(student.id);
         final hasActiveProgress = currentP.any((p) => !p.isCompleted);
@@ -297,7 +300,7 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
       academyId: widget.academy.id,
       ownerId: widget.academy.ownerId,
       items: items,
-      message: _messageController.text,
+      message: _isManualEdit ? _messageController.text : '',
       updatedAt: DateTime.now(),
     );
 
@@ -370,15 +373,30 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
   String _convertToTemplate(String message, String currentItemsText) {
     if (message.contains('{items}')) return message;
 
-    // [현재 주문 내역] 헤더를 포함한 블록 찾기
-    final itemsBlockWithHeader = '\n\n[현재 주문 내역]\n$currentItemsText';
-    if (message.contains(itemsBlockWithHeader)) {
-      return message.replaceFirst(itemsBlockWithHeader, '\n\n{items}');
+    // 공백 및 줄바꿈 차이 무시를 위한 처리
+    final normalizedMessage = message.trim();
+    final normalizedItems = currentItemsText.trim();
+
+    // 1. [현재 주문 내역] 헤더와 함께 있는 경우 찾기
+    final header = '[현재 주문 내역]';
+    if (normalizedMessage.contains(header) &&
+        normalizedMessage.contains(normalizedItems)) {
+      // 헤더부터 아이템 끝까지를 {items}로 치환 시도
+      // 좀 더 단순하게, 아이템 블록을 {items}로 바꾸고 주변 헤더는 유지함
+      if (message.contains(normalizedItems)) {
+        String result = message.replaceFirst(normalizedItems, '{items}');
+        // 바로 앞의 헤더도 포함되어 있다면 함께 치환하거나 {items}가 헤더를 포함하도록 유도
+        final itemsWithHeader = '$header\n$normalizedItems';
+        if (message.contains(itemsWithHeader)) {
+          return message.replaceFirst(itemsWithHeader, '{items}');
+        }
+        return result;
+      }
     }
 
-    // 헤더 없이 내용만 있는 경우 (또는 줄바꿈이 다른 경우 대비)
-    if (message.contains(currentItemsText.trim())) {
-      return message.replaceFirst(currentItemsText.trim(), '{items}');
+    // 2. 헤더 없이 내용만 있는 경우
+    if (normalizedItems.isNotEmpty && message.contains(normalizedItems)) {
+      return message.replaceFirst(normalizedItems, '{items}');
     }
 
     return message;
@@ -1302,6 +1320,15 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                     final success = await academyProvider.updateAcademy(
                       updatedAcademy,
                     );
+
+                    if (success) {
+                      // [핵심 수정] 문구 저장 성공 시 현재 상태를 즉시 임시 저장하고 자동 업데이트 모드로 전환
+                      setState(() {
+                        _isManualEdit = false;
+                      });
+                      await _handleSaveTemporary();
+                    }
+
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -1359,6 +1386,9 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                         setState(() {
                           _isManualEdit = false;
                         });
+                        // 초기화 후에도 임시 저장 데이터를 업데이트하여 상태 유지
+                        await _handleSaveTemporary();
+
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('기본 메시지로 초기화되었습니다.')),
                         );

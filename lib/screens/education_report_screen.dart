@@ -1095,11 +1095,16 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         .where((s) => _selectedStudentIds.contains(s.id))
         .toList();
 
-    if (selectedStudents.isEmpty) return;
-
     List<String> idsToReset = selectedStudents.map((s) => s.id).toList();
+    // 샘플 모드이거나 선택된 학생들 목록에 샘플이 없더라도 현재 샘플이 보이고 있다면 초기화 대상에 포함
+    if (selectedStudents.isEmpty || _selectedStudentIds.contains('sample')) {
+      if (!idsToReset.contains('sample')) idsToReset.add('sample');
+    }
+
+    if (idsToReset.isEmpty) return;
+
     String confirmMessage =
-        '선택된 ${selectedStudents.length}명 학생의 통지표 성분 위치와 크기를 모두 처음 기본값으로 되돌리시겠습니까?';
+        '선택된 ${idsToReset.length}명 학생의 통지표 성분 위치와 크기를 모두 처음 기본값으로 되돌리시겠습니까?';
 
     showDialog(
       context: context,
@@ -1117,7 +1122,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                 for (var id in idsToReset) {
                   _studentLayouts.remove(id);
                 }
-                _layoutVersion++; // 버전 업그레이드하여 UI 강제 Rebuild 유도
+                _layoutVersion++;
               });
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1402,7 +1407,7 @@ class _EducationReportPaper extends StatelessWidget {
   final int layoutVersion; // 추가: 강제 리빌드를 위한 버전
   final List<CommentTemplateModel> templates; // 추가: 문구 추천 데이터
 
-  const _EducationReportPaper({
+  _EducationReportPaper({
     super.key,
     required this.student,
     required this.academy,
@@ -1598,18 +1603,26 @@ class _EducationReportPaper extends StatelessWidget {
                             'radar',
                             WidgetLayout(top: t, left: l, width: w, height: h),
                           ),
-                          child: Column(
-                            children: [
-                              const Text(
-                                '[ 역량 밸런스 차트 ]',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  '[ 역량 밸런스 차트 ]',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Expanded(child: RadarChartWidget(scores: scores)),
-                            ],
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: 240,
+                                  height: 240,
+                                  child: RadarChartWidget(scores: scores),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
 
@@ -1626,78 +1639,89 @@ class _EducationReportPaper extends StatelessWidget {
                             'progress',
                             WidgetLayout(top: t, left: l, width: w, height: h),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                '[ 교재 학습 현황 ]',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              if (progressList.isEmpty)
-                                const Text(
-                                  '학습 데이터가 없습니다.',
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 12,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            alignment: Alignment.topLeft,
+                            child: SizedBox(
+                              width: 280,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    '[ 교재 학습 현황 ]',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
                                   ),
-                                )
-                              else
-                                ...progressList
-                                    .take(3)
-                                    .map(
-                                      (p) => Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 8,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
+                                  const SizedBox(height: 8),
+                                  if (progressList.isEmpty)
+                                    const Text(
+                                      '학습 데이터가 없습니다.',
+                                      style: TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 12,
+                                      ),
+                                    )
+                                  else
+                                    ...progressList
+                                        .take(3)
+                                        .map(
+                                          (p) => Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 8,
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
-                                                Text(
-                                                  '${p.textbookName} ${p.volumeNumber}권',
-                                                  style: const TextStyle(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
+                                                Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    Text(
+                                                      '${p.textbookName} ${p.volumeNumber}권',
+                                                      style: const TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      '${p.progressPercentage.toInt()}%',
+                                                      style: const TextStyle(
+                                                        fontSize: 10,
+                                                        color: Colors.indigo,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
-                                                Text(
-                                                  '${p.progressPercentage.toInt()}%',
-                                                  style: const TextStyle(
-                                                    fontSize: 10,
-                                                    color: Colors.indigo,
-                                                    fontWeight: FontWeight.bold,
+                                                const SizedBox(height: 2),
+                                                ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(2),
+                                                  child: LinearProgressIndicator(
+                                                    value:
+                                                        p.progressPercentage /
+                                                        100,
+                                                    backgroundColor:
+                                                        Colors.grey.shade200,
+                                                    color:
+                                                        Colors.indigo.shade300,
+                                                    minHeight: 3,
                                                   ),
                                                 ),
                                               ],
                                             ),
-                                            const SizedBox(height: 2),
-                                            ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(2),
-                                              child: LinearProgressIndicator(
-                                                value:
-                                                    p.progressPercentage / 100,
-                                                backgroundColor:
-                                                    Colors.grey.shade200,
-                                                color: Colors.indigo.shade300,
-                                                minHeight: 3,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                            ],
+                                          ),
+                                        )
+                                        .toList(),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
 
@@ -1714,53 +1738,61 @@ class _EducationReportPaper extends StatelessWidget {
                             'competency',
                             WidgetLayout(top: t, left: l, width: w, height: h),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                '[ 역량별 성취도 상세 ]',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            alignment: Alignment.topLeft,
+                            child: SizedBox(
+                              width: 280,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    '[ 역량별 성취도 상세 ]',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildScoreBar(
+                                    '집중력',
+                                    scores.focus,
+                                    Colors.blue.shade700,
+                                    () => _showScoreEditDialog(context),
+                                  ),
+                                  _buildScoreBar(
+                                    '응용력',
+                                    scores.application,
+                                    Colors.teal.shade600,
+                                    () => _showScoreEditDialog(context),
+                                  ),
+                                  _buildScoreBar(
+                                    '정확도',
+                                    scores.accuracy,
+                                    Colors.orange.shade700,
+                                    () => _showScoreEditDialog(context),
+                                  ),
+                                  _buildScoreBar(
+                                    '과제수행',
+                                    scores.task,
+                                    Colors.purple.shade600,
+                                    () => _showScoreEditDialog(context),
+                                  ),
+                                  _buildScoreBar(
+                                    '창의성',
+                                    scores.creativity,
+                                    Colors.pink.shade600,
+                                    () => _showScoreEditDialog(context),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 8),
-                              _buildScoreBar(
-                                '집중력',
-                                scores.focus,
-                                Colors.blue.shade700,
-                                () => _showScoreEditDialog(context),
-                              ),
-                              _buildScoreBar(
-                                '응용력',
-                                scores.application,
-                                Colors.teal.shade600,
-                                () => _showScoreEditDialog(context),
-                              ),
-                              _buildScoreBar(
-                                '정확도',
-                                scores.accuracy,
-                                Colors.orange.shade700,
-                                () => _showScoreEditDialog(context),
-                              ),
-                              _buildScoreBar(
-                                '과제수행',
-                                scores.task,
-                                Colors.purple.shade600,
-                                () => _showScoreEditDialog(context),
-                              ),
-                              _buildScoreBar(
-                                '창의성',
-                                scores.creativity,
-                                Colors.pink.shade600,
-                                () => _showScoreEditDialog(context),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
 
                       // 종합 의견
                       ResizableDraggableWrapper(
+                        key: ValueKey('comment_$layoutVersion'),
                         initialTop: layouts['comment']?.top ?? 300,
                         initialLeft: layouts['comment']?.left ?? 0,
                         initialWidth: layouts['comment']?.width ?? 536,

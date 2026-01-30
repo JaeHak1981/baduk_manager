@@ -225,6 +225,7 @@ class CommentTemplateModel {
   final String category; // 칭찬, 지도, 성실 등
   final String content; // {{name}}, {{textbook}} 태그 포함 가능
   final bool isCustom; // 사용자가 직접 추가한 것인지 여부
+  final int? level; // 수준 (1: 입문/기초, 2: 초급, 3: 중고급)
 
   CommentTemplateModel({
     required this.id,
@@ -233,6 +234,7 @@ class CommentTemplateModel {
     required this.category,
     required this.content,
     this.isCustom = false,
+    this.level,
   });
 
   Map<String, dynamic> toFirestore() {
@@ -243,6 +245,7 @@ class CommentTemplateModel {
       'category': category,
       'content': content,
       'isCustom': isCustom,
+      'level': level,
     };
   }
 
@@ -257,6 +260,7 @@ class CommentTemplateModel {
       category: data['category'] as String,
       content: data['content'] as String,
       isCustom: data['isCustom'] as bool? ?? false,
+      level: data['level'] as int?,
     );
   }
 }

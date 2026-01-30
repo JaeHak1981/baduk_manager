@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/academy_model.dart';
@@ -265,13 +266,15 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                   final textbookNames = progress
                       .map((p) => p.textbookName)
                       .toList();
+                  final volumes = progress.map((p) => p.volumeNumber).toList();
 
                   _customComments[student
                       .id] = ReportCommentUtils.autoGenerateComment(
                     studentName: student.name,
                     scores: _customScores[student.id] ?? AchievementScores(),
                     textbookNames: textbookNames,
-                    templates: _getSampleTemplates(), // 실제로는 서버에서 로드한 템플릿 사용
+                    volumes: volumes,
+                    templates: _getSampleTemplates(),
                   );
                 }
               });
@@ -314,7 +317,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                   color: _isPreviewMode ? Colors.indigo : null,
                 ),
                 Text(
-                  _isPreviewMode ? '편집 모드로' : '결과 미리보기',
+                  '통지표 미리보기',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
@@ -646,6 +649,9 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                               final textbookNames = progress
                                                   .map((p) => p.textbookName)
                                                   .toList();
+                                              final volumes = progress
+                                                  .map((p) => p.volumeNumber)
+                                                  .toList();
 
                                               setState(() {
                                                 _customComments[item.id] =
@@ -657,6 +663,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                                           AchievementScores(),
                                                       textbookNames:
                                                           textbookNames,
+                                                      volumes: volumes,
                                                       templates:
                                                           _getSampleTemplates(),
                                                     );
@@ -872,7 +879,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                '집중 미리보기 (좌우로 넘겨서 확인)',
+                '집중 미리보기 (좌우 방향키 또는 화살표 버튼 사용)',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               Text(
@@ -883,118 +890,198 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
           ),
         ),
         Expanded(
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: displayItems.length,
-            itemBuilder: (context, index) {
-              final item = displayItems[index];
-              final reportKey = _reportKeys.putIfAbsent(
-                item.id,
-                () => GlobalKey(),
-              );
+          child: KeyboardListener(
+            focusNode: FocusNode()..requestFocus(),
+            onKeyEvent: (KeyEvent event) {
+              if (event is KeyDownEvent) {
+                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                  _pageController.previousPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                  _pageController.nextPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                }
+              }
+            },
+            child: Stack(
+              children: [
+                PageView.builder(
+                  controller: _pageController,
+                  itemCount: displayItems.length,
+                  itemBuilder: (context, index) {
+                    final item = displayItems[index];
+                    final reportKey = _reportKeys.putIfAbsent(
+                      item.id,
+                      () => GlobalKey(),
+                    );
 
-              final isSample = item.id == 'sample';
-              final progressProvider = context.read<ProgressProvider>();
-              final progressList = isSample
-                  ? [
-                      StudentProgressModel(
-                        id: 'dummy',
-                        studentId: 'sample',
-                        academyId: widget.academy.id,
-                        ownerId: widget.academy.ownerId,
-                        textbookId: 'dummy',
-                        textbookName: '싱크탱크 바둑 1권',
-                        volumeNumber: 1,
-                        totalVolumes: 4,
-                        startDate: DateTime.now(),
-                        updatedAt: DateTime.now(),
-                      ),
-                    ]
-                  : progressProvider.getProgressForStudent(item.id);
+                    final isSample = item.id == 'sample';
+                    final progressProvider = context.read<ProgressProvider>();
+                    final progressList = isSample
+                        ? [
+                            StudentProgressModel(
+                              id: 'dummy',
+                              studentId: 'sample',
+                              academyId: widget.academy.id,
+                              ownerId: widget.academy.ownerId,
+                              textbookId: 'dummy',
+                              textbookName: '싱크탱크 바둑 1권',
+                              volumeNumber: 1,
+                              totalVolumes: 4,
+                              startDate: DateTime.now(),
+                              updatedAt: DateTime.now(),
+                            ),
+                          ]
+                        : progressProvider.getProgressForStudent(item.id);
 
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(40),
-                child: Center(
-                  child: RepaintBoundary(
-                    key: reportKey,
-                    child: _EducationReportPaper(
-                      student: item,
-                      academy: widget.academy,
-                      progressList: progressList,
-                      academyName:
-                          _customAcademyNames[item.id] ?? widget.academy.name,
-                      reportTitle: _customReportTitles[item.id] ?? '수강생 학습 통지표',
-                      reportDate:
-                          _customReportDate ??
-                          DateFormat('yyyy. MM. dd').format(DateTime.now()),
-                      studentLevel: _customStudentLevels[item.id] ?? '급수 미정',
-                      showLevel: _showLevel,
-                      showRadarChart: _showRadarChart,
-                      showProgress: _showProgress,
-                      showCompetency: _showCompetency,
-                      scores: _customScores[item.id] ?? AchievementScores(),
-                      teacherComment:
-                          _customComments[item.id] ??
-                          '(의견을 입력하거나 자동생성 버튼을 누르세요)',
-                      onAcademyNameChanged: (val) =>
-                          setState(() => _customAcademyNames[item.id] = val),
-                      onReportTitleChanged: (val) =>
-                          setState(() => _customReportTitles[item.id] = val),
-                      onReportDateChanged: (val) =>
-                          setState(() => _customReportDate = val),
-                      onLevelChanged: (val) =>
-                          setState(() => _customStudentLevels[item.id] = val),
-                      onScoresChanged: (val) =>
-                          setState(() => _customScores[item.id] = val),
-                      onCommentChanged: (val) =>
-                          setState(() => _customComments[item.id] = val),
-                      onOpenCommentPicker: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          builder: (context) => CommentGridPicker(
-                            templates: _getSampleTemplates(),
-                            onSelected: (content) {
+                    return SingleChildScrollView(
+                      padding: const EdgeInsets.all(40),
+                      child: Center(
+                        child: RepaintBoundary(
+                          key: reportKey,
+                          child: _EducationReportPaper(
+                            student: item,
+                            academy: widget.academy,
+                            progressList: progressList,
+                            academyName:
+                                _customAcademyNames[item.id] ??
+                                widget.academy.name,
+                            reportTitle:
+                                _customReportTitles[item.id] ?? '수강생 학습 통지표',
+                            reportDate:
+                                _customReportDate ??
+                                DateFormat(
+                                  'yyyy. MM. dd',
+                                ).format(DateTime.now()),
+                            studentLevel:
+                                _customStudentLevels[item.id] ?? '급수 미정',
+                            showLevel: _showLevel,
+                            showRadarChart: _showRadarChart,
+                            showProgress: _showProgress,
+                            showCompetency: _showCompetency,
+                            scores:
+                                _customScores[item.id] ?? AchievementScores(),
+                            teacherComment:
+                                _customComments[item.id] ??
+                                '(의견을 입력하거나 자동생성 버튼을 누르세요)',
+                            onAcademyNameChanged: (val) => setState(
+                              () => _customAcademyNames[item.id] = val,
+                            ),
+                            onReportTitleChanged: (val) => setState(
+                              () => _customReportTitles[item.id] = val,
+                            ),
+                            onReportDateChanged: (val) =>
+                                setState(() => _customReportDate = val),
+                            onLevelChanged: (val) => setState(
+                              () => _customStudentLevels[item.id] = val,
+                            ),
+                            onScoresChanged: (val) =>
+                                setState(() => _customScores[item.id] = val),
+                            onCommentChanged: (val) =>
+                                setState(() => _customComments[item.id] = val),
+                            onOpenCommentPicker: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                builder: (context) => CommentGridPicker(
+                                  templates: _getSampleTemplates(),
+                                  onSelected: (content) {
+                                    setState(() {
+                                      _customComments[item.id] = content;
+                                    });
+                                  },
+                                ),
+                              );
+                            },
+                            onRerollComment: () {
+                              final progress = progressProvider
+                                  .getProgressForStudent(item.id);
+                              final textbookNames = progress
+                                  .map((p) => p.textbookName)
+                                  .toList();
+                              final volumes = progress
+                                  .map((p) => p.volumeNumber)
+                                  .toList();
+
                               setState(() {
-                                _customComments[item.id] = content;
+                                _customComments[item.id] =
+                                    ReportCommentUtils.autoGenerateComment(
+                                      studentName: item.name,
+                                      scores:
+                                          _customScores[item.id] ??
+                                          AchievementScores(),
+                                      textbookNames: textbookNames,
+                                      volumes: volumes,
+                                      templates: _getSampleTemplates(),
+                                    );
+                              });
+                            },
+                            isLayoutEditing: _isLayoutEditing,
+                            layouts: _studentLayouts[item.id] ?? {},
+                            onLayoutChanged: (widgetId, layout) {
+                              setState(() {
+                                _studentLayouts[item.id] ??= {};
+                                _studentLayouts[item.id]![widgetId] = layout;
                               });
                             },
                           ),
-                        );
-                      },
-                      onRerollComment: () {
-                        final progress = progressProvider.getProgressForStudent(
-                          item.id,
-                        );
-                        final textbookNames = progress
-                            .map((p) => p.textbookName)
-                            .toList();
-
-                        setState(() {
-                          _customComments[item
-                              .id] = ReportCommentUtils.autoGenerateComment(
-                            studentName: item.name,
-                            scores:
-                                _customScores[item.id] ?? AchievementScores(),
-                            textbookNames: textbookNames,
-                            templates: _getSampleTemplates(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                // 왼쪽 화살표
+                Positioned(
+                  left: 20,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new),
+                        onPressed: () {
+                          _pageController.previousPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
                           );
-                        });
-                      },
-                      isLayoutEditing: _isLayoutEditing,
-                      layouts: _studentLayouts[item.id] ?? {},
-                      onLayoutChanged: (widgetId, layout) {
-                        setState(() {
-                          final studentLayout = _studentLayouts[item.id] ?? {};
-                          studentLayout[widgetId] = layout;
-                          _studentLayouts[item.id] = studentLayout;
-                        });
-                      },
+                        },
+                      ),
                     ),
                   ),
                 ),
-              );
-            },
+                // 오른쪽 화살표
+                Positioned(
+                  right: 20,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_forward_ios),
+                        onPressed: () {
+                          _pageController.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],

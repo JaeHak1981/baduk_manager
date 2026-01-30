@@ -44,15 +44,27 @@ class ReportCommentUtils {
     required String studentName,
     required AchievementScores scores,
     required List<String> textbookNames,
+    required List<int> volumes,
     List<CommentTemplateModel> templates = const [],
   }) {
     final random = Random();
     List<String> selectedFragments = [];
 
-    // 1. 학습 성취 (교재 기반)
+    // 수준 판별 (가장 높은 교재 기준)
+    int studentLevel = 1;
+    if (textbookNames.isNotEmpty && volumes.isNotEmpty) {
+      studentLevel = _determineLevel(textbookNames.first, volumes.first);
+    }
+
+    // 1. 학습 성취 (수준 및 카테고리 기반)
     final achievementTemplates = templates
-        .where((t) => t.category == '학습 성취' || t.category == '실력')
+        .where(
+          (t) =>
+              (t.category == '학습 성취' || t.category == '실력') &&
+              (t.level == null || t.level == studentLevel),
+        )
         .toList();
+
     if (achievementTemplates.isNotEmpty) {
       selectedFragments.add(
         _processTemplate(
@@ -63,11 +75,21 @@ class ReportCommentUtils {
         ),
       );
     } else {
-      // 기본 문구 (데이터가 없을 때)
+      // 기본 문구 (데이터가 없을 때 수준별 대응)
       if (textbookNames.isNotEmpty) {
-        selectedFragments.add(
-          "${textbookNames.first} 과정을 통해 바둑의 핵심 원리를 체계적으로 학습하고 있습니다.",
-        );
+        if (studentLevel == 1) {
+          selectedFragments.add(
+            "${textbookNames.first} 과정을 통해 바둑의 기초 규칙과 착수 금지, 따먹기 등 기본 원리를 차근차근 익히고 있습니다.",
+          );
+        } else if (studentLevel == 2) {
+          selectedFragments.add(
+            "${textbookNames.first} 학습을 통해 초급 전술과 수읽기의 기초를 다지며 실전 능력을 키워가고 있습니다.",
+          );
+        } else {
+          selectedFragments.add(
+            "${textbookNames.first} 과정을 통해 고급 행마와 사활, 복합적인 수읽기 전략을 깊이 있게 연구하고 있습니다.",
+          );
+        }
       }
     }
 
@@ -141,5 +163,22 @@ class ReportCommentUtils {
       result = result.replaceAll('{{textbook}}', '배우고 있는 교재');
     }
     return result;
+  }
+
+  /// 교재 명칭과 권수를 바탕으로 학생의 기술 수준 판별
+  static int _determineLevel(String textbookName, int volume) {
+    // 수상전, 사활은 1권이라도 중고급(Level 3)으로 간주
+    if (textbookName.contains('수상전') || textbookName.contains('사활')) {
+      return 3;
+    }
+
+    // 일반 교재 기준
+    if (volume == 1) {
+      return 1; // 입문/기초
+    } else if (volume >= 2 && volume <= 5) {
+      return 2; // 초급/실전
+    } else {
+      return 3; // 중고급 (6권 이상)
+    }
   }
 }

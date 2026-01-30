@@ -15,17 +15,46 @@ import 'package:universal_html/html.dart' as html;
 
 class PrintingService {
   /// 위젯을 이미지로 캡처
-  static Future<Uint8List?> captureWidgetToImage(GlobalKey key) async {
+  static Future<Uint8List?> captureWidgetToImage(
+    GlobalKey key, {
+    double? pixelRatio,
+  }) async {
     try {
       final boundary =
           key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) return null;
+      if (boundary == null) {
+        debugPrint(
+          '❌ PrintingService: RenderRepaintBoundary not found for key: $key',
+        );
+        return null;
+      }
 
-      final image = await boundary.toImage(pixelRatio: 3.0); // 고해상도 캡처
+      // 웹 환경에서는 고해상도(3.0) 캡처 시 메모리 부족으로 멈춤 현상이 발생하기 쉬움
+      // 명시적으로 전달되지 않았을 경우 웹은 2.0, 그 외는 3.0(고품질) 사용
+      final effectiveRatio = pixelRatio ?? (kIsWeb ? 2.0 : 3.0);
+      debugPrint(
+        '📸 PrintingService: Starting toImage capture (ratio: $effectiveRatio)',
+      );
+
+      final image = await boundary.toImage(pixelRatio: effectiveRatio);
+      debugPrint(
+        '🖼️ PrintingService: Image object created (${image.width}x${image.height})',
+      );
+
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      return byteData?.buffer.asUint8List();
+      final bytes = byteData?.buffer.asUint8List();
+
+      if (bytes != null) {
+        debugPrint(
+          '✅ PrintingService: Capture successful (${bytes.length} bytes)',
+        );
+      } else {
+        debugPrint('❌ PrintingService: toByteData returned null');
+      }
+
+      return bytes;
     } catch (e) {
-      debugPrint('Error capturing widget: $e');
+      debugPrint('❌ PrintingService error capturing widget: $e');
       return null;
     }
   }

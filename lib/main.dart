@@ -13,6 +13,7 @@ import 'providers/order_provider.dart';
 import 'providers/schedule_provider.dart';
 import 'package:baduk_textbook_manager/providers/temporary_order_provider.dart';
 import 'providers/system_provider.dart';
+import 'providers/education_report_provider.dart';
 import 'utils/seed_data.dart';
 
 import 'screens/login_screen.dart';
@@ -48,6 +49,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ScheduleProvider()),
         ChangeNotifierProvider(create: (_) => TemporaryOrderProvider()),
         ChangeNotifierProvider(create: (_) => SystemProvider()),
+        ChangeNotifierProvider(create: (_) => EducationReportProvider()),
       ],
 
       child: MaterialApp(

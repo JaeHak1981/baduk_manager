@@ -1,6 +1,6 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/academy_model.dart';
@@ -38,15 +38,14 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
   bool _showCompetency = true; // 역량 점수바 표시 여부
   Map<String, String> _customComments = {}; // 학생 ID -> 커스텀 의견
   bool _isLayoutEditing = false; // 레이아웃 편집 모드 여부
-  Map<String, String> _customAcademyNames = {}; // 학생 ID -> 커스텀 학원명
-  Map<String, String> _customReportTitles = {}; // 학생 ID -> 커스텀 제목
   Map<String, Map<String, WidgetLayout>> _studentLayouts =
       {}; // 학생 ID -> (위젯 ID -> 레이아웃)
   final Map<String, GlobalKey> _reportKeys = {}; // 학생 ID -> GlobalKey (이미지 캡처용)
   final ScrollController _previewScrollController = ScrollController();
-  final PageController _pageController = PageController();
-  bool _isPreviewMode = false; // 집중 미리보기 모드 여부
+
   int _layoutVersion = 0; // 레이아웃 초기화 시 UI 강제 새로고침을 위한 버전
+  dynamic _capturingItem; // 현재 순차적으로 캡처 중인 학생 아이템
+  final GlobalKey _captureSlotKey = GlobalKey(); // 캡처 전용 단일 슬롯의 키
 
   @override
   void initState() {
@@ -70,8 +69,130 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
   @override
   void dispose() {
     _previewScrollController.dispose();
-    _pageController.dispose();
     super.dispose();
+  }
+
+  // --- 레이아웃 관련 메서드 ---
+
+  Widget _buildReportPaper(
+    dynamic item, {
+    bool isBackground = false,
+    bool useGlobalKey = true,
+  }) {
+    // 순차 캡처 중인 아이템이고 백그라운드 슬롯인 경우에만 특정 키(_captureSlotKey) 사용
+    final reportKey = (isBackground && _capturingItem?.id == item.id)
+        ? _captureSlotKey
+        : (useGlobalKey
+              ? _reportKeys.putIfAbsent(item.id, () => GlobalKey())
+              : null);
+
+    final progressProvider = context.read<ProgressProvider>();
+    final isSample = item.id == 'sample';
+    final progressList = isSample
+        ? [
+            StudentProgressModel(
+              id: 'dummy',
+              studentId: 'sample',
+              academyId: widget.academy.id,
+              ownerId: widget.academy.ownerId,
+              textbookId: 'dummy',
+              textbookName: '싱크탱크 바둑 1권',
+              volumeNumber: 1,
+              totalVolumes: 4,
+              startDate: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+          ]
+        : progressProvider.getProgressForStudent(item.id);
+
+    return RepaintBoundary(
+      key: reportKey,
+      child: _EducationReportPaper(
+        key: ValueKey(
+          '${isBackground ? 'bg' : 'list'}_${item.id}_$_layoutVersion',
+        ),
+        student: item,
+        academy: widget.academy,
+        progressList: progressList,
+        academyName: _customAcademyName ?? widget.academy.name,
+        reportTitle: _customReportTitle ?? '바둑 성장 레포트',
+        templates: _getSampleTemplates(),
+        reportDate:
+            _customReportDate ??
+            DateFormat('yyyy. MM. dd').format(DateTime.now()),
+        studentLevel: _customStudentLevels[item.id] ?? item.levelDisplayName,
+        showLevel: _showLevel,
+        showRadarChart: _showRadarChart,
+        showProgress: _showProgress,
+        showCompetency: _showCompetency,
+        scores: _customScores[item.id] ?? AchievementScores(),
+        teacherComment:
+            _customComments[item.id] ??
+            '이번 달은 수읽기 교재를 중점적으로 학습하며 집중력이 많이 향상되었습니다. 특히 사활 문제 풀이 속도가 빨라진 점이 고무적입니다.',
+        onAcademyNameChanged: (newName) {
+          setState(() => _customAcademyName = newName);
+        },
+        onReportTitleChanged: (newTitle) {
+          setState(() => _customReportTitle = newTitle);
+        },
+        onReportDateChanged: (newDate) {
+          setState(() => _customReportDate = newDate);
+        },
+        onLevelChanged: (newLevel) {
+          setState(() {
+            _customStudentLevels[item.id] = newLevel;
+          });
+        },
+        onScoresChanged: (newScores) {
+          setState(() {
+            _customScores[item.id] = newScores;
+          });
+        },
+        onCommentChanged: (newComment) {
+          setState(() {
+            _customComments[item.id] = newComment;
+          });
+        },
+        onOpenCommentPicker: () {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            builder: (context) => CommentGridPicker(
+              templates: _getSampleTemplates(),
+              onSelected: (content) {
+                setState(() {
+                  _customComments[item.id] = content;
+                });
+              },
+            ),
+          );
+        },
+        onRerollComment: () {
+          final progress = progressProvider.getProgressForStudent(item.id);
+          final textbookNames = progress.map((p) => p.textbookName).toList();
+          final volumes = progress.map((p) => p.volumeNumber).toList();
+
+          setState(() {
+            _customComments[item.id] = ReportCommentUtils.autoGenerateComment(
+              studentName: item.name,
+              scores: _customScores[item.id] ?? AchievementScores(),
+              textbookNames: textbookNames,
+              volumes: volumes,
+              templates: _getSampleTemplates(),
+            );
+          });
+        },
+        isLayoutEditing: _isLayoutEditing,
+        layouts: _studentLayouts[item.id] ?? {},
+        onLayoutChanged: (widgetId, layout) {
+          setState(() {
+            _studentLayouts[item.id] ??= {};
+            _studentLayouts[item.id]![widgetId] = layout;
+          });
+        },
+        layoutVersion: _layoutVersion,
+      ),
+    );
   }
 
   void _showStudentSelectionDialog() async {
@@ -236,6 +357,61 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
     );
   }
 
+  // 개별 리포트 저장용 메서드
+  Future<void> _saveIndividualReport(dynamic student) async {
+    print('🚀 Individual save started for ${student.name}');
+    setState(() {
+      _capturingItem = student;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${student.name} 통지표 이미지를 생성 중입니다...')),
+    );
+
+    // 렌더링 대기
+    await Future.delayed(Duration(milliseconds: kIsWeb ? 1500 : 800));
+
+    try {
+      final bytes = await PrintingService.captureWidgetToImage(
+        _captureSlotKey,
+        pixelRatio: kIsWeb ? 2.0 : 3.0,
+      );
+
+      if (bytes == null) {
+        print('❌ Individual capture failed for ${student.name}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('이미지 생성에 실패했습니다. 다시 시도해 주세요.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final success = await PrintingService.saveImageToFile(
+        bytes: bytes,
+        fileName:
+            '교육통지표_${student.name}_${DateFormat('yyyyMM').format(DateTime.now())}.png',
+      );
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${student.name} 통지표 저장 완료!')));
+      }
+    } catch (e) {
+      print('❌ Error in individual save: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _capturingItem = null;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -292,13 +468,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    '${selectedStudents.length}명의 종합 의견이 자동 생성되었습니다. [결과 미리보기]로 확인 후 저장해주세요.',
-                  ),
-                  action: SnackBarAction(
-                    label: '확인하기',
-                    onPressed: () {
-                      setState(() => _isPreviewMode = true);
-                    },
+                    '${selectedStudents.length}명의 종합 의견이 자동 생성되어 리스트에 반영되었습니다.',
                   ),
                 ),
               );
@@ -315,29 +485,6 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
             ),
           ),
           TextButton(
-            onPressed: () {
-              setState(() => _isPreviewMode = !_isPreviewMode);
-            },
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _isPreviewMode ? Icons.edit_note : Icons.visibility_outlined,
-                  size: 20,
-                  color: _isPreviewMode ? Colors.indigo : null,
-                ),
-                Text(
-                  '통지표 미리보기',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: _isPreviewMode ? Colors.indigo : null,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          TextButton(
             child: const Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -349,109 +496,221 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
               ],
             ),
             onPressed: () async {
-              // 1. 선택된 학생 목록 확인
-              final studentProvider = context.read<StudentProvider>();
-              final reportProvider = context.read<EducationReportProvider>();
-              final progressProvider = context.read<ProgressProvider>();
+              print('🚀 Batch save started');
+              try {
+                print('🔍 Reading providers...');
+                final studentProvider = context.read<StudentProvider>();
+                print('✅ StudentProvider OK');
+                final reportProvider = context.read<EducationReportProvider>();
+                print('✅ EducationReportProvider OK');
+                final progressProvider = context.read<ProgressProvider>();
+                print('✅ ProgressProvider OK');
 
-              final selectedStudents = studentProvider.students
-                  .where((s) => _selectedStudentIds.contains(s.id))
-                  .toList();
-
-              if (selectedStudents.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('저장할 학생을 먼저 선택해주세요.')),
+                print(
+                  '🔍 Filtering students... _selectedStudentIds: $_selectedStudentIds',
                 );
-                return;
-              }
-
-              // 2. 저장 진행 확인
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('통지표 이미지 저장'),
-                  content: Text(
-                    '${selectedStudents.length}명의 통지표를 각각 이미지 파일(PNG)로 저장하시겠습니까?\n(현재 화면에 보이는 배치 그대로 저장됩니다.)',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('취소'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('진행'),
-                    ),
-                  ],
-                ),
-              );
-
-              if (confirm != true) return;
-
-              // 3. 루프를 돌며 개별 저장
-              for (var student in selectedStudents) {
-                final key = _reportKeys[student.id];
-                if (key == null) continue;
-
-                // 웹의 경우 브라우저 팝업 차단/지연 방지를 위해 미세한 지연 추가
-                if (kIsWeb) {
-                  await Future.delayed(const Duration(milliseconds: 500));
-                }
-
-                // 스낵바나 로딩으로 현재 진행 상황 알림 (생략 가능하지만 UX상 권장)
-
-                final bytes = await PrintingService.captureWidgetToImage(key);
-                if (bytes == null) continue;
-
-                final success = await PrintingService.saveImageToFile(
-                  bytes: bytes,
-                  fileName:
-                      '교육통지표_${student.name}_${DateFormat('yyyyMM').format(DateTime.now())}.png',
-                );
-
-                if (!success && mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('${student.name} 통지표 저장에 실패했거나 취소되었습니다.'),
-                    ),
-                  );
-                  continue; // 파일 저장 실패 시 다음 학생으로 진행
-                }
-
-                // 4. DB에 리포트 데이터 저장
-                final progressList = progressProvider.getProgressForStudent(
-                  student.id,
-                );
-                final textbookIds = progressList
-                    .map((p) => p.textbookId)
+                final selectedStudents = studentProvider.students
+                    .where((s) => _selectedStudentIds.contains(s.id))
                     .toList();
 
-                final report = EducationReportModel(
-                  id: '${student.id}_${DateFormat('yyyyMM').format(DateTime.now())}',
-                  academyId: widget.academy.id,
-                  ownerId: widget.academy.ownerId,
-                  studentId: student.id,
-                  startDate: DateTime.now().subtract(
-                    const Duration(days: 30),
-                  ), // 임시: 최근 1개월
-                  endDate: DateTime.now(),
-                  textbookIds: textbookIds,
-                  scores: _customScores[student.id] ?? AchievementScores(),
-                  attendanceCount: 0, // 출결 연동은 추후 필요시 추가
-                  totalClasses: 0,
-                  teacherComment: _customComments[student.id] ?? '',
-                  createdAt: DateTime.now(),
-                  updatedAt: DateTime.now(),
-                  layouts: _studentLayouts[student.id],
+                print('👥 Found ${selectedStudents.length} student objects');
+
+                if (selectedStudents.isEmpty) {
+                  print('⚠️ No students selected. Aborting.');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('저장할 학생을 먼저 선택해주세요.')),
+                    );
+                  }
+                  return;
+                }
+
+                print('💬 Showing confirmation dialog...');
+                // 2. 저장 진행 확인
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('통지표 이미지 저장'),
+                    content: Text(
+                      '${selectedStudents.length}명의 통지표를 각각 이미지 파일(PNG)로 저장하시겠습니까?\n(현재 화면에 보이는 배치 그대로 저장됩니다.)',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('취소'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('진행'),
+                      ),
+                    ],
+                  ),
                 );
 
-                await reportProvider.saveReport(report);
-              }
+                print('💬 Confirmation result: $confirm');
 
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('선택한 학생들의 통지표 저장이 완료되었습니다.')),
+                if (confirm != true) {
+                  print('⏹️ Save cancelled by user');
+                  return;
+                }
+
+                // 3. 진행률 다이얼로그 표시
+                if (!mounted) return;
+
+                int currentCount = 0;
+                String currentName = '';
+                StateSetter? setProgressState;
+
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (dialogContext) {
+                    return StatefulBuilder(
+                      builder: (context, setDialogState) {
+                        setProgressState = setDialogState;
+                        return AlertDialog(
+                          title: const Text('통지표 저장 중...'),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const CircularProgressIndicator(),
+                              const SizedBox(height: 20),
+                              Text(
+                                '진행: $currentCount / ${selectedStudents.length}',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (currentName.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  '현재: $currentName',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ],
+                              const SizedBox(height: 12),
+                              LinearProgressIndicator(
+                                value: selectedStudents.isEmpty
+                                    ? 0
+                                    : currentCount / selectedStudents.length,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
                 );
+
+                // 4. 순차적으로 저장 처리
+                int batchSuccessCount = 0;
+                print('📦 Total students to save: ${selectedStudents.length}');
+
+                for (var student in selectedStudents) {
+                  currentCount++;
+                  currentName = student.name;
+
+                  // 1. 캡처 슬롯에 학생 할당 (오프스크린 렌더링 시작)
+                  setState(() {
+                    _capturingItem = student;
+                  });
+
+                  // 다이얼로그 상태 업데이트
+                  if (setProgressState != null) {
+                    setProgressState!(() {});
+                  }
+
+                  // 2. 렌더링 엔진에 그릴 시간 제공
+                  await Future.delayed(
+                    Duration(milliseconds: kIsWeb ? 1500 : 800),
+                  );
+
+                  try {
+                    print('📸 Capturing image for ${student.name}');
+                    final bytes = await PrintingService.captureWidgetToImage(
+                      _captureSlotKey,
+                      pixelRatio: kIsWeb ? 2.0 : 3.0,
+                    );
+
+                    if (bytes == null) {
+                      print('❌ Capture failed for ${student.name}');
+                      continue;
+                    }
+
+                    final success = await PrintingService.saveImageToFile(
+                      bytes: bytes,
+                      fileName:
+                          '교육통지표_${student.name}_${DateFormat('yyyyMM').format(DateTime.now())}.png',
+                    );
+
+                    if (success) {
+                      print('💾 Save success for ${student.name}');
+                      batchSuccessCount++;
+
+                      // DB에 리포트 데이터 저장
+                      final progressList = progressProvider
+                          .getProgressForStudent(student.id);
+                      final report = EducationReportModel(
+                        id: '${student.id}_${DateFormat('yyyyMM').format(DateTime.now())}',
+                        academyId: widget.academy.id,
+                        ownerId: widget.academy.ownerId,
+                        studentId: student.id,
+                        startDate: DateTime.now().subtract(
+                          const Duration(days: 30),
+                        ),
+                        endDate: DateTime.now(),
+                        textbookIds: progressList
+                            .map((p) => p.textbookId)
+                            .toList(),
+                        scores:
+                            _customScores[student.id] ?? AchievementScores(),
+                        attendanceCount: 0,
+                        totalClasses: 0,
+                        teacherComment: _customComments[student.id] ?? '',
+                        createdAt: DateTime.now(),
+                        updatedAt: DateTime.now(),
+                        layouts: _studentLayouts[student.id],
+                      );
+                      await reportProvider.saveReport(report);
+
+                      // 웹에서는 브라우저 처리를 위해 약간 대기
+                      if (kIsWeb) {
+                        await Future.delayed(const Duration(milliseconds: 500));
+                      }
+                    } else {
+                      print(
+                        '❌ Save failed (cancelled or error) for ${student.name}',
+                      );
+                    }
+                  } catch (e) {
+                    print(
+                      '❌ Error during batch process for ${student.name}: $e',
+                    );
+                  } finally {
+                    // 캡처 슬롯 비우기 (메모리 해제 유도)
+                    setState(() {
+                      _capturingItem = null;
+                    });
+                  }
+                }
+
+                // 5. 진행률 다이얼로그 닫기
+                if (mounted) {
+                  Navigator.of(context, rootNavigator: true).pop();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '통지표 저장 완료: $batchSuccessCount / ${selectedStudents.length}',
+                      ),
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+              } catch (e, stack) {
+                print('❌ Fatal error in batch save: $e');
+                print('❌ Stack trace: $stack');
               }
             },
           ),
@@ -513,198 +772,84 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                           ),
                         ),
                       Expanded(
-                        child: _isPreviewMode
-                            ? _buildFocusedPreview(displayItems)
-                            : SingleChildScrollView(
-                                controller: _previewScrollController,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 40,
-                                  horizontal: 20,
-                                ),
-                                child: Column(
-                                  children: displayItems.map((item) {
-                                    final reportKey = _reportKeys.putIfAbsent(
-                                      item.id,
-                                      () => GlobalKey(),
-                                    );
-
-                                    // 실제 학생인 경우 진도 데이터를 가져오고, 샘플인 경우 더미 데이터 전달
-                                    final isSample = item.id == 'sample';
-                                    final progressList = isSample
-                                        ? <StudentProgressModel>[
-                                            StudentProgressModel(
-                                              id: 'p1',
-                                              studentId: 'sample',
-                                              academyId: widget.academy.id,
-                                              ownerId: widget.academy.ownerId,
-                                              textbookId: 't1',
-                                              textbookName: '바둑 입문',
-                                              volumeNumber: 2,
-                                              totalVolumes: 4,
-                                              startDate: DateTime.now(),
-                                              updatedAt: DateTime.now(),
-                                            ),
-                                            StudentProgressModel(
-                                              id: 'p2',
-                                              studentId: 'sample',
-                                              academyId: widget.academy.id,
-                                              ownerId: widget.academy.ownerId,
-                                              textbookId: 't2',
-                                              textbookName: '사활의 기초',
-                                              volumeNumber: 1,
-                                              totalVolumes: 3,
-                                              startDate: DateTime.now(),
-                                              updatedAt: DateTime.now(),
-                                            ),
-                                          ]
-                                        : progressProvider
-                                              .getProgressForStudent(item.id)
-                                              .where((p) => !p.isCompleted)
-                                              .toList();
-
-                                    return Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 40,
-                                      ),
-                                      child: Center(
-                                        child: RepaintBoundary(
-                                          key: reportKey,
-                                          child: _EducationReportPaper(
-                                            key: ValueKey(
-                                              'report_list_${item.id}_$_layoutVersion',
-                                            ),
-                                            student: item,
-                                            academy: widget.academy,
-                                            progressList: progressList,
-                                            academyName:
-                                                _customAcademyName ??
-                                                widget.academy.name,
-                                            // ...
-                                            reportTitle:
-                                                _customReportTitle ??
-                                                '바둑 성장 레포트',
-                                            templates: _getSampleTemplates(),
-                                            reportDate:
-                                                _customReportDate ??
-                                                DateFormat(
-                                                  'yyyy년 M월',
-                                                ).format(DateTime.now()),
-                                            studentLevel:
-                                                _customStudentLevels[item.id] ??
-                                                item.levelDisplayName,
-                                            showLevel: _showLevel,
-                                            showRadarChart: _showRadarChart,
-                                            showProgress: _showProgress,
-                                            showCompetency: _showCompetency,
-                                            scores:
-                                                _customScores[item.id] ??
-                                                AchievementScores(),
-                                            teacherComment:
-                                                _customComments[item.id] ??
-                                                '이번 달은 수읽기 교재를 중점적으로 학습하며 집중력이 많이 향상되었습니다. 특히 사활 문제 풀이 속도가 빨라진 점이 고무적입니다. 다음 달에는 실전 대국에서의 형세 판단 능력을 기르는 데 집중할 예정입니다.',
-                                            onAcademyNameChanged: (newName) {
-                                              setState(
-                                                () => _customAcademyName =
-                                                    newName,
-                                              );
-                                            },
-                                            onReportTitleChanged: (newTitle) {
-                                              setState(
-                                                () => _customReportTitle =
-                                                    newTitle,
-                                              );
-                                            },
-                                            onReportDateChanged: (newDate) {
-                                              setState(
-                                                () =>
-                                                    _customReportDate = newDate,
-                                              );
-                                            },
-                                            onLevelChanged: (newLevel) {
-                                              setState(() {
-                                                _customStudentLevels[item.id] =
-                                                    newLevel;
-                                              });
-                                            },
-                                            onScoresChanged: (newScores) {
-                                              setState(() {
-                                                _customScores[item.id] =
-                                                    newScores;
-                                              });
-                                            },
-                                            onCommentChanged: (newComment) {
-                                              setState(() {
-                                                _customComments[item.id] =
-                                                    newComment;
-                                              });
-                                            },
-                                            onOpenCommentPicker: () {
-                                              showModalBottomSheet(
-                                                context: context,
-                                                isScrollControlled: true,
-                                                builder: (context) =>
-                                                    CommentGridPicker(
-                                                      templates:
-                                                          _getSampleTemplates(),
-                                                      onSelected: (content) {
-                                                        setState(() {
-                                                          _customComments[item
-                                                                  .id] =
-                                                              content;
-                                                        });
-                                                      },
-                                                    ),
-                                              );
-                                            },
-                                            onRerollComment: () {
-                                              final progress = progressProvider
-                                                  .getProgressForStudent(
-                                                    item.id,
-                                                  );
-                                              final textbookNames = progress
-                                                  .map((p) => p.textbookName)
-                                                  .toList();
-                                              final volumes = progress
-                                                  .map((p) => p.volumeNumber)
-                                                  .toList();
-
-                                              setState(() {
-                                                _customComments[item.id] =
-                                                    ReportCommentUtils.autoGenerateComment(
-                                                      studentName: item.name,
-                                                      scores:
-                                                          _customScores[item
-                                                              .id] ??
-                                                          AchievementScores(),
-                                                      textbookNames:
-                                                          textbookNames,
-                                                      volumes: volumes,
-                                                      templates:
-                                                          _getSampleTemplates(),
-                                                    );
-                                              });
-                                            },
-                                            isLayoutEditing: _isLayoutEditing,
-                                            layouts:
-                                                _studentLayouts[item.id] ?? {},
-                                            onLayoutChanged:
-                                                (widgetId, layout) {
-                                                  setState(() {
-                                                    _studentLayouts[item.id] ??=
-                                                        {};
-                                                    _studentLayouts[item
-                                                            .id]![widgetId] =
-                                                        layout;
-                                                  });
-                                                },
-                                            layoutVersion: _layoutVersion,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
+                        child: Stack(
+                          children: [
+                            // 2. 캡처 전용 단일 슬롯
+                            // 실제 페인팅이 일어나야 하므로 화면 안에 배치하되 리스트 뒤에 숨김
+                            if (_capturingItem != null)
+                              Positioned(
+                                left: 0,
+                                top: 0,
+                                child: Opacity(
+                                  opacity: 0.01, // 완전히 0이면 렌더링에서 제외될 수 있음
+                                  child: _buildReportPaper(
+                                    _capturingItem!,
+                                    isBackground: true,
+                                  ),
                                 ),
                               ),
+
+                            // 1. 실제 보여지는 영역 (항상 리스트 모드)
+                            // 캡처 슬롯 뒤에 위치시켜서 사용자에게는 보이지 않게 함
+                            SingleChildScrollView(
+                              controller: _previewScrollController,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 40,
+                                horizontal: 20,
+                              ),
+                              child: Column(
+                                children: displayItems.map((item) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 60),
+                                    child: Column(
+                                      children: [
+                                        // 개별 저장 버튼
+                                        if (item.id != 'sample')
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 12,
+                                            ),
+                                            child: ElevatedButton.icon(
+                                              onPressed: () =>
+                                                  _saveIndividualReport(item),
+                                              icon: const Icon(
+                                                Icons.download,
+                                                size: 16,
+                                              ),
+                                              label: Text(
+                                                '${item.name} 통지표만 저장',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.white,
+                                                foregroundColor: Colors.indigo,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 8,
+                                                    ),
+                                                side: const BorderSide(
+                                                  color: Colors.indigo,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        Center(
+                                          child: _buildReportPaper(
+                                            item,
+                                            useGlobalKey: true,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -952,27 +1097,9 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
 
     if (selectedStudents.isEmpty) return;
 
-    List<String> idsToReset = [];
-    String confirmMessage = '';
-
-    if (_isPreviewMode) {
-      int currentIndex = 0;
-      try {
-        if (_pageController.hasClients) {
-          currentIndex = _pageController.page?.round() ?? 0;
-        }
-      } catch (_) {}
-
-      if (currentIndex < 0 || currentIndex >= selectedStudents.length) return;
-      final student = selectedStudents[currentIndex];
-      idsToReset.add(student.id);
-      confirmMessage = '${student.name} 학생의 통지표 항목 위치와 크기를 처음 기본값으로 되돌리시겠습니까?';
-    } else {
-      // 리스트 뷰인 경우 선택된 모든 학생 초기화
-      idsToReset.addAll(selectedStudents.map((s) => s.id));
-      confirmMessage =
-          '선택된 ${selectedStudents.length}명 학생의 통지표 성분 위치와 크기를 모두 처음 기본값으로 되돌리시겠습니까?';
-    }
+    List<String> idsToReset = selectedStudents.map((s) => s.id).toList();
+    String confirmMessage =
+        '선택된 ${selectedStudents.length}명 학생의 통지표 성분 위치와 크기를 모두 처음 기본값으로 되돌리시겠습니까?';
 
     showDialog(
       context: context,
@@ -995,11 +1122,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(
-                    _isPreviewMode
-                        ? '레이아웃이 초기화되었습니다.'
-                        : '${idsToReset.length}명의 레이아웃이 초기화되었습니다.',
-                  ),
+                  content: Text('${idsToReset.length}명의 레이아웃이 초기화되었습니다.'),
                   duration: const Duration(seconds: 2),
                 ),
               );
@@ -1008,239 +1131,6 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildFocusedPreview(List<dynamic> displayItems) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-          color: Colors.indigo.shade50,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                '집중 미리보기 (좌우 방향키 또는 화살표 버튼 사용)',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              Text(
-                '총 ${displayItems.length}명 중 선택됨',
-                style: const TextStyle(fontSize: 12, color: Colors.indigo),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: KeyboardListener(
-            focusNode: FocusNode()..requestFocus(),
-            onKeyEvent: (KeyEvent event) {
-              if (event is KeyDownEvent) {
-                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                  _pageController.previousPage(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                  );
-                } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                  _pageController.nextPage(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                  );
-                }
-              }
-            },
-            child: Stack(
-              children: [
-                PageView.builder(
-                  controller: _pageController,
-                  itemCount: displayItems.length,
-                  itemBuilder: (context, index) {
-                    final item = displayItems[index];
-                    final reportKey = _reportKeys.putIfAbsent(
-                      item.id,
-                      () => GlobalKey(),
-                    );
-
-                    final isSample = item.id == 'sample';
-                    final progressProvider = context.read<ProgressProvider>();
-                    final progressList = isSample
-                        ? [
-                            StudentProgressModel(
-                              id: 'dummy',
-                              studentId: 'sample',
-                              academyId: widget.academy.id,
-                              ownerId: widget.academy.ownerId,
-                              textbookId: 'dummy',
-                              textbookName: '싱크탱크 바둑 1권',
-                              volumeNumber: 1,
-                              totalVolumes: 4,
-                              startDate: DateTime.now(),
-                              updatedAt: DateTime.now(),
-                            ),
-                          ]
-                        : progressProvider.getProgressForStudent(item.id);
-
-                    return SingleChildScrollView(
-                      padding: const EdgeInsets.all(40),
-                      child: Center(
-                        child: RepaintBoundary(
-                          key: reportKey,
-                          child: _EducationReportPaper(
-                            key: ValueKey(
-                              'report_focused_${item.id}_$_layoutVersion',
-                            ),
-                            student: item,
-                            academy: widget.academy,
-                            progressList: progressList,
-                            academyName:
-                                _customAcademyNames[item.id] ??
-                                widget.academy.name,
-                            templates: _getSampleTemplates(),
-                            reportTitle:
-                                _customReportTitles[item.id] ?? '수강생 학습 통지표',
-                            reportDate:
-                                _customReportDate ??
-                                DateFormat(
-                                  'yyyy. MM. dd',
-                                ).format(DateTime.now()),
-                            studentLevel:
-                                _customStudentLevels[item.id] ?? '급수 미정',
-                            showLevel: _showLevel,
-                            showRadarChart: _showRadarChart,
-                            showProgress: _showProgress,
-                            showCompetency: _showCompetency,
-                            scores:
-                                _customScores[item.id] ?? AchievementScores(),
-                            teacherComment:
-                                _customComments[item.id] ??
-                                '(의견을 입력하거나 자동생성 버튼을 누르세요)',
-                            onAcademyNameChanged: (val) => setState(
-                              () => _customAcademyNames[item.id] = val,
-                            ),
-                            onReportTitleChanged: (val) => setState(
-                              () => _customReportTitles[item.id] = val,
-                            ),
-                            onReportDateChanged: (val) =>
-                                setState(() => _customReportDate = val),
-                            onLevelChanged: (val) => setState(
-                              () => _customStudentLevels[item.id] = val,
-                            ),
-                            onScoresChanged: (val) =>
-                                setState(() => _customScores[item.id] = val),
-                            onCommentChanged: (val) =>
-                                setState(() => _customComments[item.id] = val),
-                            onOpenCommentPicker: () {
-                              showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                builder: (context) => CommentGridPicker(
-                                  templates: _getSampleTemplates(),
-                                  onSelected: (content) {
-                                    setState(() {
-                                      _customComments[item.id] = content;
-                                    });
-                                  },
-                                ),
-                              );
-                            },
-                            onRerollComment: () {
-                              final progress = progressProvider
-                                  .getProgressForStudent(item.id);
-                              final textbookNames = progress
-                                  .map((p) => p.textbookName)
-                                  .toList();
-                              final volumes = progress
-                                  .map((p) => p.volumeNumber)
-                                  .toList();
-
-                              final initialScores =
-                                  ReportCommentUtils.generateInitialScores(
-                                    textbookName: textbookNames.isNotEmpty
-                                        ? textbookNames.first
-                                        : '배우고 있는 교재',
-                                    volumeNumber: volumes.isNotEmpty
-                                        ? volumes.first
-                                        : 1,
-                                  );
-
-                              setState(() {
-                                _customScores[item.id] = initialScores;
-                                _customComments[item.id] =
-                                    ReportCommentUtils.autoGenerateComment(
-                                      studentName: item.name,
-                                      scores: initialScores,
-                                      textbookNames: textbookNames,
-                                      volumes: volumes,
-                                      templates: _getSampleTemplates(),
-                                    );
-                              });
-                            },
-                            isLayoutEditing: _isLayoutEditing,
-                            layouts: _studentLayouts[item.id] ?? {},
-                            onLayoutChanged: (widgetId, layout) {
-                              setState(() {
-                                _studentLayouts[item.id] ??= {};
-                                _studentLayouts[item.id]![widgetId] = layout;
-                              });
-                            },
-                            layoutVersion: _layoutVersion,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                // 왼쪽 화살표
-                Positioned(
-                  left: 20,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_new),
-                        onPressed: () {
-                          _pageController.previousPage(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-                // 오른쪽 화살표
-                Positioned(
-                  right: 20,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_forward_ios),
-                        onPressed: () {
-                          _pageController.nextPage(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -1316,7 +1206,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       CommentTemplateModel(
         id: 't1',
         category: '학습 태도',
-        content: '수업 시간 내내 높은 몰입도를 유지하며 강사님의 설명에 귀를 기울이는 자세가 매우 좋습니다.',
+        content: '수업 시간 내내 높은 몰입도를 유지하며 선생님의 설명에 귀를 기울이는 자세가 매우 좋습니다.',
       ),
       CommentTemplateModel(
         id: 't2',
@@ -1400,7 +1290,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       CommentTemplateModel(
         id: 'g1',
         category: '성장 변화',
-        content: '학기 초에 비해 바둑판을 보는 시야가 넓어졌으며 착점 시의 자신감이 크게 회복되었습니다.',
+        content: '초기 대비 바둑판을 보는 시야가 넓어졌으며 착점 시의 자신감이 크게 회복되었습니다.',
       ),
       CommentTemplateModel(
         id: 'g2',
@@ -1415,7 +1305,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       CommentTemplateModel(
         id: 'g4',
         category: '성장 변화',
-        content: '부족했던 수읽기 능력이 매일 꾸준한 연습을 통해 학년 수준을 상회할 만큼 크게 늘었습니다.',
+        content: '부족했던 수읽기 능력이 매일 꾸준한 연습을 통해 또래 수준을 상회할 만큼 크게 늘었습니다.',
       ),
       CommentTemplateModel(
         id: 'g5',
@@ -1425,7 +1315,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       CommentTemplateModel(
         id: 'g6',
         category: '성장 변화',
-        content: '기초 단계에서 중급 단계로 거침없이 도약하며 실전 실력이 비약적으로 향상된 한 학기였습니다.',
+        content: '기초 단계에서 중급 단계로 거침없이 도약하며 실전 실력이 비약적으로 향상된 기간이었습니다.',
       ),
       CommentTemplateModel(
         id: 'g7',
@@ -1457,7 +1347,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       CommentTemplateModel(
         id: 'v4',
         category: '격려',
-        content: '바둑에서 배운 \'생각하는 힘\'이 다른 학교 생활에서도 긍정적인 에너지로 발휘되길 응원합니다.',
+        content: '바둑에서 배운 \'생각하는 힘\'이 학교 생활과 일상에서도 긍정적인 에너지로 발휘되길 응원합니다.',
       ),
       CommentTemplateModel(
         id: 'v5',
@@ -1467,12 +1357,12 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       CommentTemplateModel(
         id: 'v6',
         category: '격려',
-        content: '한 학기 동안 보여준 성실함에 박수를 보내며 방학 동안에도 바둑의 즐거움을 잊지 않길 바랍니다.',
+        content: '그동안 보여준 성실함에 박수를 보내며 앞으로도 바둑의 즐거움을 잊지 않길 바랍니다.',
       ),
       CommentTemplateModel(
         id: 'v7',
         category: '격려',
-        content: '자신감을 가지고 자신의 수를 믿는다면 다음 학기에는 훨씬 더 놀라운 실력을 보여줄 것입니다.',
+        content: '자신감을 가지고 자신의 수를 믿는다면 앞으로는 훨씬 더 놀라운 실력을 보여줄 것입니다.',
       ),
       CommentTemplateModel(
         id: 'v8',

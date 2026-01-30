@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import '../../models/education_report_model.dart';
+import '../../utils/report_comment_utils.dart';
 
 class CommentGridPicker extends StatefulWidget {
   final List<CommentTemplateModel> templates;
   final Function(String) onSelected;
   final bool multiSelect; // 다중 선택 모드
+  final String? studentName;
+  final List<String>? textbookNames;
 
   const CommentGridPicker({
     super.key,
     required this.templates,
     required this.onSelected,
     this.multiSelect = false,
+    this.studentName,
+    this.textbookNames,
   });
 
   @override
@@ -37,41 +42,21 @@ class _CommentGridPickerState extends State<CommentGridPicker> {
         .toList();
 
     if (selectedTemplates.isEmpty) return '';
-    if (selectedTemplates.length == 1) return selectedTemplates.first.content;
 
-    // 카테고리별로 그룹화
-    final Map<String, List<String>> groupedByCategory = {};
-    for (final template in selectedTemplates) {
-      groupedByCategory.putIfAbsent(template.category, () => []);
-      groupedByCategory[template.category]!.add(template.content);
-    }
-
-    // 문장 조합
-    final List<String> combinedSentences = [];
-    String? previousCategory;
-
-    for (final template in selectedTemplates) {
-      final sentence = template.content;
-
-      // 카테고리가 바뀌면 전환 표현 추가
-      if (previousCategory != null && previousCategory != template.category) {
-        // 마지막 문장에 전환어 추가
-        if (combinedSentences.isNotEmpty) {
-          final transitions = ['또한', '아울러', '특히'];
-          final transition =
-              transitions[combinedSentences.length % transitions.length];
-          combinedSentences.add('$transition $sentence');
-        } else {
-          combinedSentences.add(sentence);
-        }
-      } else {
-        combinedSentences.add(sentence);
+    // 선택된 템플릿의 내용들을 리스트로 추출하되, 태그 치환 적용
+    final fragments = selectedTemplates.map((t) {
+      if (widget.studentName != null) {
+        return ReportCommentUtils.processTemplate(
+          t.content,
+          widget.studentName!,
+          widget.textbookNames ?? [],
+        );
       }
+      return t.content;
+    }).toList();
 
-      previousCategory = template.category;
-    }
-
-    return combinedSentences.join(' ');
+    // Utils의 결합 로직 사용 (마침표 처리 등 자동 수행)
+    return ReportCommentUtils.combineFragments(fragments);
   }
 
   void _showPreview() {
@@ -179,6 +164,15 @@ class _CommentGridPickerState extends State<CommentGridPicker> {
                 final template = filteredTemplates[index];
                 final isSelected = _selectedTemplateIds.contains(template.id);
 
+                // 표시용 텍스트 (태그 치환 적용)
+                final displayText = widget.studentName != null
+                    ? ReportCommentUtils.processTemplate(
+                        template.content,
+                        widget.studentName!,
+                        widget.textbookNames ?? [],
+                      )
+                    : template.content;
+
                 return InkWell(
                   onTap: () {
                     if (widget.multiSelect) {
@@ -190,7 +184,7 @@ class _CommentGridPickerState extends State<CommentGridPicker> {
                         }
                       });
                     } else {
-                      widget.onSelected(template.content);
+                      widget.onSelected(displayText);
                       Navigator.pop(context);
                     }
                   },
@@ -212,7 +206,7 @@ class _CommentGridPickerState extends State<CommentGridPicker> {
                           padding: const EdgeInsets.all(12),
                           child: Center(
                             child: Text(
-                              template.content,
+                              displayText,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: isSelected

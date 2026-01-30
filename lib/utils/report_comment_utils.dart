@@ -62,7 +62,7 @@ class ReportCommentUtils {
     final introTemplates = templates.where((t) => t.category == '인트로').toList();
     if (introTemplates.isNotEmpty) {
       introFragments.add(
-        _processTemplate(
+        processTemplate(
           introTemplates[random.nextInt(introTemplates.length)].content,
           studentName,
           textbookNames,
@@ -81,7 +81,7 @@ class ReportCommentUtils {
 
     if (achievementTemplates.isNotEmpty) {
       bodyFragments.add(
-        _processTemplate(
+        processTemplate(
           achievementTemplates[random.nextInt(achievementTemplates.length)]
               .content,
           studentName,
@@ -113,7 +113,7 @@ class ReportCommentUtils {
         .toList();
     if (attitudeTemplates.isNotEmpty) {
       bodyFragments.add(
-        _processTemplate(
+        processTemplate(
           attitudeTemplates[random.nextInt(attitudeTemplates.length)].content,
           studentName,
           textbookNames,
@@ -135,7 +135,7 @@ class ReportCommentUtils {
         .toList();
     if (etiquetteTemplates.isNotEmpty) {
       bodyFragments.add(
-        _processTemplate(
+        processTemplate(
           etiquetteTemplates[random.nextInt(etiquetteTemplates.length)].content,
           studentName,
           textbookNames,
@@ -154,7 +154,7 @@ class ReportCommentUtils {
         .toList();
     if (visionTemplates.isNotEmpty) {
       bodyFragments.add(
-        _processTemplate(
+        processTemplate(
           visionTemplates[random.nextInt(visionTemplates.length)].content,
           studentName,
           textbookNames,
@@ -170,7 +170,7 @@ class ReportCommentUtils {
         .toList();
     if (conclusionTemplates.isNotEmpty) {
       conclusionFragments.add(
-        _processTemplate(
+        processTemplate(
           conclusionTemplates[random.nextInt(conclusionTemplates.length)]
               .content,
           studentName,
@@ -192,7 +192,7 @@ class ReportCommentUtils {
     return combineFragments(finalFragments);
   }
 
-  static String _processTemplate(
+  static String processTemplate(
     String content,
     String name,
     List<String> textbooks,

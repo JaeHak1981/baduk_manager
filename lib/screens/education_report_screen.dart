@@ -159,6 +159,12 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
             isScrollControlled: true,
             builder: (context) => CommentGridPicker(
               templates: _getSampleTemplates(),
+              multiSelect: true, // 다중 선택 모드 활성화
+              studentName: item.name,
+              textbookNames: progressProvider
+                  .getProgressForStudent(item.id)
+                  .map((p) => p.textbookName)
+                  .toList(),
               onSelected: (content) {
                 setState(() {
                   _customComments[item.id] = content;
@@ -414,6 +420,10 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final studentProvider = context.watch<StudentProvider>();
+    final students = studentProvider.students;
+    final progressProvider = context.watch<ProgressProvider>();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('통지표 편집 및 미리보기'),
@@ -933,6 +943,16 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                     builder: (sheetContext) => CommentGridPicker(
                                       templates: _getSampleTemplates(),
                                       multiSelect: true, // 다중 선택 모드 활성화
+                                      studentName:
+                                          _selectedStudentIds.length == 1
+                                          ? students
+                                                .firstWhere(
+                                                  (s) =>
+                                                      s.id ==
+                                                      _selectedStudentIds.first,
+                                                )
+                                                .name
+                                          : '학생',
                                       onSelected: (content) {
                                         setState(() {
                                           // 선택된 모든 학생에게 문구 적용
@@ -1443,6 +1463,7 @@ class _EducationReportPaper extends StatelessWidget {
                             context,
                             title: '학원명/교실명',
                             initialValue: academyName,
+                            studentName: student.name,
                             onSaved: onAcademyNameChanged,
                           ),
                           borderRadius: BorderRadius.circular(4),
@@ -1465,6 +1486,7 @@ class _EducationReportPaper extends StatelessWidget {
                             context,
                             title: '리포트 날짜',
                             initialValue: reportDate,
+                            studentName: student.name,
                             onSaved: onReportDateChanged,
                           ),
                           borderRadius: BorderRadius.circular(4),
@@ -1491,6 +1513,7 @@ class _EducationReportPaper extends StatelessWidget {
                       context,
                       title: '레포트 제목',
                       initialValue: reportTitle,
+                      studentName: student.name,
                       onSaved: onReportTitleChanged,
                     ),
                     borderRadius: BorderRadius.circular(8),
@@ -1527,7 +1550,27 @@ class _EducationReportPaper extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildInfoItem('학생명', student.name),
+                      InkWell(
+                        onTap: () => _showEditDialog(
+                          context,
+                          title: '학생명',
+                          initialValue: student.name,
+                          studentName: student.name,
+                          onSaved: (val) {
+                            // This callback is for the _EducationReportPaper widget,
+                            // but student.name is final. The actual editing happens
+                            // in the parent EducationReportScreen via _customStudentNames.
+                            // For now, this is a placeholder to allow editing.
+                            // The parent will handle the state update.
+                          },
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                        hoverColor: Colors.indigo.withOpacity(0.05),
+                        child: Tooltip(
+                          message: '클릭하여 수정',
+                          child: _buildInfoItem('학생명', student.name),
+                        ),
+                      ),
                       _buildDivider(),
                       _buildInfoItem('학년', '${student.grade}학년'),
                       _buildDivider(),
@@ -1539,6 +1582,7 @@ class _EducationReportPaper extends StatelessWidget {
                             context,
                             title: '급수',
                             initialValue: studentLevel,
+                            studentName: student.name,
                             onSaved: onLevelChanged,
                           ),
                           borderRadius: BorderRadius.circular(4),
@@ -1817,6 +1861,12 @@ class _EducationReportPaper extends StatelessWidget {
                                   onSaved: onCommentChanged,
                                   isMultiline: true,
                                   templates: templates,
+                                  studentName: student.name,
+                                  textbookNames: context
+                                      .read<ProgressProvider>()
+                                      .getProgressForStudent(student.id)
+                                      .map((p) => p.textbookName)
+                                      .toList(),
                                 ),
                                 borderRadius: BorderRadius.circular(4),
                                 hoverColor: Colors.indigo.withOpacity(0.05),
@@ -2031,6 +2081,8 @@ class _EducationReportPaper extends StatelessWidget {
     required Function(String) onSaved,
     bool isMultiline = false,
     List<CommentTemplateModel> templates = const [],
+    String? studentName,
+    List<String>? textbookNames,
   }) {
     print(
       '🔍 _showEditDialog called: title=$title, isMultiline=$isMultiline, templates.length=${templates.length}',
@@ -2067,6 +2119,9 @@ class _EducationReportPaper extends StatelessWidget {
                         isScrollControlled: true,
                         builder: (sheetContext) => CommentGridPicker(
                           templates: templates,
+                          multiSelect: true, // 다중 선택 모드 활성화
+                          studentName: studentName,
+                          textbookNames: textbookNames,
                           onSelected: (content) {
                             // 커서 위치에 삽입하거나 끝에 추가
                             final text = controller.text;
@@ -2074,18 +2129,34 @@ class _EducationReportPaper extends StatelessWidget {
                             String newText;
 
                             if (selection.start >= 0 && selection.end >= 0) {
-                              newText = text.replaceRange(
+                              final beforeText = text.substring(
+                                0,
                                 selection.start,
-                                selection.end,
-                                content,
                               );
+                              final afterText = text.substring(selection.end);
+
+                              // 기존 텍스트가 있으면 자연스럽게 연결
+                              if (beforeText.isNotEmpty &&
+                                  !beforeText.endsWith(' ') &&
+                                  !beforeText.endsWith('\n')) {
+                                newText = '$beforeText $content$afterText';
+                              } else {
+                                newText = '$beforeText$content$afterText';
+                              }
                             } else {
-                              newText = text.isEmpty
-                                  ? content
-                                  : '$text $content';
+                              // 기존 내용 뒤에 추가
+                              if (text.isNotEmpty &&
+                                  !text.endsWith(' ') &&
+                                  !text.endsWith('\n')) {
+                                newText = '$text $content';
+                              } else {
+                                newText = '$text$content';
+                              }
                             }
-                            controller.text = newText;
-                            // 여기서 다이얼로그를 닫지 않음 (계속 편집 가능하게)
+
+                            // 최종 결합 로직 재적용 (마침표 등 보정)
+                            controller.text =
+                                ReportCommentUtils.combineFragments([newText]);
                           },
                         ),
                       );

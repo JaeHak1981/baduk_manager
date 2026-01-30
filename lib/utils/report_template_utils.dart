@@ -8,7 +8,6 @@ class ReportTemplateUtils {
     required EducationReportModel report,
     required String studentName,
     required List<String> textbookNames,
-    String theme = 'classic',
     String? academyLogoUrl,
     String? academyName,
   }) {
@@ -18,15 +17,7 @@ class ReportTemplateUtils {
     final periodStr =
         "${DateFormat('yyyy.MM').format(report.startDate)} ~ ${DateFormat('yyyy.MM').format(report.endDate)}";
 
-    // 테마별 색상 설정
-    Map<String, String> themeColors = {
-      'classic': '#1a237e', // Navy
-      'garden': '#2e7d32', // Green
-      'space': '#4527a0', // Deep Purple
-      'modern': '#212121', // Black/Grey
-    };
-
-    String primaryColor = themeColors[theme] ?? '#1a237e';
+    String primaryColor = '#1a237e'; // Classic Navy
 
     return """
 <!DOCTYPE html>

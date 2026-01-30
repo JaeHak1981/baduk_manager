@@ -11,6 +11,8 @@ import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
 import '../services/printing_service.dart';
 import 'components/radar_chart_widget.dart';
+import 'components/bar_chart_widget.dart';
+import 'components/column_chart_widget.dart';
 import 'components/resizable_draggable_wrapper.dart';
 import 'components/comment_grid_picker.dart';
 import '../providers/education_report_provider.dart';
@@ -33,6 +35,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
   Map<String, String> _customStudentLevels = {}; // 학생 ID -> 커스텀 급수
   bool _showLevel = true; // 급수 표시 여부
   Map<String, AchievementScores> _customScores = {}; // 학생 ID -> 커스텀 점수
+  Map<String, BalanceChartType> _studentChartTypes = {}; // 학생 ID -> 밸런스 차트 타입
   bool _showRadarChart = true; // 레이더 차트 표시 여부
   bool _showProgress = true; // 교재 현황 표시 여부
   bool _showCompetency = true; // 역량 점수바 표시 여부
@@ -72,8 +75,6 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
     super.dispose();
   }
 
-  // --- 레이아웃 관련 메서드 ---
-
   Widget _buildReportPaper(
     dynamic item, {
     bool isBackground = false,
@@ -111,6 +112,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         key: ValueKey(
           '${isBackground ? 'bg' : 'list'}_${item.id}_$_layoutVersion',
         ),
+        templateType: ReportTemplateType.classic, // 항상 classic으로 고정
         student: item,
         academy: widget.academy,
         progressList: progressList,
@@ -126,6 +128,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         showProgress: _showProgress,
         showCompetency: _showCompetency,
         scores: _customScores[item.id] ?? AchievementScores(),
+        balanceChartType: _studentChartTypes[item.id] ?? BalanceChartType.radar,
         teacherComment:
             _customComments[item.id] ??
             '이번 달은 수읽기 교재를 중점적으로 학습하며 집중력이 많이 향상되었습니다. 특히 사활 문제 풀이 속도가 빨라진 점이 고무적입니다.',
@@ -146,6 +149,11 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         onScoresChanged: (newScores) {
           setState(() {
             _customScores[item.id] = newScores;
+          });
+        },
+        onChartTypeChanged: (newType) {
+          setState(() {
+            _studentChartTypes[item.id] = newType;
           });
         },
         onCommentChanged: (newComment) {
@@ -420,10 +428,6 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final studentProvider = context.watch<StudentProvider>();
-    final students = studentProvider.students;
-    final progressProvider = context.watch<ProgressProvider>();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('통지표 편집 및 미리보기'),
@@ -748,119 +752,127 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                           session: 1,
                           grade: 1,
                           createdAt: DateTime.now(),
+                          updatedAt: DateTime.now(),
                         ),
                       ]
                     : selectedStudents;
 
                 return Container(
                   color: Colors.grey.shade200,
-                  child: Column(
+                  child: Stack(
                     children: [
-                      if (selectedStudents.isEmpty)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          color: Colors.amber.shade50.withOpacity(0.8),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.info_outline,
-                                size: 14,
-                                color: Colors.amber.shade900,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '현재 샘플 양식입니다. 우측에서 학생을 선택하면 실제 데이터가 반영됩니다.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.amber.shade900,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
+                      // 2. 캡처 전용 단일 슬롯
+                      // 실제 페인팅이 일어나야 하므로 화면 안에 배치하되 리스트 뒤에 숨김
+                      if (_capturingItem != null)
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          child: Opacity(
+                            opacity: 0.01, // 완전히 0이면 렌더링에서 제외될 수 있음
+                            child: _buildReportPaper(
+                              _capturingItem!,
+                              isBackground: true,
+                            ),
                           ),
                         ),
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            // 2. 캡처 전용 단일 슬롯
-                            // 실제 페인팅이 일어나야 하므로 화면 안에 배치하되 리스트 뒤에 숨김
-                            if (_capturingItem != null)
-                              Positioned(
-                                left: 0,
-                                top: 0,
-                                child: Opacity(
-                                  opacity: 0.01, // 완전히 0이면 렌더링에서 제외될 수 있음
-                                  child: _buildReportPaper(
-                                    _capturingItem!,
-                                    isBackground: true,
-                                  ),
-                                ),
-                              ),
 
-                            // 1. 실제 보여지는 영역 (항상 리스트 모드)
-                            // 캡처 슬롯 뒤에 위치시켜서 사용자에게는 보이지 않게 함
-                            SingleChildScrollView(
-                              controller: _previewScrollController,
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 40,
-                                horizontal: 20,
-                              ),
+                      // 1. 실제 보여지는 영역 (항상 리스트 모드)
+                      SingleChildScrollView(
+                        controller: _previewScrollController,
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Column(
+                          children: displayItems.map((item) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 60),
                               child: Column(
-                                children: displayItems.map((item) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 60),
-                                    child: Column(
-                                      children: [
-                                        // 개별 저장 버튼
-                                        if (item.id != 'sample')
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 12,
-                                            ),
-                                            child: ElevatedButton.icon(
-                                              onPressed: () =>
-                                                  _saveIndividualReport(item),
-                                              icon: const Icon(
-                                                Icons.download,
-                                                size: 16,
-                                              ),
-                                              label: Text(
-                                                '${item.name} 통지표만 저장',
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.white,
-                                                foregroundColor: Colors.indigo,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 8,
-                                                    ),
-                                                side: const BorderSide(
-                                                  color: Colors.indigo,
-                                                ),
-                                              ),
-                                            ),
+                                children: [
+                                  // 개별 저장 버튼
+                                  if (item.id != 'sample')
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: ElevatedButton.icon(
+                                        onPressed: () =>
+                                            _saveIndividualReport(item),
+                                        icon: const Icon(
+                                          Icons.download,
+                                          size: 16,
+                                        ),
+                                        label: Text(
+                                          '${item.name} 통지표만 저장',
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.white,
+                                          foregroundColor: Colors.indigo,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 8,
                                           ),
-                                        Center(
-                                          child: _buildReportPaper(
-                                            item,
-                                            useGlobalKey: true,
+                                          side: const BorderSide(
+                                            color: Colors.indigo,
                                           ),
                                         ),
-                                      ],
+                                      ),
                                     ),
-                                  );
-                                }).toList(),
+                                  Center(
+                                    child: _buildReportPaper(
+                                      item,
+                                      useGlobalKey: true,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
+                            );
+                          }).toList(),
                         ),
                       ),
+
+                      // 안내 메시지 (학생이 선택되지 않았을 때)
+                      if (selectedStudents.isEmpty)
+                        Positioned(
+                          top: 10,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 10,
+                                horizontal: 20,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade50.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 10,
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: 14,
+                                    color: Colors.amber.shade900,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '현재 샘플 양식입니다. 우측에서 학생을 선택하면 실제 데이터가 반영됩니다.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.amber.shade900,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 );
@@ -915,82 +927,6 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                 color: Colors.indigo,
                                 isPrimary: true,
                                 onPressed: _showStudentSelectionDialog,
-                              ),
-                              _buildActionButton(
-                                context,
-                                label: '템플릿 선택',
-                                icon: Icons.dashboard_customize_outlined,
-                              ),
-                              _buildActionButton(
-                                context,
-                                label: '문구 선택',
-                                icon: Icons.list_alt,
-                                onPressed: () {
-                                  if (_selectedStudentIds.isEmpty) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('먼저 학생을 선택해주세요.'),
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  // 문구 선택 다이얼로그 표시
-                                  showModalBottomSheet(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    builder: (sheetContext) => CommentGridPicker(
-                                      templates: _getSampleTemplates(),
-                                      multiSelect: true, // 다중 선택 모드 활성화
-                                      studentName:
-                                          _selectedStudentIds.length == 1
-                                          ? students
-                                                .firstWhere(
-                                                  (s) =>
-                                                      s.id ==
-                                                      _selectedStudentIds.first,
-                                                )
-                                                .name
-                                          : '학생',
-                                      onSelected: (content) {
-                                        setState(() {
-                                          // 선택된 모든 학생에게 문구 적용
-                                          for (final id
-                                              in _selectedStudentIds) {
-                                            _customComments[id] = content;
-                                          }
-                                        });
-                                        // CommentGridPicker 내부에서 Navigator.pop을 호출하므로 여기서는 호출하지 않음
-                                        // SnackBar는 약간의 지연 후 표시
-                                        Future.delayed(
-                                          const Duration(milliseconds: 300),
-                                          () {
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    '${_selectedStudentIds.length}명의 학생에게 문구가 적용되었습니다.',
-                                                  ),
-                                                  duration: const Duration(
-                                                    seconds: 2,
-                                                  ),
-                                                ),
-                                              );
-                                            }
-                                          },
-                                        );
-                                      },
-                                    ),
-                                  );
-                                },
-                              ),
-                              _buildActionButton(
-                                context,
-                                label: '문구 편집',
-                                icon: Icons.edit_outlined,
                               ),
                               _buildActionButton(
                                 context,
@@ -1053,6 +989,70 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                             contentPadding: EdgeInsets.zero,
                             dense: true,
                           ),
+                          if (_showRadarChart)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                left: 56,
+                                top: 8,
+                                bottom: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  const Text(
+                                    '차트 형식:',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: DropdownButton<BalanceChartType>(
+                                      value: _capturingItem != null
+                                          ? (_studentChartTypes[_capturingItem!
+                                                    .id] ??
+                                                BalanceChartType.radar)
+                                          : BalanceChartType.radar,
+                                      isExpanded: true,
+                                      items: BalanceChartType.values.map((
+                                        type,
+                                      ) {
+                                        return DropdownMenuItem(
+                                          value: type,
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                type.icon,
+                                                size: 16,
+                                                color: Colors.indigo,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                type.displayName,
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: _capturingItem != null
+                                          ? (type) {
+                                              if (type != null) {
+                                                setState(() {
+                                                  _studentChartTypes[_capturingItem!
+                                                          .id] =
+                                                      type;
+                                                });
+                                              }
+                                            }
+                                          : null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           SwitchListTile(
                             title: const Text(
                               '교재 학습 현황',
@@ -1381,12 +1381,14 @@ class _EducationReportPaper extends StatelessWidget {
   final bool showProgress;
   final bool showCompetency;
   final AchievementScores scores;
+  final BalanceChartType balanceChartType;
   final String teacherComment;
   final Function(String) onAcademyNameChanged;
   final Function(String) onReportTitleChanged;
   final Function(String) onReportDateChanged;
   final Function(String) onLevelChanged;
   final Function(AchievementScores) onScoresChanged;
+  final Function(BalanceChartType) onChartTypeChanged;
   final Function(String) onCommentChanged;
   final VoidCallback onOpenCommentPicker;
   final VoidCallback onRerollComment;
@@ -1395,6 +1397,8 @@ class _EducationReportPaper extends StatelessWidget {
   final Function(String, WidgetLayout) onLayoutChanged;
   final int layoutVersion; // 추가: 강제 리빌드를 위한 버전
   final List<CommentTemplateModel> templates; // 추가: 문구 추천 데이터
+
+  final ReportTemplateType templateType;
 
   _EducationReportPaper({
     super.key,
@@ -1410,12 +1414,14 @@ class _EducationReportPaper extends StatelessWidget {
     required this.showProgress,
     required this.showCompetency,
     required this.scores,
+    required this.balanceChartType,
     required this.teacherComment,
     required this.onAcademyNameChanged,
     required this.onReportTitleChanged,
     required this.onReportDateChanged,
     required this.onLevelChanged,
     required this.onScoresChanged,
+    required this.onChartTypeChanged,
     required this.onCommentChanged,
     required this.onOpenCommentPicker,
     required this.onRerollComment,
@@ -1424,12 +1430,17 @@ class _EducationReportPaper extends StatelessWidget {
     required this.onLayoutChanged,
     required this.layoutVersion,
     this.templates = const [],
+    this.templateType = ReportTemplateType.classic,
   });
 
   @override
   Widget build(BuildContext context) {
+    return _buildClassicLayout(context);
+  }
+
+  Widget _buildClassicLayout(BuildContext context) {
     return Container(
-      width: 600, // 화면상의 A4 가로 너비 (상대적)
+      width: 600,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(2),
@@ -1445,457 +1456,24 @@ class _EducationReportPaper extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(2),
         child: AspectRatio(
-          aspectRatio: 1 / 1.41, // A4 비율
+          aspectRatio: 1 / 1.41,
           child: Padding(
             padding: const EdgeInsets.all(32.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. 헤더 (학원 정보 및 제호)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        InkWell(
-                          onTap: () => _showEditDialog(
-                            context,
-                            title: '학원명/교실명',
-                            initialValue: academyName,
-                            studentName: student.name,
-                            onSaved: onAcademyNameChanged,
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                          hoverColor: Colors.indigo.withOpacity(0.05),
-                          child: Tooltip(
-                            message: '클릭하여 수정',
-                            child: Text(
-                              academyName,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.indigo,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        InkWell(
-                          onTap: () => _showEditDialog(
-                            context,
-                            title: '리포트 날짜',
-                            initialValue: reportDate,
-                            studentName: student.name,
-                            onSaved: onReportDateChanged,
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                          hoverColor: Colors.indigo.withOpacity(0.05),
-                          child: Tooltip(
-                            message: '클릭하여 수정',
-                            child: Text(
-                              reportDate,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                _buildClassicHeader(context),
                 const SizedBox(height: 20),
-                Center(
-                  child: InkWell(
-                    onTap: () => _showEditDialog(
-                      context,
-                      title: '레포트 제목',
-                      initialValue: reportTitle,
-                      studentName: student.name,
-                      onSaved: onReportTitleChanged,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                    hoverColor: Colors.indigo.withOpacity(0.05),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      child: Tooltip(
-                        message: '클릭하여 수정',
-                        child: Text(
-                          reportTitle,
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 4,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // 2. 학생 인적사항
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      InkWell(
-                        onTap: () => _showEditDialog(
-                          context,
-                          title: '학생명',
-                          initialValue: student.name,
-                          studentName: student.name,
-                          onSaved: (val) {
-                            // This callback is for the _EducationReportPaper widget,
-                            // but student.name is final. The actual editing happens
-                            // in the parent EducationReportScreen via _customStudentNames.
-                            // For now, this is a placeholder to allow editing.
-                            // The parent will handle the state update.
-                          },
-                        ),
-                        borderRadius: BorderRadius.circular(4),
-                        hoverColor: Colors.indigo.withOpacity(0.05),
-                        child: Tooltip(
-                          message: '클릭하여 수정',
-                          child: _buildInfoItem('학생명', student.name),
-                        ),
-                      ),
-                      _buildDivider(),
-                      _buildInfoItem('학년', '${student.grade}학년'),
-                      _buildDivider(),
-                      _buildInfoItem('반', '${student.session}부'),
-                      if (showLevel) ...[
-                        _buildDivider(),
-                        InkWell(
-                          onTap: () => _showEditDialog(
-                            context,
-                            title: '급수',
-                            initialValue: studentLevel,
-                            studentName: student.name,
-                            onSaved: onLevelChanged,
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                          hoverColor: Colors.indigo.withOpacity(0.05),
-                          child: Tooltip(
-                            message: '클릭하여 수정',
-                            child: _buildInfoItem('급수', studentLevel),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+                _buildStudentInfoBar(context),
                 const SizedBox(height: 24),
-
-                // 3. 메인 성취도 분석 (자유 배치 영역)
                 Expanded(
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      // 레이더 차트
-                      if (showRadarChart)
-                        ResizableDraggableWrapper(
-                          key: ValueKey('radar_$layoutVersion'),
-                          initialTop: layouts['radar']?.top ?? 0,
-                          initialLeft: layouts['radar']?.left ?? 0,
-                          initialWidth: layouts['radar']?.width ?? 240,
-                          initialHeight: layouts['radar']?.height ?? 240,
-                          isEditing: isLayoutEditing,
-                          onLayoutChanged: (t, l, w, h) => onLayoutChanged(
-                            'radar',
-                            WidgetLayout(top: t, left: l, width: w, height: h),
-                          ),
-                          child: FittedBox(
-                            fit: BoxFit.contain,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  '[ 역량 밸런스 차트 ]',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                SizedBox(
-                                  width: 240,
-                                  height: 240,
-                                  child: RadarChartWidget(scores: scores),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                      // 학습 현황
-                      if (showProgress)
-                        ResizableDraggableWrapper(
-                          key: ValueKey('progress_$layoutVersion'),
-                          initialTop: layouts['progress']?.top ?? 0,
-                          initialLeft: layouts['progress']?.left ?? 260,
-                          initialWidth: layouts['progress']?.width ?? 280,
-                          initialHeight: layouts['progress']?.height ?? 150,
-                          isEditing: isLayoutEditing,
-                          onLayoutChanged: (t, l, w, h) => onLayoutChanged(
-                            'progress',
-                            WidgetLayout(top: t, left: l, width: w, height: h),
-                          ),
-                          child: FittedBox(
-                            fit: BoxFit.contain,
-                            alignment: Alignment.topLeft,
-                            child: SizedBox(
-                              width: 280,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    '[ 교재 학습 현황 ]',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  if (progressList.isEmpty)
-                                    const Text(
-                                      '학습 데이터가 없습니다.',
-                                      style: TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 12,
-                                      ),
-                                    )
-                                  else
-                                    ...progressList
-                                        .take(3)
-                                        .map(
-                                          (p) => Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 8,
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment
-                                                          .spaceBetween,
-                                                  children: [
-                                                    Text(
-                                                      '${p.textbookName} ${p.volumeNumber}권',
-                                                      style: const TextStyle(
-                                                        fontSize: 11,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      '${p.progressPercentage.toInt()}%',
-                                                      style: const TextStyle(
-                                                        fontSize: 10,
-                                                        color: Colors.indigo,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 2),
-                                                ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(2),
-                                                  child: LinearProgressIndicator(
-                                                    value:
-                                                        p.progressPercentage /
-                                                        100,
-                                                    backgroundColor:
-                                                        Colors.grey.shade200,
-                                                    color:
-                                                        Colors.indigo.shade300,
-                                                    minHeight: 3,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        )
-                                        .toList(),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                      // 역량별 성취도 상세
-                      if (showCompetency)
-                        ResizableDraggableWrapper(
-                          key: ValueKey('competency_$layoutVersion'),
-                          initialTop: layouts['competency']?.top ?? 120,
-                          initialLeft: layouts['competency']?.left ?? 260,
-                          initialWidth: layouts['competency']?.width ?? 280,
-                          initialHeight: layouts['competency']?.height ?? 180,
-                          isEditing: isLayoutEditing,
-                          onLayoutChanged: (t, l, w, h) => onLayoutChanged(
-                            'competency',
-                            WidgetLayout(top: t, left: l, width: w, height: h),
-                          ),
-                          child: FittedBox(
-                            fit: BoxFit.contain,
-                            alignment: Alignment.topLeft,
-                            child: SizedBox(
-                              width: 280,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    '[ 역량별 성취도 상세 ]',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _buildScoreBar(
-                                    '집중력',
-                                    scores.focus,
-                                    Colors.blue.shade700,
-                                    () => _showScoreEditDialog(context),
-                                  ),
-                                  _buildScoreBar(
-                                    '응용력',
-                                    scores.application,
-                                    Colors.teal.shade600,
-                                    () => _showScoreEditDialog(context),
-                                  ),
-                                  _buildScoreBar(
-                                    '정확도',
-                                    scores.accuracy,
-                                    Colors.orange.shade700,
-                                    () => _showScoreEditDialog(context),
-                                  ),
-                                  _buildScoreBar(
-                                    '과제수행',
-                                    scores.task,
-                                    Colors.purple.shade600,
-                                    () => _showScoreEditDialog(context),
-                                  ),
-                                  _buildScoreBar(
-                                    '창의성',
-                                    scores.creativity,
-                                    Colors.pink.shade600,
-                                    () => _showScoreEditDialog(context),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                      // 종합 의견
-                      ResizableDraggableWrapper(
-                        key: ValueKey('comment_$layoutVersion'),
-                        initialTop: layouts['comment']?.top ?? 300,
-                        initialLeft: layouts['comment']?.left ?? 0,
-                        initialWidth: layouts['comment']?.width ?? 536,
-                        initialHeight: layouts['comment']?.height ?? 200,
-                        isEditing: isLayoutEditing,
-                        onLayoutChanged: (t, l, w, h) => onLayoutChanged(
-                          'comment',
-                          WidgetLayout(top: t, left: l, width: w, height: h),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  '[ 지도교사 종합 의견 ]',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.refresh, size: 16),
-                                      onPressed: onRerollComment,
-                                      tooltip: '의견 다시 생성 (랜덤 조합)',
-                                      constraints: const BoxConstraints(),
-                                      padding: const EdgeInsets.all(4),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.grid_view,
-                                        size: 16,
-                                      ),
-                                      onPressed: onOpenCommentPicker,
-                                      tooltip: '카테고리별 문구 선택',
-                                      constraints: const BoxConstraints(),
-                                      padding: const EdgeInsets.all(4),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Expanded(
-                              child: InkWell(
-                                onTap: () => _showEditDialog(
-                                  context,
-                                  title: '종합 의견',
-                                  initialValue: teacherComment,
-                                  onSaved: onCommentChanged,
-                                  isMultiline: true,
-                                  templates: templates,
-                                  studentName: student.name,
-                                  textbookNames: context
-                                      .read<ProgressProvider>()
-                                      .getProgressForStudent(student.id)
-                                      .map((p) => p.textbookName)
-                                      .toList(),
-                                ),
-                                borderRadius: BorderRadius.circular(4),
-                                hoverColor: Colors.indigo.withOpacity(0.05),
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: Colors.grey.shade300,
-                                    ),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: SingleChildScrollView(
-                                    child: Text(
-                                      teacherComment,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        height: 1.6,
-                                        fontStyle: FontStyle.italic,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      if (showRadarChart) _buildRadarChartSection(context),
+                      if (showProgress) _buildProgressSection(),
+                      if (showCompetency) _buildCompetencySection(context),
+                      _buildCommentSection(context),
                     ],
                   ),
                 ),
@@ -1904,6 +1482,329 @@ class _EducationReportPaper extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildClassicHeader(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: () => _showEditDialog(
+                context,
+                title: '학원명/교실명',
+                initialValue: academyName,
+                studentName: student.name,
+                onSaved: onAcademyNameChanged,
+              ),
+              child: Text(
+                academyName,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.indigo,
+                ),
+              ),
+            ),
+            InkWell(
+              onTap: () => _showDatePicker(context),
+              child: Text(
+                reportDate,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ),
+          ],
+        ),
+        if (templateType == ReportTemplateType.classic)
+          InkWell(
+            onTap: () => _showEditDialog(
+              context,
+              title: '레포트 제목',
+              initialValue: reportTitle,
+              studentName: student.name,
+              onSaved: onReportTitleChanged,
+            ),
+            child: Text(
+              reportTitle,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildStudentInfoBar(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildInfoItem('학생명', student.name),
+          _buildDivider(),
+          _buildInfoItem('학년', '${student.grade}학년'),
+          _buildDivider(),
+          _buildInfoItem('반', '${student.session}부'),
+          if (showLevel) ...[
+            _buildDivider(),
+            _buildInfoItem('급수', studentLevel),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRadarChartSection(BuildContext context) {
+    return ResizableDraggableWrapper(
+      key: ValueKey('radar_$layoutVersion'),
+      initialTop: layouts['radar']?.top ?? 0,
+      initialLeft: layouts['radar']?.left ?? 0,
+      initialWidth: layouts['radar']?.width ?? 240,
+      initialHeight: layouts['radar']?.height ?? 240,
+      isEditing: isLayoutEditing,
+      onLayoutChanged: (t, l, w, h) => onLayoutChanged(
+        'radar',
+        WidgetLayout(top: t, left: l, width: w, height: h),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '[ ${balanceChartType.displayName} ]',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          Expanded(child: _buildChart()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChart() {
+    switch (balanceChartType) {
+      case BalanceChartType.radar:
+        return RadarChartWidget(scores: scores);
+      case BalanceChartType.bar:
+        return BarChartWidget(scores: scores);
+      case BalanceChartType.column:
+        return ColumnChartWidget(scores: scores);
+    }
+  }
+
+  Widget _buildProgressSection() {
+    return ResizableDraggableWrapper(
+      key: ValueKey('progress_$layoutVersion'),
+      initialTop: layouts['progress']?.top ?? 0,
+      initialLeft: layouts['progress']?.left ?? 260,
+      initialWidth: layouts['progress']?.width ?? 280,
+      initialHeight: layouts['progress']?.height ?? 150,
+      isEditing: isLayoutEditing,
+      onLayoutChanged: (t, l, w, h) => onLayoutChanged(
+        'progress',
+        WidgetLayout(top: t, left: l, width: w, height: h),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '[ 교재 학습 현황 ]',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          Expanded(child: SingleChildScrollView(child: _buildProgressList())),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressList() {
+    if (progressList.isEmpty)
+      return const Text(
+        '학습 데이터가 없습니다.',
+        style: TextStyle(color: Colors.grey, fontSize: 12),
+      );
+    return Column(
+      children: progressList
+          .take(3)
+          .map(
+            (p) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${p.textbookName} ${p.volumeNumber}권',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        '${p.progressPercentage.toInt()}%',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.indigo,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  LinearProgressIndicator(
+                    value: p.progressPercentage / 100,
+                    backgroundColor: Colors.grey.shade200,
+                    color: Colors.indigo.shade300,
+                    minHeight: 3,
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildCompetencySection(BuildContext context) {
+    return ResizableDraggableWrapper(
+      key: ValueKey('competency_$layoutVersion'),
+      initialTop: layouts['competency']?.top ?? 120,
+      initialLeft: layouts['competency']?.left ?? 260,
+      initialWidth: layouts['competency']?.width ?? 280,
+      initialHeight: layouts['competency']?.height ?? 180,
+      isEditing: isLayoutEditing,
+      onLayoutChanged: (t, l, w, h) => onLayoutChanged(
+        'competency',
+        WidgetLayout(top: t, left: l, width: w, height: h),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '[ 역량별 성취도 상세 ]',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  _buildScoreBar(
+                    '집중력',
+                    scores.focus,
+                    Colors.blue.shade700,
+                    () => _showScoreEditDialog(context),
+                  ),
+                  _buildScoreBar(
+                    '응용력',
+                    scores.application,
+                    Colors.teal.shade600,
+                    () => _showScoreEditDialog(context),
+                  ),
+                  _buildScoreBar(
+                    '정확도',
+                    scores.accuracy,
+                    Colors.orange.shade700,
+                    () => _showScoreEditDialog(context),
+                  ),
+                  _buildScoreBar(
+                    '과제수행',
+                    scores.task,
+                    Colors.purple.shade600,
+                    () => _showScoreEditDialog(context),
+                  ),
+                  _buildScoreBar(
+                    '창의성',
+                    scores.creativity,
+                    Colors.pink.shade600,
+                    () => _showScoreEditDialog(context),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentSection(BuildContext context) {
+    return ResizableDraggableWrapper(
+      key: ValueKey('comment_$layoutVersion'),
+      initialTop: layouts['comment']?.top ?? 300,
+      initialLeft: layouts['comment']?.left ?? 0,
+      initialWidth: layouts['comment']?.width ?? 536,
+      initialHeight: layouts['comment']?.height ?? 200,
+      isEditing: isLayoutEditing,
+      onLayoutChanged: (t, l, w, h) => onLayoutChanged(
+        'comment',
+        WidgetLayout(top: t, left: l, width: w, height: h),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                '[ 지도교사 종합 의견 ]',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 16),
+                    onPressed: onRerollComment,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.grid_view, size: 16),
+                    onPressed: onOpenCommentPicker,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: InkWell(
+              onTap: () => _showEditDialog(
+                context,
+                title: '종합 의견',
+                initialValue: teacherComment,
+                onSaved: onCommentChanged,
+                isMultiline: true,
+                templates: templates,
+                studentName: student.name,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    teacherComment,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.6,
+                      fontStyle: FontStyle.italic,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2191,6 +2092,21 @@ class _EducationReportPaper extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _showDatePicker(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      locale: const Locale('ko', 'KR'),
+    );
+
+    if (picked != null) {
+      final formattedDate = DateFormat('yyyy. MM. dd').format(picked);
+      onReportDateChanged(formattedDate);
+    }
   }
 
   Widget _buildInfoItem(String label, String value) {

@@ -132,7 +132,6 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
           children: [
             _buildInfoCard(),
             const SizedBox(height: 24),
-            _buildThemeSelector(),
             const SizedBox(height: 24),
             const Text(
               '성취도 평가 (슬라이더로 조절)',
@@ -267,42 +266,6 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
         scores: _report!.scores,
         previousScores: _report!.previousScores,
       ),
-    );
-  }
-
-  Widget _buildThemeSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('디자인 테마 선택', style: TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _themeRadio('classic', '클래식', Colors.indigo),
-            _themeRadio('garden', '가든', Colors.green),
-            _themeRadio('space', '스페이스', Colors.purple),
-            _themeRadio('modern', '모던', Colors.black),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _themeRadio(String id, String label, Color color) {
-    return Column(
-      children: [
-        Radio<String>(
-          value: id,
-          groupValue: _report!.templateId,
-          onChanged: (val) {
-            setState(() {
-              _report = _report!.copyWith(templateId: val);
-            });
-          },
-        ),
-        Text(label, style: TextStyle(fontSize: 12, color: color)),
-      ],
     );
   }
 

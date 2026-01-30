@@ -40,6 +40,9 @@ class _ResizableDraggableWrapperState extends State<ResizableDraggableWrapper> {
   final double _gridSize = 10.0; // 그리드 스냅 단위
 
   bool _isFocused = false;
+  bool _isDragging = false;
+  bool _isResizing = false;
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
@@ -113,7 +116,7 @@ class _ResizableDraggableWrapperState extends State<ResizableDraggableWrapper> {
         left: left,
         width: width,
         height: height,
-        child: widget.child,
+        child: ClipRect(child: widget.child),
       );
     }
 
@@ -123,6 +126,7 @@ class _ResizableDraggableWrapperState extends State<ResizableDraggableWrapper> {
       width: width,
       height: height,
       child: Focus(
+        focusNode: _focusNode,
         onFocusChange: (hasFocus) => setState(() => _isFocused = hasFocus),
         onKeyEvent: (node, event) {
           _handleKeyEvent(event);
@@ -138,14 +142,60 @@ class _ResizableDraggableWrapperState extends State<ResizableDraggableWrapper> {
               child: Container(
                 decoration: BoxDecoration(
                   color: _isFocused ? Colors.indigo.withOpacity(0.02) : null,
+                  boxShadow: _isDragging
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 5),
+                          ),
+                        ]
+                      : null,
                   border: Border.all(
-                    color: _isFocused
-                        ? Colors.indigo
-                        : Colors.indigo.withOpacity(0.3),
-                    width: _isFocused ? 2 : 1,
+                    color: _isDragging
+                        ? Colors.orange
+                        : (_isResizing
+                              ? Colors.teal
+                              : (_isFocused
+                                    ? Colors.indigo
+                                    : Colors.indigo.withOpacity(0.3))),
+                    width: (_isFocused || _isDragging || _isResizing) ? 2 : 1,
                   ),
                 ),
-                child: widget.child,
+                child: ClipRect(child: widget.child),
+              ),
+            ),
+
+            // 이동용 핸들 아이콘 (상단 중앙)
+            Positioned(
+              top: -25,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.grab,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.indigo,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.open_with,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ),
               ),
             ),
 
@@ -153,6 +203,11 @@ class _ResizableDraggableWrapperState extends State<ResizableDraggableWrapper> {
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
+                onTapDown: (_) => _focusNode.requestFocus(),
+                onPanStart: (_) {
+                  _focusNode.requestFocus();
+                  setState(() => _isDragging = true);
+                },
                 onPanUpdate: (details) {
                   setState(() {
                     top += details.delta.dy;
@@ -161,6 +216,7 @@ class _ResizableDraggableWrapperState extends State<ResizableDraggableWrapper> {
                 },
                 onPanEnd: (_) {
                   setState(() {
+                    _isDragging = false;
                     top = _snap(top);
                     left = _snap(left);
                   });
@@ -345,9 +401,11 @@ class _ResizableDraggableWrapperState extends State<ResizableDraggableWrapper> {
         cursor: cursor,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
+          onPanStart: (_) => setState(() => _isResizing = true),
           onPanUpdate: onUpdate,
           onPanEnd: (_) {
             setState(() {
+              _isResizing = false;
               this.top = _snap(this.top);
               this.left = _snap(this.left);
               if (this.width != null) this.width = _snap(this.width!);
@@ -379,9 +437,11 @@ class _ResizableDraggableWrapperState extends State<ResizableDraggableWrapper> {
         cursor: cursor,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
+          onPanStart: (_) => setState(() => _isResizing = true),
           onPanUpdate: onUpdate,
           onPanEnd: (_) {
             setState(() {
+              _isResizing = false;
               this.top = _snap(this.top);
               this.left = _snap(this.left);
               if (this.width != null) this.width = _snap(this.width!);

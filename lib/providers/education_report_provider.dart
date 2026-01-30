@@ -11,11 +11,13 @@ class EducationReportProvider with ChangeNotifier {
   List<CommentTemplateModel> _templates = [];
   bool _isLoading = false;
   String? _errorMessage;
+  ReportTemplateType _selectedTemplateType = ReportTemplateType.classic;
 
   List<EducationReportModel> get reports => _reports;
   List<CommentTemplateModel> get templates => _templates;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  ReportTemplateType get selectedTemplateType => _selectedTemplateType;
 
   // 특정 학생의 리포트 목록 로드 (보안 강화)
   Future<void> loadReports(

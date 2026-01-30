@@ -130,7 +130,6 @@ class PrintingService {
       report: report,
       studentName: studentName,
       textbookNames: textbookNames,
-      theme: report.templateId,
       academyName: academyName,
     );
 
@@ -164,7 +163,6 @@ class PrintingService {
         report: data['report'] as EducationReportModel,
         studentName: data['studentName'] as String,
         textbookNames: data['textbookNames'] as List<String>,
-        theme: (data['report'] as EducationReportModel).templateId,
         academyName: academyName,
       );
 

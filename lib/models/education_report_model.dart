@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// 교육 통지표에서 사용하는 평가 항목 점수 모델
@@ -96,6 +97,43 @@ class WidgetLayout {
 }
 
 /// 교육 통지표 메인 모델
+enum ReportTemplateType { classic }
+
+extension ReportTemplateTypeExtension on ReportTemplateType {
+  String get displayName {
+    switch (this) {
+      case ReportTemplateType.classic:
+        return '클래식 스탠다드';
+    }
+  }
+}
+
+enum BalanceChartType { radar, bar, column }
+
+extension BalanceChartTypeExtension on BalanceChartType {
+  String get displayName {
+    switch (this) {
+      case BalanceChartType.radar:
+        return '레이더 차트';
+      case BalanceChartType.bar:
+        return '가로 막대';
+      case BalanceChartType.column:
+        return '세로 막대';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case BalanceChartType.radar:
+        return Icons.radar;
+      case BalanceChartType.bar:
+        return Icons.bar_chart_outlined;
+      case BalanceChartType.column:
+        return Icons.align_vertical_bottom_outlined;
+    }
+  }
+}
+
 class EducationReportModel {
   final String id;
   final String academyId;
@@ -109,10 +147,11 @@ class EducationReportModel {
   final int attendanceCount;
   final int totalClasses;
   final String teacherComment;
-  final String templateId; // 4종 중 선택된 템플릿 ID
   final Map<String, WidgetLayout>? layouts; // 위젯 ID -> 위치/크기 정보
   final DateTime createdAt;
   final DateTime updatedAt;
+  final ReportTemplateType templateType;
+  final BalanceChartType balanceChartType;
 
   EducationReportModel({
     required this.id,
@@ -127,10 +166,11 @@ class EducationReportModel {
     required this.attendanceCount,
     required this.totalClasses,
     required this.teacherComment,
-    this.templateId = 'classic',
     this.layouts,
     required this.createdAt,
     required this.updatedAt,
+    this.templateType = ReportTemplateType.classic,
+    this.balanceChartType = BalanceChartType.radar,
   });
 
   Map<String, dynamic> toFirestore() {
@@ -147,10 +187,11 @@ class EducationReportModel {
       'attendanceCount': attendanceCount,
       'totalClasses': totalClasses,
       'teacherComment': teacherComment,
-      'templateId': templateId,
       'layouts': layouts?.map((key, value) => MapEntry(key, value.toMap())),
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
+      'templateType': templateType.name,
+      'balanceChartType': balanceChartType.name,
     };
   }
 
@@ -175,7 +216,6 @@ class EducationReportModel {
       attendanceCount: data['attendanceCount'] as int? ?? 0,
       totalClasses: data['totalClasses'] as int? ?? 0,
       teacherComment: data['teacherComment'] as String? ?? '',
-      templateId: data['templateId'] as String? ?? 'classic',
       layouts: data['layouts'] != null
           ? (data['layouts'] as Map<String, dynamic>).map(
               (key, value) => MapEntry(
@@ -186,13 +226,21 @@ class EducationReportModel {
           : null,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+      templateType: (data['templateType'] == 'classic')
+          ? ReportTemplateType.classic
+          : ReportTemplateType.classic,
+      balanceChartType: BalanceChartType.values.firstWhere(
+        (e) => e.name == (data['balanceChartType'] as String?),
+        orElse: () => BalanceChartType.radar,
+      ),
     );
   }
 
   EducationReportModel copyWith({
     AchievementScores? scores,
     String? teacherComment,
-    String? templateId,
+    ReportTemplateType? templateType,
+    BalanceChartType? balanceChartType,
     Map<String, WidgetLayout>? layouts,
     DateTime? updatedAt,
   }) {
@@ -209,7 +257,8 @@ class EducationReportModel {
       attendanceCount: this.attendanceCount,
       totalClasses: this.totalClasses,
       teacherComment: teacherComment ?? this.teacherComment,
-      templateId: templateId ?? this.templateId,
+      templateType: templateType ?? this.templateType,
+      balanceChartType: balanceChartType ?? this.balanceChartType,
       layouts: layouts ?? this.layouts,
       createdAt: this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

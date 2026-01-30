@@ -48,12 +48,26 @@ class ReportCommentUtils {
     List<CommentTemplateModel> templates = const [],
   }) {
     final random = Random();
-    List<String> selectedFragments = [];
+    List<String> introFragments = [];
+    List<String> bodyFragments = [];
+    List<String> conclusionFragments = [];
 
     // 수준 판별 (가장 높은 교재 기준)
     int studentLevel = 1;
     if (textbookNames.isNotEmpty && volumes.isNotEmpty) {
       studentLevel = _determineLevel(textbookNames.first, volumes.first);
+    }
+
+    // 0. 인트로 (Intro)
+    final introTemplates = templates.where((t) => t.category == '인트로').toList();
+    if (introTemplates.isNotEmpty) {
+      introFragments.add(
+        _processTemplate(
+          introTemplates[random.nextInt(introTemplates.length)].content,
+          studentName,
+          textbookNames,
+        ),
+      );
     }
 
     // 1. 학습 성취 (수준 및 카테고리 기반)
@@ -66,7 +80,7 @@ class ReportCommentUtils {
         .toList();
 
     if (achievementTemplates.isNotEmpty) {
-      selectedFragments.add(
+      bodyFragments.add(
         _processTemplate(
           achievementTemplates[random.nextInt(achievementTemplates.length)]
               .content,
@@ -75,31 +89,30 @@ class ReportCommentUtils {
         ),
       );
     } else {
-      // 기본 문구 (데이터가 없을 때 수준별 대응)
+      // 기본 문구
       if (textbookNames.isNotEmpty) {
         if (studentLevel == 1) {
-          selectedFragments.add(
+          bodyFragments.add(
             "${textbookNames.first} 과정을 통해 바둑의 기초 규칙과 착수 금지, 따먹기 등 기본 원리를 차근차근 익히고 있습니다.",
           );
         } else if (studentLevel == 2) {
-          selectedFragments.add(
+          bodyFragments.add(
             "${textbookNames.first} 학습을 통해 초급 전술과 수읽기의 기초를 다지며 실전 능력을 키워가고 있습니다.",
           );
         } else {
-          selectedFragments.add(
+          bodyFragments.add(
             "${textbookNames.first} 과정을 통해 고급 행마와 사활, 복합적인 수읽기 전략을 깊이 있게 연구하고 있습니다.",
           );
         }
       }
     }
 
-    // 2. 학습 태도 (점수 기반 - 집중력이나 과제수행도 참고)
+    // 2. 학습 태도 (점수 기반)
     final attitudeTemplates = templates
         .where((t) => t.category == '학습 태도' || t.category == '태도')
         .toList();
     if (attitudeTemplates.isNotEmpty) {
-      // 점수가 높은 경우 긍정 문구 우선 등 로직 추가 가능
-      selectedFragments.add(
+      bodyFragments.add(
         _processTemplate(
           attitudeTemplates[random.nextInt(attitudeTemplates.length)].content,
           studentName,
@@ -108,11 +121,11 @@ class ReportCommentUtils {
       );
     } else {
       if (scores.focus >= 85) {
-        selectedFragments.add(
+        bodyFragments.add(
           "수업 시간 내내 높은 집중력을 유지하며 어려운 문제도 끝까지 스스로 해결하려는 자세가 돋보입니다.",
         );
       } else {
-        selectedFragments.add("매 수업 시간 성실한 태도로 임하며 차근차근 실력을 쌓아가고 있습니다.");
+        bodyFragments.add("매 수업 시간 성실한 태도로 임하며 차근차근 실력을 쌓아가고 있습니다.");
       }
     }
 
@@ -121,7 +134,7 @@ class ReportCommentUtils {
         .where((t) => t.category == '대국 매너' || t.category == '인성')
         .toList();
     if (etiquetteTemplates.isNotEmpty) {
-      selectedFragments.add(
+      bodyFragments.add(
         _processTemplate(
           etiquetteTemplates[random.nextInt(etiquetteTemplates.length)].content,
           studentName,
@@ -129,15 +142,18 @@ class ReportCommentUtils {
         ),
       );
     } else {
-      selectedFragments.add("상대방을 존중하는 바른 대국 예절을 갖추고 있어 주변 친구들에게 좋은 본보기가 됩니다.");
+      bodyFragments.add("상대방을 존중하는 바른 대국 예절을 갖추고 있어 주변 친구들에게 좋은 본보기가 됩니다.");
     }
 
-    // 4. 격려/비전
+    // 4. 격려/비전/성장
     final visionTemplates = templates
-        .where((t) => t.category == '격려' || t.category == '비전')
+        .where(
+          (t) =>
+              t.category == '격려' || t.category == '비전' || t.category == '성장 변화',
+        )
         .toList();
     if (visionTemplates.isNotEmpty) {
-      selectedFragments.add(
+      bodyFragments.add(
         _processTemplate(
           visionTemplates[random.nextInt(visionTemplates.length)].content,
           studentName,
@@ -145,10 +161,35 @@ class ReportCommentUtils {
         ),
       );
     } else {
-      selectedFragments.add("지금과 같이 즐겁게 정진한다면 앞으로 더욱 큰 성장이 기대됩니다.");
+      bodyFragments.add("지금과 같이 즐겁게 정진한다면 앞으로 더욱 큰 성장이 기대됩니다.");
     }
 
-    return combineFragments(selectedFragments);
+    // 5. 마무리 (Conclusion)
+    final conclusionTemplates = templates
+        .where((t) => t.category == '마무리')
+        .toList();
+    if (conclusionTemplates.isNotEmpty) {
+      conclusionFragments.add(
+        _processTemplate(
+          conclusionTemplates[random.nextInt(conclusionTemplates.length)]
+              .content,
+          studentName,
+          textbookNames,
+        ),
+      );
+    }
+
+    // 바디 섹션 무작위 셔플링 (순서 변화를 통한 다양성 확보)
+    bodyFragments.shuffle(random);
+
+    // 최종 결합: 인트로 + (셔플된) 바디 + 마무리
+    List<String> finalFragments = [
+      ...introFragments,
+      ...bodyFragments,
+      ...conclusionFragments,
+    ];
+
+    return combineFragments(finalFragments);
   }
 
   static String _processTemplate(

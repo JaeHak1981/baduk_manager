@@ -1165,49 +1165,93 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
 
   List<CommentTemplateModel> _getSampleTemplates() {
     return [
-      // 1. 학습 성취
+      // 0. 인트로 (Intro) - 문단의 시작을 다양하게
+      CommentTemplateModel(
+        id: 'i1',
+        category: '인트로',
+        content: '이번 달 {{name}} 학생은 바둑의 깊은 묘미를 알아가며 한층 더 성장한 모습을 보여주었습니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i2',
+        category: '인트로',
+        content: '꾸준한 노력과 열정으로 실력을 쌓아가고 있는 {{name}} 학생의 학습 현황을 전해드립니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i3',
+        category: '인트로',
+        content: '선생님과 함께 호흡하며 바둑판 위에서 자신만의 길을 찾아가는 {{name}} 학생이 대견합니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i4',
+        category: '인트로',
+        content: '집중력 있는 모습으로 매 수업에 임하는 {{name}} 학생의 바둑 공부는 매우 순조롭게 진행 중입니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i5',
+        category: '인트로',
+        content: '최근 {{name}} 학생은 기술적인 발전뿐만 아니라 바둑을 대하는 마음가짐도 더욱 성숙해졌습니다.',
+      ),
+
+      // 1. 학습 성취 (Achievement) - 수준별로 구분
+      // [입문/기초 - Level 1]
       CommentTemplateModel(
         id: 'a1',
         category: '학습 성취',
+        level: 1,
         content: '기초 규칙을 완벽히 이해하고 돌의 활로와 집의 개념을 정확히 구분하여 적용합니다.',
       ),
       CommentTemplateModel(
+        id: 'a10',
+        category: '학습 성취',
+        level: 1,
+        content: '단수와 따내기 등 바둑의 가장 기본이 되는 원리를 실전 대국에서 실수 없이 수행해냅니다.',
+      ),
+      CommentTemplateModel(
+        id: 'a11',
+        category: '학습 성취',
+        level: 1,
+        content: '착수 금지와 패의 규칙 등 자칫 헷갈리기 쉬운 부분들도 이제는 정확히 숙지하고 있습니다.',
+      ),
+      // [초급/실전 - Level 2]
+      CommentTemplateModel(
         id: 'a2',
         category: '학습 성취',
+        level: 2,
         content: '착점의 우선순위인 \'큰 자리\'를 스스로 찾아내며 형세를 분석하는 안목이 생겼습니다.',
       ),
       CommentTemplateModel(
+        id: 'a12',
+        category: '학습 성취',
+        level: 2,
+        content: '축과 장문, 환격 등 기본적인 맥점을 발견하고 이를 이용해 이득을 보는 감각이 매우 좋습니다.',
+      ),
+      CommentTemplateModel(
+        id: 'a13',
+        category: '학습 성취',
+        level: 2,
+        content: '집 짓기의 효율성을 이해하기 시작했으며, 돌이 끊기지 않도록 연결하는 능력이 향상되었습니다.',
+      ),
+      // [중고급/심화 - Level 3]
+      CommentTemplateModel(
         id: 'a3',
         category: '학습 성취',
+        level: 3,
         content: '복잡한 사활 문제도 침착하게 수읽기하여 정답을 찾아내는 해결 능력이 우수합니다.',
       ),
       CommentTemplateModel(
-        id: 'a4',
+        id: 'a14',
         category: '학습 성취',
-        content: '단수와 축, 장문 등 기초 전술을 실전 대국에서 적재적소에 활용하는 능력이 좋습니다.',
+        level: 3,
+        content: '중반 전투 시 상대의 약점을 예리하게 파고드는 공격적인 수읽기가 돋보입니다.',
       ),
       CommentTemplateModel(
-        id: 'a5',
+        id: 'a15',
         category: '학습 성취',
-        content: '집 짓기의 효율성을 고려하여 돌의 모양을 입체적으로 구성하는 감각이 향상되었습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a6',
-        category: '학습 성취',
-        content: '상대방의 약점을 포착하여 공격하고 자신의 약점을 보강하는 공배 연동 능력이 뛰어납니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a7',
-        category: '학습 성취',
-        content: '필수 정석과 포석의 기본 원리를 이해하고 판을 넓게 쓰는 능력이 돋보입니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a8',
-        category: '학습 성취',
-        content: '패싸움과 끝내기 등 대국 마무리 단계까지 집중력을 유지하며 계산하는 능력이 정확합니다.',
+        level: 3,
+        content: '형세 판단을 통해 현재의 유불리를 파악하고, 그에 맞는 전략을 세우는 능력이 탁월합니다.',
       ),
 
-      // 2. 학습 태도/집중력
+      // 2. 학습 태도 (Attitude)
       CommentTemplateModel(
         id: 't1',
         category: '학습 태도',
@@ -1219,37 +1263,22 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         content: '궁금한 원리에 대해 적극적으로 질문하고 답을 찾으려는 탐구적인 태도가 훌륭합니다.',
       ),
       CommentTemplateModel(
-        id: 't3',
+        id: 't10',
         category: '학습 태도',
-        content: '어려운 난이도의 과제에도 포기하지 않고 끈기 있게 도전하여 성취해내는 모습이 인상적입니다.',
+        content: '패배에 실망하기보다 복기를 통해 자신의 실수를 돌아보는 진지한 자세를 갖고 있습니다.',
       ),
       CommentTemplateModel(
-        id: 't4',
+        id: 't11',
         category: '학습 태도',
-        content: '착점 전 신중하게 수읽기하는 습관이 정착되어 불필요한 실수가 눈에 띄게 줄었습니다.',
+        content: '한 수 한 수 신중하게 생각하고 두려는 노력이 보이며, 경솔한 착점이 눈에 띄게 줄었습니다.',
       ),
       CommentTemplateModel(
-        id: 't5',
+        id: 't12',
         category: '학습 태도',
-        content: '학습 활동에 즐겁게 참여하며 바둑을 구상하고 문제를 해결하는 과정 자체를 즐깁니다.',
-      ),
-      CommentTemplateModel(
-        id: 't6',
-        category: '학습 태도',
-        content: '자신의 대국 결과에 대해 스스로 복기하며 개선점을 찾으려는 진지한 성찰 태도를 보입니다.',
-      ),
-      CommentTemplateModel(
-        id: 't7',
-        category: '학습 태도',
-        content: '주의 깊게 판 전체를 살피는 신중함이 돋보이며 정해진 학습 분량을 항상 성실히 완수합니다.',
-      ),
-      CommentTemplateModel(
-        id: 't8',
-        category: '학습 태도',
-        content: '새로운 기술을 배울 때 열린 마음으로 수용하고 자신의 것으로 만들려는 열의가 가득합니다.',
+        content: '모르는 문제가 나와도 포기하지 않고 스스로 끝까지 해결해 보려는 의지가 강합니다.',
       ),
 
-      // 3. 대국 예절/인성
+      // 3. 대국 예절 (Etiquette)
       CommentTemplateModel(
         id: 'e1',
         category: '대국 매너',
@@ -1258,121 +1287,61 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       CommentTemplateModel(
         id: 'e2',
         category: '대국 매너',
-        content: '승패 결과보다는 대국의 과정에 집중하며 패배했을 때도 의연하게 받아들이는 태도가 우수합니다.',
+        content: '승패 결과보다는 대국의 과정에 집중하며 승부의 세계를 건전하게 즐기는 모습이 보기 좋습니다.',
       ),
       CommentTemplateModel(
-        id: 'e3',
+        id: 'e10',
         category: '대국 매너',
-        content: '대국 중 바른 자세를 유지하며 주위를 산만하게 하지 않는 높은 정서적 조절력을 보여줍니다.',
+        content: '대국 중 정숙을 유지하고 상대방의 생각 시간을 배려하는 매너 있는 태도가 돋보입니다.',
       ),
       CommentTemplateModel(
-        id: 'e4',
+        id: 'e11',
         category: '대국 매너',
-        content: '친구들과의 대국에서 규칙을 정확히 준수하며 서로 돕고 배우는 협력적인 모습을 보입니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e5',
-        category: '대국 매너',
-        content: '시간을 잘 지키고 도구(바둑판, 돌)를 소중히 다루는 기본 생활 습관이 잘 형성되어 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e6',
-        category: '대국 매너',
-        content: '상대방이 생각할 시간을 충분히 배려하며 매너 있게 대국에 임하는 성숙함을 보여줍니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e7',
-        category: '대국 매너',
-        content: '어려워하는 친구에게 친절하게 원리를 설명해 주며 함께 성장하려는 따뜻한 마음을 가졌습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e8',
-        category: '대국 매너',
-        content: '대국 중의 정숙을 잘 유지하며 한 수 한 수에 정성을 다하는 명상적인 태도가 돋보입니다.',
+        content: '바둑판과 바둑알을 소중히 다루며, 대국 후 정리 정돈까지 완벽하게 해냅니다.',
       ),
 
-      // 4. 성장 변화
+      // 4. 성장 변화 (Growth)
       CommentTemplateModel(
         id: 'g1',
         category: '성장 변화',
-        content: '초기 대비 바둑판을 보는 시야가 넓어졌으며 착점 시의 자신감이 크게 회복되었습니다.',
+        content: '초기 대비 바둑판을 보는 시야가 넓어졌으며 착점 시의 자신감이 크게 향상되었습니다.',
       ),
       CommentTemplateModel(
-        id: 'g2',
+        id: 'g10',
         category: '성장 변화',
-        content: '산만했던 대국 습관이 사라지고 한 수 한 수 신중하게 생각한 뒤 착점하는 변화가 뚜렷합니다.',
+        content: '단순히 돌을 따내기보다 판 전체를 보며 집을 지으려는 거시적인 안목이 생기기 시작했습니다.',
       ),
       CommentTemplateModel(
-        id: 'g3',
+        id: 'g11',
         category: '성장 변화',
-        content: '초기에는 승패에 예민했으나 이제는 대국 자체의 즐거움을 알고 즐기는 모습으로 성장했습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g4',
-        category: '성장 변화',
-        content: '부족했던 수읽기 능력이 매일 꾸준한 연습을 통해 또래 수준을 상회할 만큼 크게 늘었습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g5',
-        category: '성장 변화',
-        content: '소극적이었던 질문 태도가 적극적으로 바뀌며 수업의 주인공으로 거듭난 긍정적인 변화를 보입니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g6',
-        category: '성장 변화',
-        content: '기초 단계에서 중급 단계로 거침없이 도약하며 실전 실력이 비약적으로 향상된 기간이었습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g7',
-        category: '성장 변화',
-        content: '바둑을 통해 집중력이 길러지면서 학습 전반에 걸쳐 신중함과 끈기가 보태지고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g8',
-        category: '성장 변화',
-        content: '어렵게 느끼던 사활 풀이에 흥미를 느끼기 시작하며 자기주도적인 학습 습관이 형성되었습니다.',
+        content: '수읽기 능력이 정교해지면서 실전 대국에서의 승률 또한 눈에 띄게 상승하고 있습니다.',
       ),
 
-      // 5. 격려/비전
+      // 5. 마무리 (Conclusion)
       CommentTemplateModel(
-        id: 'v1',
-        category: '격려',
-        content: '지금처럼 즐기며 꾸준히 정진한다면 다음 단계에서도 큰 성취를 이룰 것이라 확신합니다.',
+        id: 'c1',
+        category: '마무리',
+        content: '지금처럼 바둑을 즐기며 성실하게 노력한다면 머지않아 훌륭한 기량을 갖추게 될 것입니다.',
       ),
       CommentTemplateModel(
-        id: 'v2',
-        category: '격려',
-        content: '무한한 잠재력을 가진 학생으로 바둑을 통한 인내심 함양이 앞으로의 성장에 큰 밑거름이 될 것입니다.',
+        id: 'c2',
+        category: '마무리',
+        content: '앞으로도 {{name}} 학생의 멋진 성장을 기대하며 적극적으로 지원하고 지도하겠습니다.',
       ),
       CommentTemplateModel(
-        id: 'v3',
-        category: '격려',
-        content: '이미 충분히 훌륭한 실력을 갖췄으며 더 넓은 시야를 갖기 위한 꾸준한 실전 대국을 권장합니다.',
+        id: 'c3',
+        category: '마무리',
+        content: '바둑을 통해 키운 수읽기 능력과 인내심이 다른 학습에도 긍정적인 영향을 미치길 바랍니다.',
       ),
       CommentTemplateModel(
-        id: 'v4',
-        category: '격려',
-        content: '바둑에서 배운 \'생각하는 힘\'이 학교 생활과 일상에서도 긍정적인 에너지로 발휘되길 응원합니다.',
+        id: 'c4',
+        category: '마무리',
+        content: '다음 달에는 더욱 발전된 모습으로 깊이 있는 바둑을 함께 연구해 나가기를 희망합니다.',
       ),
       CommentTemplateModel(
-        id: 'v5',
-        category: '격려',
-        content: '뛰어난 감각을 잘 가다듬는다면 미래에 아주 훌륭한 기력을 갖춘 바둑 인재가 될 인재입니다.',
-      ),
-      CommentTemplateModel(
-        id: 'v6',
-        category: '격려',
-        content: '그동안 보여준 성실함에 박수를 보내며 앞으로도 바둑의 즐거움을 잊지 않길 바랍니다.',
-      ),
-      CommentTemplateModel(
-        id: 'v7',
-        category: '격려',
-        content: '자신감을 가지고 자신의 수를 믿는다면 앞으로는 훨씬 더 놀라운 실력을 보여줄 것입니다.',
-      ),
-      CommentTemplateModel(
-        id: 'v8',
-        category: '격려',
-        content: '바둑을 즐기는 마음이 인성 성장으로 이어지는 모습이 아름다우며 지속적인 정진을 응원합니다.',
+        id: 'c5',
+        category: '마무리',
+        content: '꾸준함이 가장 큰 무기입니다. {{name}} 학생의 밝은 미래를 응원합니다.',
       ),
     ];
   }

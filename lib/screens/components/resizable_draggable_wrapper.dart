@@ -74,6 +74,15 @@ class _ResizableDraggableWrapperState extends State<ResizableDraggableWrapper> {
     return (value / _gridSize).roundToDouble() * _gridSize;
   }
 
+  // A4 용지 범위 계산 (1:1.41 비율, 패딩 32px 제외)
+  double get _maxWidth => 536.0; // A4 비율 기준 최대 너비
+  double get _maxHeight => 756.0; // A4 비율 기준 최대 높이
+
+  // 경계 제한 함수
+  double _clampPosition(double value, double min, double max) {
+    return value.clamp(min, max);
+  }
+
   void _notifyChange() {
     widget.onLayoutChanged(top, left, width, height);
   }
@@ -210,8 +219,20 @@ class _ResizableDraggableWrapperState extends State<ResizableDraggableWrapper> {
                 },
                 onPanUpdate: (details) {
                   setState(() {
-                    top += details.delta.dy;
-                    left += details.delta.dx;
+                    double newTop = top + details.delta.dy;
+                    double newLeft = left + details.delta.dx;
+
+                    // 경계 제한 적용
+                    top = _clampPosition(
+                      newTop,
+                      0,
+                      _maxHeight - (height ?? 50),
+                    );
+                    left = _clampPosition(
+                      newLeft,
+                      0,
+                      _maxWidth - (width ?? 50),
+                    );
                   });
                 },
                 onPanEnd: (_) {

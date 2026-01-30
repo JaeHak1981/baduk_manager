@@ -113,6 +113,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
           '${isBackground ? 'bg' : 'list'}_${item.id}_$_layoutVersion',
         ),
         templateType: ReportTemplateType.classic, // 항상 classic으로 고정
+        isPrinting: isBackground,
         student: item,
         academy: widget.academy,
         progressList: progressList,
@@ -1399,6 +1400,7 @@ class _EducationReportPaper extends StatelessWidget {
   final List<CommentTemplateModel> templates; // 추가: 문구 추천 데이터
 
   final ReportTemplateType templateType;
+  final bool isPrinting; // 인쇄/저장 모드 플래그
 
   _EducationReportPaper({
     super.key,
@@ -1431,6 +1433,7 @@ class _EducationReportPaper extends StatelessWidget {
     required this.layoutVersion,
     this.templates = const [],
     this.templateType = ReportTemplateType.classic,
+    this.isPrinting = false,
   });
 
   @override
@@ -1457,27 +1460,19 @@ class _EducationReportPaper extends StatelessWidget {
         borderRadius: BorderRadius.circular(2),
         child: AspectRatio(
           aspectRatio: 1 / 1.41,
-          child: Padding(
+          child: Container(
+            color: const Color(0xFFF5F7FA),
             padding: const EdgeInsets.all(32.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                _buildClassicHeader(context),
-                const SizedBox(height: 20),
+                _buildAcademyInfo(context),
+                _buildReportTitle(context),
                 _buildStudentInfoBar(context),
-                const SizedBox(height: 24),
-                Expanded(
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      if (showRadarChart) _buildRadarChartSection(context),
-                      if (showProgress) _buildProgressSection(),
-                      if (showCompetency) _buildCompetencySection(context),
-                      _buildCommentSection(context),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
+                if (showRadarChart) _buildRadarChartSection(context),
+                if (showProgress) _buildProgressSection(),
+                if (showCompetency) _buildCompetencySection(context),
+                _buildCommentSection(context),
               ],
             ),
           ),
@@ -1486,78 +1481,118 @@ class _EducationReportPaper extends StatelessWidget {
     );
   }
 
-  Widget _buildClassicHeader(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              onTap: () => _showEditDialog(
-                context,
-                title: '학원명/교실명',
-                initialValue: academyName,
-                studentName: student.name,
-                onSaved: onAcademyNameChanged,
-              ),
-              child: Text(
-                academyName,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.indigo,
-                ),
-              ),
-            ),
-            InkWell(
-              onTap: () => _showDatePicker(context),
-              child: Text(
-                reportDate,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-              ),
-            ),
-          ],
-        ),
-        if (templateType == ReportTemplateType.classic)
+  Widget _buildAcademyInfo(BuildContext context) {
+    return ResizableDraggableWrapper(
+      key: ValueKey('academyInfo_$layoutVersion'),
+      initialTop: layouts['academyInfo']?.top ?? 20,
+      initialLeft: layouts['academyInfo']?.left ?? 0,
+      initialWidth: layouts['academyInfo']?.width ?? 200,
+      initialHeight: layouts['academyInfo']?.height ?? 45,
+      isEditing: isLayoutEditing,
+      onLayoutChanged: (t, l, w, h) => onLayoutChanged(
+        'academyInfo',
+        WidgetLayout(top: t, left: l, width: w, height: h),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
           InkWell(
             onTap: () => _showEditDialog(
               context,
-              title: '레포트 제목',
-              initialValue: reportTitle,
+              title: '학원명/교실명',
+              initialValue: academyName,
               studentName: student.name,
-              onSaved: onReportTitleChanged,
+              onSaved: onAcademyNameChanged,
             ),
             child: Text(
-              reportTitle,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              academyName,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.indigo,
+              ),
             ),
           ),
-      ],
+          InkWell(
+            onTap: () => _showDatePicker(context),
+            child: Text(
+              reportDate,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportTitle(BuildContext context) {
+    if (templateType != ReportTemplateType.classic) {
+      return const SizedBox.shrink();
+    }
+
+    return ResizableDraggableWrapper(
+      key: ValueKey('reportTitle_$layoutVersion'),
+      initialTop: layouts['reportTitle']?.top ?? 110,
+      initialLeft: layouts['reportTitle']?.left ?? 0,
+      initialWidth: layouts['reportTitle']?.width ?? 530,
+      initialHeight: layouts['reportTitle']?.height ?? 30,
+      isEditing: isLayoutEditing,
+      onLayoutChanged: (t, l, w, h) => onLayoutChanged(
+        'reportTitle',
+        WidgetLayout(top: t, left: l, width: w, height: h),
+      ),
+      child: InkWell(
+        onTap: () => _showEditDialog(
+          context,
+          title: '레포트 제목',
+          initialValue: reportTitle,
+          studentName: student.name,
+          onSaved: onReportTitleChanged,
+        ),
+        child: Center(
+          child: Text(
+            reportTitle,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildStudentInfoBar(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
+    return ResizableDraggableWrapper(
+      key: ValueKey('studentInfo_$layoutVersion'),
+      initialTop: layouts['studentInfo']?.top ?? 160,
+      initialLeft: layouts['studentInfo']?.left ?? 0,
+      initialWidth: layouts['studentInfo']?.width ?? 530,
+      initialHeight: layouts['studentInfo']?.height ?? 62,
+      isEditing: isLayoutEditing,
+      onLayoutChanged: (t, l, w, h) => onLayoutChanged(
+        'studentInfo',
+        WidgetLayout(top: t, left: l, width: w, height: h),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildInfoItem('학생명', student.name),
-          _buildDivider(),
-          _buildInfoItem('학년', '${student.grade}학년'),
-          _buildDivider(),
-          _buildInfoItem('반', '${student.session}부'),
-          if (showLevel) ...[
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildInfoItem('학생명', student.name),
             _buildDivider(),
-            _buildInfoItem('급수', studentLevel),
+            _buildInfoItem('학년', '${student.grade}학년'),
+            _buildDivider(),
+            _buildInfoItem('반', '${student.session}부'),
+            if (showLevel) ...[
+              _buildDivider(),
+              _buildInfoItem('급수', studentLevel),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1565,24 +1600,40 @@ class _EducationReportPaper extends StatelessWidget {
   Widget _buildRadarChartSection(BuildContext context) {
     return ResizableDraggableWrapper(
       key: ValueKey('radar_$layoutVersion'),
-      initialTop: layouts['radar']?.top ?? 0,
+      initialTop: layouts['radar']?.top ?? 222,
       initialLeft: layouts['radar']?.left ?? 0,
-      initialWidth: layouts['radar']?.width ?? 240,
-      initialHeight: layouts['radar']?.height ?? 240,
+      initialWidth: layouts['radar']?.width ?? 230,
+      initialHeight: layouts['radar']?.height ?? 250,
       isEditing: isLayoutEditing,
       onLayoutChanged: (t, l, w, h) => onLayoutChanged(
         'radar',
         WidgetLayout(top: t, left: l, width: w, height: h),
       ),
-      child: Column(
-        children: [
-          Text(
-            '[ ${balanceChartType.displayName} ]',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    _buildChart(),
+                    Positioned.fill(
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => _showChartTypeSelectionDialog(context),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Expanded(child: _buildChart()),
-        ],
+        ),
       ),
     );
   }
@@ -1598,28 +1649,74 @@ class _EducationReportPaper extends StatelessWidget {
     }
   }
 
+  void _showChartTypeSelectionDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return SimpleDialog(
+          title: const Text('차트 종류 선택'),
+          children: BalanceChartType.values.map((type) {
+            return SimpleDialogOption(
+              onPressed: () {
+                onChartTypeChanged(type);
+                Navigator.pop(context);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      type == balanceChartType
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: type == balanceChartType
+                          ? Colors.indigo
+                          : Colors.grey,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(type.displayName),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
   Widget _buildProgressSection() {
     return ResizableDraggableWrapper(
       key: ValueKey('progress_$layoutVersion'),
-      initialTop: layouts['progress']?.top ?? 0,
-      initialLeft: layouts['progress']?.left ?? 260,
+      initialTop: layouts['progress']?.top ?? 222,
+      initialLeft: layouts['progress']?.left ?? 250,
       initialWidth: layouts['progress']?.width ?? 280,
-      initialHeight: layouts['progress']?.height ?? 150,
+      initialHeight: layouts['progress']?.height ?? 118,
       isEditing: isLayoutEditing,
       onLayoutChanged: (t, l, w, h) => onLayoutChanged(
         'progress',
         WidgetLayout(top: t, left: l, width: w, height: h),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '[ 교재 학습 현황 ]',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '[ 교재 학습 현황 ]',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: SingleChildScrollView(child: _buildProgressList()),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Expanded(child: SingleChildScrollView(child: _buildProgressList())),
-        ],
+        ),
       ),
     );
   }
@@ -1676,62 +1773,69 @@ class _EducationReportPaper extends StatelessWidget {
   Widget _buildCompetencySection(BuildContext context) {
     return ResizableDraggableWrapper(
       key: ValueKey('competency_$layoutVersion'),
-      initialTop: layouts['competency']?.top ?? 120,
-      initialLeft: layouts['competency']?.left ?? 260,
+      initialTop: layouts['competency']?.top ?? 345,
+      initialLeft: layouts['competency']?.left ?? 250,
       initialWidth: layouts['competency']?.width ?? 280,
-      initialHeight: layouts['competency']?.height ?? 180,
+      initialHeight: layouts['competency']?.height ?? 127,
       isEditing: isLayoutEditing,
       onLayoutChanged: (t, l, w, h) => onLayoutChanged(
         'competency',
         WidgetLayout(top: t, left: l, width: w, height: h),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '[ 역량별 성취도 상세 ]',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  _buildScoreBar(
-                    '집중력',
-                    scores.focus,
-                    Colors.blue.shade700,
-                    () => _showScoreEditDialog(context),
-                  ),
-                  _buildScoreBar(
-                    '응용력',
-                    scores.application,
-                    Colors.teal.shade600,
-                    () => _showScoreEditDialog(context),
-                  ),
-                  _buildScoreBar(
-                    '정확도',
-                    scores.accuracy,
-                    Colors.orange.shade700,
-                    () => _showScoreEditDialog(context),
-                  ),
-                  _buildScoreBar(
-                    '과제수행',
-                    scores.task,
-                    Colors.purple.shade600,
-                    () => _showScoreEditDialog(context),
-                  ),
-                  _buildScoreBar(
-                    '창의성',
-                    scores.creativity,
-                    Colors.pink.shade600,
-                    () => _showScoreEditDialog(context),
-                  ),
-                ],
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '[ 역량별 성취도 상세 ]',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
-            ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildScoreBar(
+                        '집중력',
+                        scores.focus,
+                        Colors.blue.shade700,
+                        () => _showScoreEditDialog(context),
+                      ),
+                      _buildScoreBar(
+                        '응용력',
+                        scores.application,
+                        Colors.teal.shade600,
+                        () => _showScoreEditDialog(context),
+                      ),
+                      _buildScoreBar(
+                        '정확도',
+                        scores.accuracy,
+                        Colors.orange.shade700,
+                        () => _showScoreEditDialog(context),
+                      ),
+                      _buildScoreBar(
+                        '과제수행',
+                        scores.task,
+                        Colors.purple.shade600,
+                        () => _showScoreEditDialog(context),
+                      ),
+                      _buildScoreBar(
+                        '창의성',
+                        scores.creativity,
+                        Colors.pink.shade600,
+                        () => _showScoreEditDialog(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1739,72 +1843,80 @@ class _EducationReportPaper extends StatelessWidget {
   Widget _buildCommentSection(BuildContext context) {
     return ResizableDraggableWrapper(
       key: ValueKey('comment_$layoutVersion'),
-      initialTop: layouts['comment']?.top ?? 300,
+      initialTop: layouts['comment']?.top ?? 500,
       initialLeft: layouts['comment']?.left ?? 0,
-      initialWidth: layouts['comment']?.width ?? 536,
-      initialHeight: layouts['comment']?.height ?? 200,
+      initialWidth: layouts['comment']?.width ?? 530,
+      initialHeight: layouts['comment']?.height ?? 188,
       isEditing: isLayoutEditing,
       onLayoutChanged: (t, l, w, h) => onLayoutChanged(
         'comment',
         WidgetLayout(top: t, left: l, width: w, height: h),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '[ 지도교사 종합 의견 ]',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.refresh, size: 16),
-                    onPressed: onRerollComment,
+                  const Text(
+                    '[ 지도교사 종합 의견 ]',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.grid_view, size: 16),
-                    onPressed: onOpenCommentPicker,
-                  ),
+                  if (!isPrinting)
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.refresh, size: 16),
+                          onPressed: onRerollComment,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.grid_view, size: 16),
+                          onPressed: onOpenCommentPicker,
+                        ),
+                      ],
+                    ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: InkWell(
-              onTap: () => _showEditDialog(
-                context,
-                title: '종합 의견',
-                initialValue: teacherComment,
-                onSaved: onCommentChanged,
-                isMultiline: true,
-                templates: templates,
-                studentName: student.name,
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: SingleChildScrollView(
-                  child: Text(
-                    teacherComment,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      height: 1.6,
-                      fontStyle: FontStyle.italic,
-                      color: Colors.black87,
+              const SizedBox(height: 12),
+              Expanded(
+                child: InkWell(
+                  onTap: () => _showEditDialog(
+                    context,
+                    title: '종합 의견',
+                    initialValue: teacherComment,
+                    onSaved: onCommentChanged,
+                    isMultiline: true,
+                    templates: templates,
+                    studentName: student.name,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Text(
+                        teacherComment,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.6,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.black87,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

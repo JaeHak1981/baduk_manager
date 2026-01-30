@@ -579,9 +579,11 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                             academyName:
                                                 _customAcademyName ??
                                                 widget.academy.name,
+                                            // ...
                                             reportTitle:
                                                 _customReportTitle ??
                                                 '바둑 성장 레포트',
+                                            templates: _getSampleTemplates(),
                                             reportDate:
                                                 _customReportDate ??
                                                 DateFormat(
@@ -768,6 +770,57 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                 context,
                                 label: '문구 선택',
                                 icon: Icons.list_alt,
+                                onPressed: () {
+                                  if (_selectedStudentIds.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('먼저 학생을 선택해주세요.'),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  // 문구 선택 다이얼로그 표시
+                                  showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    builder: (sheetContext) => CommentGridPicker(
+                                      templates: _getSampleTemplates(),
+                                      multiSelect: true, // 다중 선택 모드 활성화
+                                      onSelected: (content) {
+                                        setState(() {
+                                          // 선택된 모든 학생에게 문구 적용
+                                          for (final id
+                                              in _selectedStudentIds) {
+                                            _customComments[id] = content;
+                                          }
+                                        });
+                                        // CommentGridPicker 내부에서 Navigator.pop을 호출하므로 여기서는 호출하지 않음
+                                        // SnackBar는 약간의 지연 후 표시
+                                        Future.delayed(
+                                          const Duration(milliseconds: 300),
+                                          () {
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    '${_selectedStudentIds.length}명의 학생에게 문구가 적용되었습니다.',
+                                                  ),
+                                                  duration: const Duration(
+                                                    seconds: 2,
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          },
+                                        );
+                                      },
+                                    ),
+                                  );
+                                },
                               ),
                               _buildActionButton(
                                 context,
@@ -1042,6 +1095,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                             academyName:
                                 _customAcademyNames[item.id] ??
                                 widget.academy.name,
+                            templates: _getSampleTemplates(),
                             reportTitle:
                                 _customReportTitles[item.id] ?? '수강생 학습 통지표',
                             reportDate:
@@ -1456,6 +1510,7 @@ class _EducationReportPaper extends StatelessWidget {
   final Map<String, WidgetLayout> layouts;
   final Function(String, WidgetLayout) onLayoutChanged;
   final int layoutVersion; // 추가: 강제 리빌드를 위한 버전
+  final List<CommentTemplateModel> templates; // 추가: 문구 추천 데이터
 
   const _EducationReportPaper({
     super.key,
@@ -1484,6 +1539,7 @@ class _EducationReportPaper extends StatelessWidget {
     required this.layouts,
     required this.onLayoutChanged,
     required this.layoutVersion,
+    this.templates = const [],
   });
 
   @override
@@ -1869,6 +1925,7 @@ class _EducationReportPaper extends StatelessWidget {
                                   initialValue: teacherComment,
                                   onSaved: onCommentChanged,
                                   isMultiline: true,
+                                  templates: templates,
                                 ),
                                 borderRadius: BorderRadius.circular(4),
                                 hoverColor: Colors.indigo.withOpacity(0.05),
@@ -2082,35 +2139,90 @@ class _EducationReportPaper extends StatelessWidget {
     required String initialValue,
     required Function(String) onSaved,
     bool isMultiline = false,
+    List<CommentTemplateModel> templates = const [],
   }) {
+    print(
+      '🔍 _showEditDialog called: title=$title, isMultiline=$isMultiline, templates.length=${templates.length}',
+    );
     final controller = TextEditingController(text: initialValue);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('$title 수정'),
         content: SizedBox(
           width: 500,
-          child: TextField(
-            controller: controller,
-            maxLines: isMultiline ? 8 : 1,
-            minLines: isMultiline ? 5 : 1,
-            decoration: InputDecoration(
-              hintText: '새로운 $title을 입력하세요',
-              border: const OutlineInputBorder(),
-              alignLabelWithHint: true,
-            ),
-            autofocus: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                maxLines: isMultiline ? 8 : 1,
+                minLines: isMultiline ? 5 : 1,
+                decoration: InputDecoration(
+                  hintText: '새로운 $title을 입력하세요',
+                  border: const OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+                autofocus: true,
+              ),
+              if (templates.isNotEmpty && isMultiline) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context, // 부모 컨텍스트 사용
+                        isScrollControlled: true,
+                        builder: (sheetContext) => CommentGridPicker(
+                          templates: templates,
+                          onSelected: (content) {
+                            // 커서 위치에 삽입하거나 끝에 추가
+                            final text = controller.text;
+                            final selection = controller.selection;
+                            String newText;
+
+                            if (selection.start >= 0 && selection.end >= 0) {
+                              newText = text.replaceRange(
+                                selection.start,
+                                selection.end,
+                                content,
+                              );
+                            } else {
+                              newText = text.isEmpty
+                                  ? content
+                                  : '$text $content';
+                            }
+                            controller.text = newText;
+                            // 여기서 다이얼로그를 닫지 않음 (계속 편집 가능하게)
+                          },
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.grid_view, size: 16),
+                    label: const Text('문구 선택'),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      backgroundColor: Colors.indigo.withValues(alpha: 0.05),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('취소'),
           ),
           ElevatedButton(
             onPressed: () {
               onSaved(controller.text.trim());
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
             },
             child: const Text('저장'),
           ),

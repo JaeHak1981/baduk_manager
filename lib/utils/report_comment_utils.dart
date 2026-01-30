@@ -181,4 +181,38 @@ class ReportCommentUtils {
       return 3; // 중고급 (6권 이상)
     }
   }
+
+  /// 학생의 수준 및 권수에 따라 초기 성취도 점수를 동적으로 생성
+  static AchievementScores generateInitialScores({
+    required String textbookName,
+    required int volumeNumber,
+  }) {
+    final random = Random();
+    final level = _determineLevel(textbookName, volumeNumber);
+
+    int baseMin;
+    int baseMax;
+
+    if (level == 1) {
+      baseMin = 70;
+      baseMax = 79;
+    } else if (level == 2) {
+      baseMin = 80;
+      baseMax = 89;
+    } else {
+      baseMin = 90;
+      baseMax = 98;
+    }
+
+    // 각 항목별로 베이스 범위 내에서 랜덤하게 생성 (자연스러움을 위해 항목별 개별 랜덤 부여)
+    int nextScore() => baseMin + random.nextInt(baseMax - baseMin + 1);
+
+    return AchievementScores(
+      focus: nextScore(),
+      application: nextScore(),
+      accuracy: nextScore(),
+      task: nextScore(),
+      creativity: nextScore(),
+    );
+  }
 }

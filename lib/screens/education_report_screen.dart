@@ -46,6 +46,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
   final ScrollController _previewScrollController = ScrollController();
   final PageController _pageController = PageController();
   bool _isPreviewMode = false; // 집중 미리보기 모드 여부
+  int _layoutVersion = 0; // 레이아웃 초기화 시 UI 강제 새로고침을 위한 버전
 
   @override
   void initState() {
@@ -268,14 +269,23 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                       .toList();
                   final volumes = progress.map((p) => p.volumeNumber).toList();
 
-                  _customComments[student
-                      .id] = ReportCommentUtils.autoGenerateComment(
-                    studentName: student.name,
-                    scores: _customScores[student.id] ?? AchievementScores(),
-                    textbookNames: textbookNames,
-                    volumes: volumes,
-                    templates: _getSampleTemplates(),
-                  );
+                  final initialScores =
+                      ReportCommentUtils.generateInitialScores(
+                        textbookName: textbookNames.isNotEmpty
+                            ? textbookNames.first
+                            : '배우고 있는 교재',
+                        volumeNumber: volumes.isNotEmpty ? volumes.first : 1,
+                      );
+
+                  _customScores[student.id] = initialScores;
+                  _customComments[student.id] =
+                      ReportCommentUtils.autoGenerateComment(
+                        studentName: student.name,
+                        scores: initialScores,
+                        textbookNames: textbookNames,
+                        volumes: volumes,
+                        templates: _getSampleTemplates(),
+                      );
                 }
               });
 
@@ -560,6 +570,9 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                         child: RepaintBoundary(
                                           key: reportKey,
                                           child: _EducationReportPaper(
+                                            key: ValueKey(
+                                              'report_list_${item.id}_$_layoutVersion',
+                                            ),
                                             student: item,
                                             academy: widget.academy,
                                             progressList: progressList,
@@ -682,6 +695,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                                         layout;
                                                   });
                                                 },
+                                            layoutVersion: _layoutVersion,
                                           ),
                                         ),
                                       ),
@@ -776,6 +790,14 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                   });
                                 },
                               ),
+                              if (_isLayoutEditing)
+                                _buildActionButton(
+                                  context,
+                                  label: '레이아웃 초기화',
+                                  icon: Icons.restart_alt,
+                                  color: Colors.red,
+                                  onPressed: _resetCurrentStudentLayout,
+                                ),
                             ],
                           ),
                           const SizedBox(height: 24),
@@ -869,6 +891,73 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
     );
   }
 
+  void _resetCurrentStudentLayout() {
+    final studentProvider = context.read<StudentProvider>();
+    final selectedStudents = studentProvider.students
+        .where((s) => _selectedStudentIds.contains(s.id))
+        .toList();
+
+    if (selectedStudents.isEmpty) return;
+
+    List<String> idsToReset = [];
+    String confirmMessage = '';
+
+    if (_isPreviewMode) {
+      int currentIndex = 0;
+      try {
+        if (_pageController.hasClients) {
+          currentIndex = _pageController.page?.round() ?? 0;
+        }
+      } catch (_) {}
+
+      if (currentIndex < 0 || currentIndex >= selectedStudents.length) return;
+      final student = selectedStudents[currentIndex];
+      idsToReset.add(student.id);
+      confirmMessage = '${student.name} 학생의 통지표 항목 위치와 크기를 처음 기본값으로 되돌리시겠습니까?';
+    } else {
+      // 리스트 뷰인 경우 선택된 모든 학생 초기화
+      idsToReset.addAll(selectedStudents.map((s) => s.id));
+      confirmMessage =
+          '선택된 ${selectedStudents.length}명 학생의 통지표 성분 위치와 크기를 모두 처음 기본값으로 되돌리시겠습니까?';
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('레이아웃 초기화'),
+        content: Text(confirmMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                for (var id in idsToReset) {
+                  _studentLayouts.remove(id);
+                }
+                _layoutVersion++; // 버전 업그레이드하여 UI 강제 Rebuild 유도
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    _isPreviewMode
+                        ? '레이아웃이 초기화되었습니다.'
+                        : '${idsToReset.length}명의 레이아웃이 초기화되었습니다.',
+                  ),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            child: const Text('초기화', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFocusedPreview(List<dynamic> displayItems) {
     return Column(
       children: [
@@ -944,6 +1033,9 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                         child: RepaintBoundary(
                           key: reportKey,
                           child: _EducationReportPaper(
+                            key: ValueKey(
+                              'report_focused_${item.id}_$_layoutVersion',
+                            ),
                             student: item,
                             academy: widget.academy,
                             progressList: progressList,
@@ -1007,13 +1099,22 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                   .map((p) => p.volumeNumber)
                                   .toList();
 
+                              final initialScores =
+                                  ReportCommentUtils.generateInitialScores(
+                                    textbookName: textbookNames.isNotEmpty
+                                        ? textbookNames.first
+                                        : '배우고 있는 교재',
+                                    volumeNumber: volumes.isNotEmpty
+                                        ? volumes.first
+                                        : 1,
+                                  );
+
                               setState(() {
+                                _customScores[item.id] = initialScores;
                                 _customComments[item.id] =
                                     ReportCommentUtils.autoGenerateComment(
                                       studentName: item.name,
-                                      scores:
-                                          _customScores[item.id] ??
-                                          AchievementScores(),
+                                      scores: initialScores,
                                       textbookNames: textbookNames,
                                       volumes: volumes,
                                       templates: _getSampleTemplates(),
@@ -1028,6 +1129,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                 _studentLayouts[item.id]![widgetId] = layout;
                               });
                             },
+                            layoutVersion: _layoutVersion,
                           ),
                         ),
                       ),
@@ -1353,8 +1455,10 @@ class _EducationReportPaper extends StatelessWidget {
   final bool isLayoutEditing;
   final Map<String, WidgetLayout> layouts;
   final Function(String, WidgetLayout) onLayoutChanged;
+  final int layoutVersion; // 추가: 강제 리빌드를 위한 버전
 
   const _EducationReportPaper({
+    super.key,
     required this.student,
     required this.academy,
     required this.progressList,
@@ -1379,6 +1483,7 @@ class _EducationReportPaper extends StatelessWidget {
     required this.isLayoutEditing,
     required this.layouts,
     required this.onLayoutChanged,
+    required this.layoutVersion,
   });
 
   @override
@@ -1537,6 +1642,7 @@ class _EducationReportPaper extends StatelessWidget {
                       // 레이더 차트
                       if (showRadarChart)
                         ResizableDraggableWrapper(
+                          key: ValueKey('radar_$layoutVersion'),
                           initialTop: layouts['radar']?.top ?? 0,
                           initialLeft: layouts['radar']?.left ?? 0,
                           initialWidth: layouts['radar']?.width ?? 240,
@@ -1564,10 +1670,11 @@ class _EducationReportPaper extends StatelessWidget {
                       // 학습 현황
                       if (showProgress)
                         ResizableDraggableWrapper(
+                          key: ValueKey('progress_$layoutVersion'),
                           initialTop: layouts['progress']?.top ?? 0,
                           initialLeft: layouts['progress']?.left ?? 260,
                           initialWidth: layouts['progress']?.width ?? 280,
-                          initialHeight: layouts['progress']?.height ?? 100,
+                          initialHeight: layouts['progress']?.height ?? 150,
                           isEditing: isLayoutEditing,
                           onLayoutChanged: (t, l, w, h) => onLayoutChanged(
                             'progress',
@@ -1651,10 +1758,11 @@ class _EducationReportPaper extends StatelessWidget {
                       // 역량별 성취도 상세
                       if (showCompetency)
                         ResizableDraggableWrapper(
+                          key: ValueKey('competency_$layoutVersion'),
                           initialTop: layouts['competency']?.top ?? 120,
                           initialLeft: layouts['competency']?.left ?? 260,
                           initialWidth: layouts['competency']?.width ?? 280,
-                          initialHeight: layouts['competency']?.height ?? 160,
+                          initialHeight: layouts['competency']?.height ?? 180,
                           isEditing: isLayoutEditing,
                           onLayoutChanged: (t, l, w, h) => onLayoutChanged(
                             'competency',

@@ -3,9 +3,94 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../models/education_report_model.dart';
 import '../utils/report_template_utils.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
+import 'dart:ui' as ui;
+import 'dart:typed_data';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart' show debugPrint;
+import 'package:universal_html/html.dart' as html;
 
 class PrintingService {
-  /// 단일 교육 통지표 인쇄/저장
+  /// 위젯을 이미지로 캡처
+  static Future<Uint8List?> captureWidgetToImage(GlobalKey key) async {
+    try {
+      final boundary =
+          key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return null;
+
+      final image = await boundary.toImage(pixelRatio: 3.0); // 고해상도 캡처
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
+    } catch (e) {
+      debugPrint('Error capturing widget: $e');
+      return null;
+    }
+  }
+
+  /// 캡처된 이미들을 PDF로 변환하여 출력/저장
+  static Future<void> printCapturedImages({
+    required List<Uint8List> images,
+    required String fileName,
+  }) async {
+    final pdf = pw.Document();
+
+    for (var imageBytes in images) {
+      final image = pw.MemoryImage(imageBytes);
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: pw.EdgeInsets.zero, // 이미지 기반이므로 여백 없이 꽉 채움
+          build: (pw.Context context) {
+            return pw.Center(child: pw.Image(image, fit: pw.BoxFit.contain));
+          },
+        ),
+      );
+    }
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: fileName,
+    );
+  }
+
+  /// 이미지를 파일로 직접 저장 (사용자가 위치 선택)
+  static Future<bool> saveImageToFile({
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    try {
+      if (kIsWeb) {
+        final blob = html.Blob([bytes]);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        html.AnchorElement(href: url)
+          ..setAttribute("download", fileName)
+          ..click();
+        html.Url.revokeObjectUrl(url);
+        return true;
+      }
+
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: '통지표 이미지 저장',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['png'],
+      );
+
+      if (outputFile == null) return false;
+
+      final file = File(outputFile);
+      await file.writeAsBytes(bytes);
+      return true;
+    } catch (e) {
+      debugPrint('Error saving image file: $e');
+      return false;
+    }
+  }
+
+  /// (기존 HTML 방식 보존) 단일 교육 통지표 인쇄/저장
   static Future<void> printReport({
     required EducationReportModel report,
     required String studentName,

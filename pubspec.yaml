@@ -50,6 +50,7 @@ dependencies:
   uuid: ^4.5.1
   pdf: ^3.11.1
   printing: ^5.13.2
+  file_picker: ^10.3.10
 
 dev_dependencies:
   flutter_test:

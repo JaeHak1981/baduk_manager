@@ -53,6 +53,48 @@ class AchievementScores {
   }
 }
 
+/// 위젯의 위치와 크기 정보를 담는 모델
+class WidgetLayout {
+  final double top;
+  final double left;
+  final double? width;
+  final double? height;
+
+  WidgetLayout({
+    required this.top,
+    required this.left,
+    this.width,
+    this.height,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {'top': top, 'left': left, 'width': width, 'height': height};
+  }
+
+  factory WidgetLayout.fromMap(Map<String, dynamic> map) {
+    return WidgetLayout(
+      top: (map['top'] as num).toDouble(),
+      left: (map['left'] as num).toDouble(),
+      width: (map['width'] as num?)?.toDouble(),
+      height: (map['height'] as num?)?.toDouble(),
+    );
+  }
+
+  WidgetLayout copyWith({
+    double? top,
+    double? left,
+    double? width,
+    double? height,
+  }) {
+    return WidgetLayout(
+      top: top ?? this.top,
+      left: left ?? this.left,
+      width: width ?? this.width,
+      height: height ?? this.height,
+    );
+  }
+}
+
 /// 교육 통지표 메인 모델
 class EducationReportModel {
   final String id;
@@ -68,6 +110,7 @@ class EducationReportModel {
   final int totalClasses;
   final String teacherComment;
   final String templateId; // 4종 중 선택된 템플릿 ID
+  final Map<String, WidgetLayout>? layouts; // 위젯 ID -> 위치/크기 정보
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -85,6 +128,7 @@ class EducationReportModel {
     required this.totalClasses,
     required this.teacherComment,
     this.templateId = 'classic',
+    this.layouts,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -104,6 +148,7 @@ class EducationReportModel {
       'totalClasses': totalClasses,
       'teacherComment': teacherComment,
       'templateId': templateId,
+      'layouts': layouts?.map((key, value) => MapEntry(key, value.toMap())),
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -131,6 +176,14 @@ class EducationReportModel {
       totalClasses: data['totalClasses'] as int? ?? 0,
       teacherComment: data['teacherComment'] as String? ?? '',
       templateId: data['templateId'] as String? ?? 'classic',
+      layouts: data['layouts'] != null
+          ? (data['layouts'] as Map<String, dynamic>).map(
+              (key, value) => MapEntry(
+                key,
+                WidgetLayout.fromMap(value as Map<String, dynamic>),
+              ),
+            )
+          : null,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       updatedAt: (data['updatedAt'] as Timestamp).toDate(),
     );
@@ -140,6 +193,7 @@ class EducationReportModel {
     AchievementScores? scores,
     String? teacherComment,
     String? templateId,
+    Map<String, WidgetLayout>? layouts,
     DateTime? updatedAt,
   }) {
     return EducationReportModel(
@@ -156,6 +210,7 @@ class EducationReportModel {
       totalClasses: this.totalClasses,
       teacherComment: teacherComment ?? this.teacherComment,
       templateId: templateId ?? this.templateId,
+      layouts: layouts ?? this.layouts,
       createdAt: this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

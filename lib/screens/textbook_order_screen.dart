@@ -934,12 +934,15 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
   String _getItemsText(Map<String, Map<int, int>> summary, int totalAll) {
     StringBuffer buffer = StringBuffer();
     summary.forEach((tName, volumes) {
+      buffer.writeln('$tName : ');
       List<int> sortedV = volumes.keys.toList()..sort();
-      String detailed = sortedV.map((v) => '${v}권:${volumes[v]}개').join(', ');
-      buffer.writeln('$tName -> $detailed');
+      for (var v in sortedV) {
+        buffer.writeln('${v}권 : ${volumes[v]}개,');
+      }
+      buffer.writeln(); // 교재 묶음 사이 빈 줄
     });
     if (totalAll > 0) {
-      buffer.write('\n총 $totalAll권 입니다.');
+      buffer.write('총 $totalAll권 입니다.');
     } else {
       buffer.write('(주문 교재 없음)');
     }

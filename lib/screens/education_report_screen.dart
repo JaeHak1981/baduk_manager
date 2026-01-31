@@ -367,6 +367,8 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                   _selectedStudentIds.remove(student.id);
                                 }
                               });
+                              // 개별 선택 시에도 레이아웃 로드 시도
+                              _loadAllStudentLayouts();
                             },
                             controlAffinity: ListTileControlAffinity.leading,
                           );
@@ -382,9 +384,11 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                   child: const Text('취소'),
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    setState(() {}); // 메인 상태 반영
-                    Navigator.pop(context);
+                  onPressed: () async {
+                    // 확인 버튼 클릭 시 최종적으로 선택된 학생들의 레이아웃을 다시 한 번 확인
+                    await _loadAllStudentLayouts();
+                    setState(() {}); // 메인 화면 갱신
+                    if (mounted) Navigator.pop(context);
                   },
                   child: const Text('확인'),
                 ),

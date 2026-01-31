@@ -59,6 +59,8 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
 
   final LocalStorageService _storageService = LocalStorageService();
   Timer? _saveDebounceTimer; // 레이아웃 저장 디바운싱 타이머
+  String? _pendingSaveStudentId; // 저장이 예약된 학생 ID
+  bool _isExiting = false; // 뒤로 가기 중복 방지 플래그
 
   @override
   void initState() {
@@ -85,7 +87,16 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
 
   @override
   void dispose() {
-    _saveDebounceTimer?.cancel();
+    // 화면을 나갈 때 아직 저장되지 않은 레이아웃이 있다면 즉시 구동
+    if (_saveDebounceTimer?.isActive ?? false) {
+      _saveDebounceTimer!.cancel();
+      if (_pendingSaveStudentId != null) {
+        final layout = _studentLayouts[_pendingSaveStudentId!];
+        if (layout != null) {
+          _storageService.saveStudentLayout(_pendingSaveStudentId!, layout);
+        }
+      }
+    }
     _previewScrollController.dispose();
     super.dispose();
   }
@@ -152,6 +163,8 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
           setState(() {
             _studentChartTypes[item.id] = newType;
           });
+          // 차트 타입 변경 시에도 로컬에 저장
+          _storageService.saveStudentChartType(item.id, newType);
         },
 
         teacherComment:
@@ -385,10 +398,16 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    // 확인 버튼 클릭 시 최종적으로 선택된 학생들의 레이아웃을 다시 한 번 확인
-                    await _loadAllStudentLayouts();
-                    setState(() {}); // 메인 화면 갱신
-                    if (mounted) Navigator.pop(context);
+                    // 확인 버튼 클릭 시 화면을 닫기 전에 모든 데이터 확정 로드
+                    try {
+                      await _loadAllStudentLayouts();
+                    } catch (e) {
+                      print('Error in confirm: $e');
+                    }
+                    if (mounted) {
+                      setState(() {});
+                      Navigator.pop(context);
+                    }
                   },
                   child: const Text('확인'),
                 ),
@@ -403,34 +422,98 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
   // --- 레이아웃 저장/로드 로직 ---
 
   Future<void> _loadAllStudentLayouts() async {
-    // 현재 선택된 학생(또는 전체)에 대해 레이아웃 로드
-    // 성능을 위해 선택된 학생들과 샘플만 우선 로드
-    final targetIds = _selectedStudentIds.toList();
-    if (!targetIds.contains('sample')) targetIds.add('sample');
+    try {
+      // 로드 전 보류된 저장 작업이 있다면 먼저 스토리지에 반영 (레이스 컨디션 방지)
+      await _flushPendingSave();
 
-    for (var id in targetIds) {
-      if (_studentLayouts.containsKey(id) && _studentLayouts[id]!.isNotEmpty) {
-        continue; // 이미 메모리에 있으면 패스
-      }
-      final savedLayout = await _storageService.getStudentLayout(id);
-      if (savedLayout.isNotEmpty) {
+      final targetIds = _selectedStudentIds.toList();
+      if (!targetIds.contains('sample')) targetIds.add('sample');
+
+      bool hasChanged = false;
+
+      // 실질적인 데이터 로드 (병렬 처리로 속도 개선)
+      await Future.wait(
+        targetIds.map((id) async {
+          // 레이아웃 로드
+          if (!_studentLayouts.containsKey(id) ||
+              _studentLayouts[id]!.isEmpty) {
+            final savedLayout = await _storageService.getStudentLayout(id);
+            if (savedLayout.isNotEmpty) {
+              _studentLayouts[id] = savedLayout;
+              hasChanged = true;
+            }
+          }
+
+          // 차트 타입 로드
+          if (!_studentChartTypes.containsKey(id)) {
+            final savedChartType = await _storageService.getStudentChartType(
+              id,
+            );
+            if (savedChartType != null) {
+              _studentChartTypes[id] = savedChartType;
+              hasChanged = true;
+            }
+          }
+
+          // 상세 보기 타입 로드
+          if (!_studentDetailTypes.containsKey(id)) {
+            final savedDetailType = await _storageService.getStudentDetailType(
+              id,
+            );
+            if (savedDetailType != null) {
+              _studentDetailTypes[id] = savedDetailType;
+              hasChanged = true;
+            }
+          }
+        }),
+      );
+
+      if (hasChanged && mounted) {
         setState(() {
-          _studentLayouts[id] = savedLayout;
+          _layoutVersion++; // 데이터 로드 후 레이아웃 엔진 강제 새로고침
         });
+        print('✅ All layouts and settings loaded and UI refreshed.');
       }
+    } catch (e) {
+      print('❌ Error in _loadAllStudentLayouts: $e');
     }
   }
 
   void _saveLayoutToLocal(String studentId) {
+    _pendingSaveStudentId = studentId;
     if (_saveDebounceTimer?.isActive ?? false) _saveDebounceTimer!.cancel();
 
-    _saveDebounceTimer = Timer(const Duration(seconds: 1), () async {
+    _saveDebounceTimer = Timer(const Duration(milliseconds: 500), () async {
       final layout = _studentLayouts[studentId];
       if (layout != null) {
         await _storageService.saveStudentLayout(studentId, layout);
         print('💾 Layout saved for $studentId');
       }
+      _pendingSaveStudentId = null;
     });
+  }
+
+  /// 모든 저장 작업을 즉시 동기적으로(비동기 대기 포함) 완료
+  Future<void> _flushPendingSave() async {
+    // 진행 중인 디바운스 타이머가 있다면 취소
+    if (_saveDebounceTimer?.isActive ?? false) {
+      _saveDebounceTimer!.cancel();
+      print('⏱️ Save timer cancelled for flushing.');
+    }
+
+    if (_pendingSaveStudentId != null) {
+      final id = _pendingSaveStudentId!;
+      final layout = _studentLayouts[id];
+      if (layout != null) {
+        try {
+          await _storageService.saveStudentLayout(id, layout);
+          print('💾 Flushed pending save for $id');
+        } catch (e) {
+          print('❌ Error flushing save for $id: $e');
+        }
+      }
+      _pendingSaveStudentId = null;
+    }
   }
 
   Future<void> _saveIndividualReport(dynamic student) async {
@@ -489,844 +572,918 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('통지표 편집 및 미리보기'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          TextButton(
-            onPressed: () {
-              // 전체 자동 생성 로직
-              final studentProvider = context.read<StudentProvider>();
-              final progressProvider = context.read<ProgressProvider>();
-              final selectedStudents = studentProvider.students
-                  .where((s) => _selectedStudentIds.contains(s.id))
-                  .toList();
+    return PopScope(
+      canPop: false, // 수동 제어하여 저장 완료 보장
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop || _isExiting) return;
+        _isExiting = true; // 플래그 설정하여 중복 실행 방지
+        print('🚪 Back button pressed. Flushing and exiting...');
 
-              if (selectedStudents.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('자동 생성할 학생을 먼저 선택해주세요.')),
-                );
-                return;
-              }
+        try {
+          await _flushPendingSave();
+        } catch (e) {
+          print('❌ Error during exit flush: $e');
+        }
 
-              setState(() {
-                for (var student in selectedStudents) {
-                  final progress = progressProvider.getProgressForStudent(
-                    student.id,
-                  );
-                  final textbookNames = progress
-                      .map((p) => p.textbookName)
-                      .toList();
-                  final volumes = progress.map((p) => p.volumeNumber).toList();
-
-                  final initialScores =
-                      ReportCommentUtils.generateInitialScores(
-                        textbookName: textbookNames.isNotEmpty
-                            ? textbookNames.first
-                            : '배우고 있는 교재',
-                        volumeNumber: volumes.isNotEmpty ? volumes.first : 1,
-                      );
-
-                  _customScores[student.id] = initialScores;
-                  _customComments[student.id] =
-                      ReportCommentUtils.autoGenerateComment(
-                        studentName: student.name,
-                        scores: initialScores,
-                        textbookNames: textbookNames,
-                        volumes: volumes,
-                        templates: _getSampleTemplates(),
-                      );
-                }
-              });
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '${selectedStudents.length}명의 종합 의견이 자동 생성되어 리스트에 반영되었습니다.',
-                  ),
-                ),
-              );
-            },
-            child: const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.auto_awesome, size: 20),
-                Text(
-                  '의견 자동 생성',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            child: const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.download_for_offline_outlined, size: 20),
-                Text(
-                  '이미지 저장',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            onPressed: () async {
-              print('🚀 Batch save started');
-              try {
-                print('🔍 Reading providers...');
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('통지표 편집 및 미리보기'),
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          actions: [
+            TextButton(
+              onPressed: () {
+                // 전체 자동 생성 로직
                 final studentProvider = context.read<StudentProvider>();
-                print('✅ StudentProvider OK');
-                final reportProvider = context.read<EducationReportProvider>();
-                print('✅ EducationReportProvider OK');
                 final progressProvider = context.read<ProgressProvider>();
-                print('✅ ProgressProvider OK');
-
-                print(
-                  '🔍 Filtering students... _selectedStudentIds: $_selectedStudentIds',
-                );
                 final selectedStudents = studentProvider.students
                     .where((s) => _selectedStudentIds.contains(s.id))
                     .toList();
-
-                print('👥 Found ${selectedStudents.length} student objects');
 
                 if (selectedStudents.isEmpty) {
-                  print('⚠️ No students selected. Aborting.');
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('저장할 학생을 먼저 선택해주세요.')),
-                    );
-                  }
-                  return;
-                }
-
-                print('💬 Showing confirmation dialog...');
-                // 2. 저장 진행 확인
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('통지표 이미지 저장'),
-                    content: Text(
-                      '${selectedStudents.length}명의 통지표를 각각 이미지 파일(PNG)로 저장하시겠습니까?\n(현재 화면에 보이는 배치 그대로 저장됩니다.)',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('취소'),
-                      ),
-                      ElevatedButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('진행'),
-                      ),
-                    ],
-                  ),
-                );
-
-                print('💬 Confirmation result: $confirm');
-
-                if (confirm != true) {
-                  print('⏹️ Save cancelled by user');
-                  return;
-                }
-
-                // 3. 진행률 다이얼로그 표시
-                if (!mounted) return;
-
-                int currentCount = 0;
-                String currentName = '';
-                StateSetter? setProgressState;
-
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (dialogContext) {
-                    return StatefulBuilder(
-                      builder: (context, setDialogState) {
-                        setProgressState = setDialogState;
-                        return AlertDialog(
-                          title: const Text('통지표 저장 중...'),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const CircularProgressIndicator(),
-                              const SizedBox(height: 20),
-                              Text(
-                                '진행: $currentCount / ${selectedStudents.length}',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (currentName.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                Text(
-                                  '현재: $currentName',
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                              ],
-                              const SizedBox(height: 12),
-                              LinearProgressIndicator(
-                                value: selectedStudents.isEmpty
-                                    ? 0
-                                    : currentCount / selectedStudents.length,
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-
-                // 4. 순차적으로 저장 처리
-                int batchSuccessCount = 0;
-                print('📦 Total students to save: ${selectedStudents.length}');
-
-                for (var student in selectedStudents) {
-                  currentCount++;
-                  currentName = student.name;
-
-                  // 1. 캡처 슬롯에 학생 할당 (오프스크린 렌더링 시작)
-                  setState(() {
-                    _capturingItem = student;
-                  });
-
-                  // 다이얼로그 상태 업데이트
-                  if (setProgressState != null) {
-                    setProgressState!(() {});
-                  }
-
-                  // 2. 렌더링 엔진에 그릴 시간 제공
-                  await Future.delayed(
-                    Duration(milliseconds: kIsWeb ? 1500 : 800),
-                  );
-
-                  try {
-                    print('📸 Capturing image for ${student.name}');
-                    final bytes = await PrintingService.captureWidgetToImage(
-                      _captureSlotKey,
-                      pixelRatio: kIsWeb ? 2.0 : 3.0,
-                    );
-
-                    if (bytes == null) {
-                      print('❌ Capture failed for ${student.name}');
-                      continue;
-                    }
-
-                    final success = await PrintingService.saveImageToFile(
-                      bytes: bytes,
-                      fileName:
-                          '교육통지표_${student.name}_${DateFormat('yyyyMM').format(DateTime.now())}.png',
-                    );
-
-                    if (success) {
-                      print('💾 Save success for ${student.name}');
-                      batchSuccessCount++;
-
-                      // DB에 리포트 데이터 저장
-                      final progressList = progressProvider
-                          .getProgressForStudent(student.id);
-                      final report = EducationReportModel(
-                        id: '${student.id}_${DateFormat('yyyyMM').format(DateTime.now())}',
-                        academyId: widget.academy.id,
-                        ownerId: widget.academy.ownerId,
-                        studentId: student.id,
-                        startDate: DateTime.now().subtract(
-                          const Duration(days: 30),
-                        ),
-                        endDate: DateTime.now(),
-                        textbookIds: progressList
-                            .map((p) => p.textbookId)
-                            .toList(),
-                        scores:
-                            _customScores[student.id] ?? AchievementScores(),
-                        attendanceCount: 0,
-                        totalClasses: 0,
-                        teacherComment: _customComments[student.id] ?? '',
-                        createdAt: DateTime.now(),
-                        updatedAt: DateTime.now(),
-                        layouts: _studentLayouts[student.id],
-                      );
-                      await reportProvider.saveReport(report);
-
-                      // 웹에서는 브라우저 처리를 위해 약간 대기
-                      if (kIsWeb) {
-                        await Future.delayed(const Duration(milliseconds: 500));
-                      }
-                    } else {
-                      print(
-                        '❌ Save failed (cancelled or error) for ${student.name}',
-                      );
-                    }
-                  } catch (e) {
-                    print(
-                      '❌ Error during batch process for ${student.name}: $e',
-                    );
-                  } finally {
-                    // 캡처 슬롯 비우기 (메모리 해제 유도)
-                    setState(() {
-                      _capturingItem = null;
-                    });
-                  }
-                }
-
-                // 5. 진행률 다이얼로그 닫기
-                if (mounted) {
-                  Navigator.of(context, rootNavigator: true).pop();
-
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        '통지표 저장 완료: $batchSuccessCount / ${selectedStudents.length}',
-                      ),
-                      duration: const Duration(seconds: 3),
-                    ),
+                    const SnackBar(content: Text('자동 생성할 학생을 먼저 선택해주세요.')),
                   );
+                  return;
                 }
-              } catch (e, stack) {
-                print('❌ Fatal error in batch save: $e');
-                print('❌ Stack trace: $stack');
-              }
-            },
-          ),
-        ],
-      ),
-      body: Row(
-        children: [
-          // 1. 통지표 미리 보기 영역 (80%)
-          Expanded(
-            flex: 3,
-            child: Consumer2<StudentProvider, ProgressProvider>(
-              builder: (context, studentProvider, progressProvider, child) {
-                final selectedStudents = studentProvider.students
-                    .where((s) => _selectedStudentIds.contains(s.id))
-                    .toList();
 
-                // 학생이 선택되지 않았을 때 표시할 더미 데이터
-                final List<dynamic> displayItems = selectedStudents.isEmpty
-                    ? [
-                        StudentModel(
-                          id: 'sample',
-                          academyId: widget.academy.id,
-                          ownerId: widget.academy.ownerId,
-                          name: '학생명 [샘플]',
-                          session: 1,
-                          grade: 1,
-                          createdAt: DateTime.now(),
-                          updatedAt: DateTime.now(),
-                        ),
-                      ]
-                    : selectedStudents;
+                setState(() {
+                  for (var student in selectedStudents) {
+                    final progress = progressProvider.getProgressForStudent(
+                      student.id,
+                    );
+                    final textbookNames = progress
+                        .map((p) => p.textbookName)
+                        .toList();
+                    final volumes = progress
+                        .map((p) => p.volumeNumber)
+                        .toList();
 
-                return Container(
-                  color: Colors.grey.shade200,
-                  child: Stack(
-                    children: [
-                      // 2. 캡처 전용 단일 슬롯
-                      // 실제 페인팅이 일어나야 하므로 화면 안에 배치하되 리스트 뒤에 숨김
-                      if (_capturingItem != null)
-                        Positioned(
-                          left: 0,
-                          top: 0,
-                          child: Opacity(
-                            opacity: 0.01, // 완전히 0이면 렌더링에서 제외될 수 있음
-                            child: _buildReportPaper(
-                              _capturingItem!,
-                              isBackground: true,
-                            ),
-                          ),
-                        ),
+                    final initialScores =
+                        ReportCommentUtils.generateInitialScores(
+                          textbookName: textbookNames.isNotEmpty
+                              ? textbookNames.first
+                              : '배우고 있는 교재',
+                          volumeNumber: volumes.isNotEmpty ? volumes.first : 1,
+                        );
 
-                      // 1. 실제 보여지는 영역 (항상 리스트 모드)
-                      SingleChildScrollView(
-                        controller: _previewScrollController,
-                        padding: const EdgeInsets.symmetric(vertical: 40),
-                        child: Column(
-                          children: displayItems.map((item) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 60),
-                              child: Column(
-                                children: [
-                                  // 개별 저장 버튼
-                                  if (item.id != 'sample')
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 12,
-                                      ),
-                                      child: ElevatedButton.icon(
-                                        onPressed: () =>
-                                            _saveIndividualReport(item),
-                                        icon: const Icon(
-                                          Icons.download,
-                                          size: 16,
-                                        ),
-                                        label: Text(
-                                          '${item.name} 통지표만 저장',
-                                          style: const TextStyle(fontSize: 12),
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.white,
-                                          foregroundColor: Colors.indigo,
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 8,
-                                          ),
-                                          side: const BorderSide(
-                                            color: Colors.indigo,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  Center(
-                                    child: _buildReportPaper(
-                                      item,
-                                      useGlobalKey: true,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
+                    _customScores[student.id] = initialScores;
+                    _customComments[student.id] =
+                        ReportCommentUtils.autoGenerateComment(
+                          studentName: student.name,
+                          scores: initialScores,
+                          textbookNames: textbookNames,
+                          volumes: volumes,
+                          templates: _getSampleTemplates(),
+                        );
+                  }
+                });
 
-                      // 안내 메시지 (학생이 선택되지 않았을 때)
-                      if (selectedStudents.isEmpty)
-                        Positioned(
-                          top: 10,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 10,
-                                horizontal: 20,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.amber.shade50.withOpacity(0.8),
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 10,
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.info_outline,
-                                    size: 14,
-                                    color: Colors.amber.shade900,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '현재 샘플 양식입니다. 우측에서 학생을 선택하면 실제 데이터가 반영됩니다.',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.amber.shade900,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      '${selectedStudents.length}명의 종합 의견이 자동 생성되어 리스트에 반영되었습니다.',
+                    ),
                   ),
                 );
               },
-            ),
-          ),
-
-          // 구분선
-          const VerticalDivider(width: 1, thickness: 1),
-
-          // 2. 편집창 영역 (20%)
-          Expanded(
-            flex: 1,
-            child: Container(
-              color: Colors.white,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primaryContainer.withOpacity(0.3),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.edit_note, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          '편집 도구',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 16,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            alignment: WrapAlignment.start,
-                            children: [
-                              _buildActionButton(
-                                context,
-                                label: '학생 선택',
-                                icon: Icons.person_add_outlined,
-                                color: Colors.indigo,
-                                isPrimary: true,
-                                onPressed: _showStudentSelectionDialog,
-                              ),
-                              _buildActionButton(
-                                context,
-                                label: _isLayoutEditing ? '편집 완료' : '위치/크기 편집',
-                                icon: _isLayoutEditing
-                                    ? Icons.check_circle_outline
-                                    : Icons.open_with,
-                                color: _isLayoutEditing
-                                    ? Colors.green
-                                    : Colors.orange,
-                                isPrimary: _isLayoutEditing,
-                                onPressed: () {
-                                  setState(() {
-                                    _isLayoutEditing = !_isLayoutEditing;
-                                  });
-                                },
-                              ),
-                              if (_isLayoutEditing)
-                                _buildActionButton(
-                                  context,
-                                  label: '레이아웃 초기화',
-                                  icon: Icons.restart_alt,
-                                  color: Colors.red,
-                                  onPressed: _resetCurrentStudentLayout,
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          // 보기 스타일 설정 섹션 (상단 배치)
-                          const Row(
-                            children: [
-                              Icon(Icons.style, size: 16, color: Colors.indigo),
-                              SizedBox(width: 8),
-                              Text(
-                                '보기 스타일 설정',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: Colors.indigo,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          // 1. 차트 모양 선택
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              '차트 모양',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: BalanceChartType.values.map((type) {
-                                final checkId = _selectedStudentIds.isNotEmpty
-                                    ? _selectedStudentIds.first
-                                    : 'sample';
-                                final currentType =
-                                    _studentChartTypes[checkId] ??
-                                    BalanceChartType.radar;
-                                final isSelected = type == currentType;
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 8.0),
-                                  child: InkWell(
-                                    onTap: () {
-                                      final bool wasSelectedStudentsEmpty =
-                                          _selectedStudentIds.isEmpty;
-                                      setState(() {
-                                        if (wasSelectedStudentsEmpty) {
-                                          final allStudents = context
-                                              .read<StudentProvider>()
-                                              .students;
-                                          for (var s in allStudents) {
-                                            _studentChartTypes[s.id] = type;
-                                          }
-                                          _studentChartTypes['sample'] = type;
-                                        } else {
-                                          for (var id in _selectedStudentIds) {
-                                            _studentChartTypes[id] = type;
-                                          }
-                                        }
-                                      });
-                                    },
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? const Color(0xFF1A237E)
-                                            : Colors.white,
-                                        border: Border.all(
-                                          color: isSelected
-                                              ? const Color(0xFFFFD700)
-                                              : Colors.grey.shade300,
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Icon(
-                                        type.icon,
-                                        size: 20,
-                                        color: isSelected
-                                            ? Colors.white
-                                            : Colors.grey,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // 2. 상세 보기 방식 선택
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              '상세 내역 보기',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: DetailViewType.values.map((type) {
-                                final checkId = _selectedStudentIds.isNotEmpty
-                                    ? _selectedStudentIds.first
-                                    : 'sample';
-                                final currentType =
-                                    _studentDetailTypes[checkId] ??
-                                    DetailViewType.progressBar;
-                                final isSelected = type == currentType;
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 8.0),
-                                  child: InkWell(
-                                    onTap: () {
-                                      final bool wasSelectedStudentsEmpty =
-                                          _selectedStudentIds.isEmpty;
-                                      setState(() {
-                                        if (wasSelectedStudentsEmpty) {
-                                          final allStudents = context
-                                              .read<StudentProvider>()
-                                              .students;
-                                          for (var s in allStudents) {
-                                            _studentDetailTypes[s.id] = type;
-                                          }
-                                          _studentDetailTypes['sample'] = type;
-                                        } else {
-                                          for (var id in _selectedStudentIds) {
-                                            _studentDetailTypes[id] = type;
-                                          }
-                                        }
-                                      });
-                                    },
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? Colors.indigo.shade50
-                                            : Colors.white,
-                                        border: Border.all(
-                                          color: isSelected
-                                              ? Colors.indigo
-                                              : Colors.grey.shade300,
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            type.icon,
-                                            size: 16,
-                                            color: isSelected
-                                                ? Colors.indigo
-                                                : Colors.grey,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            type.displayName,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: isSelected
-                                                  ? FontWeight.bold
-                                                  : FontWeight.normal,
-                                              color: isSelected
-                                                  ? Colors.indigo
-                                                  : Colors.black87,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-                          const Divider(),
-
-                          // 데이터 표시 설정
-                          const Row(
-                            children: [
-                              Icon(
-                                Icons.visibility,
-                                size: 16,
-                                color: Colors.grey,
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                '표시 항목 설정',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          SwitchListTile(
-                            title: const Text(
-                              '급수 정보 표시',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            value: _showLevel,
-                            onChanged: (val) {
-                              setState(() => _showLevel = val);
-                            },
-                            secondary: const Icon(Icons.military_tech_outlined),
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                          ),
-                          SwitchListTile(
-                            title: const Text(
-                              '출석률 표시',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            value: _showAttendance,
-                            onChanged: (val) {
-                              setState(() => _showAttendance = val);
-                            },
-                            secondary: const Icon(
-                              Icons.event_available_outlined,
-                            ),
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                          ),
-                          SwitchListTile(
-                            title: const Text(
-                              '역량 밸런스 차트 (그래프)',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            value: _showRadarChart,
-                            onChanged: (val) {
-                              setState(() => _showRadarChart = val);
-                            },
-                            secondary: const Icon(Icons.pie_chart_outline),
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                          ),
-                          // 기존의 하위 차트 선택 UI 제거됨 (위로 이동)
-                          // 기존의 하위 상세 보기 방식 선택 UI 제거됨 (위로 이동)
-                          SwitchListTile(
-                            title: const Text(
-                              '교재 학습 현황',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            value: _showProgress,
-                            onChanged: (val) {
-                              setState(() => _showProgress = val);
-                            },
-                            secondary: const Icon(Icons.library_books_outlined),
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                          ),
-                          SwitchListTile(
-                            title: const Text(
-                              '역량별 성취도 상세 (점수)',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            value: _showCompetency,
-                            onChanged: (val) {
-                              setState(() => _showCompetency = val);
-                            },
-                            secondary: const Icon(Icons.bar_chart_outlined),
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Text(
-                      '대상 학생을 선택하고 내용을 편집하세요.',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade500,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
+                  Icon(Icons.auto_awesome, size: 20),
+                  Text(
+                    '의견 자동 생성',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+            TextButton(
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.download_for_offline_outlined, size: 20),
+                  Text(
+                    '이미지 저장',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              onPressed: () async {
+                print('🚀 Batch save started');
+                try {
+                  print('🔍 Reading providers...');
+                  final studentProvider = context.read<StudentProvider>();
+                  print('✅ StudentProvider OK');
+                  final reportProvider = context
+                      .read<EducationReportProvider>();
+                  print('✅ EducationReportProvider OK');
+                  final progressProvider = context.read<ProgressProvider>();
+                  print('✅ ProgressProvider OK');
+
+                  print(
+                    '🔍 Filtering students... _selectedStudentIds: $_selectedStudentIds',
+                  );
+                  final selectedStudents = studentProvider.students
+                      .where((s) => _selectedStudentIds.contains(s.id))
+                      .toList();
+
+                  print('👥 Found ${selectedStudents.length} student objects');
+
+                  if (selectedStudents.isEmpty) {
+                    print('⚠️ No students selected. Aborting.');
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('저장할 학생을 먼저 선택해주세요.')),
+                      );
+                    }
+                    return;
+                  }
+
+                  print('💬 Showing confirmation dialog...');
+                  // 2. 저장 진행 확인
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('통지표 이미지 저장'),
+                      content: Text(
+                        '${selectedStudents.length}명의 통지표를 각각 이미지 파일(PNG)로 저장하시겠습니까?\n(현재 화면에 보이는 배치 그대로 저장됩니다.)',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('취소'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('진행'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  print('💬 Confirmation result: $confirm');
+
+                  if (confirm != true) {
+                    print('⏹️ Save cancelled by user');
+                    return;
+                  }
+
+                  // 3. 진행률 다이얼로그 표시
+                  if (!mounted) return;
+
+                  int currentCount = 0;
+                  String currentName = '';
+                  StateSetter? setProgressState;
+
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (dialogContext) {
+                      return StatefulBuilder(
+                        builder: (context, setDialogState) {
+                          setProgressState = setDialogState;
+                          return AlertDialog(
+                            title: const Text('통지표 저장 중...'),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const CircularProgressIndicator(),
+                                const SizedBox(height: 20),
+                                Text(
+                                  '진행: $currentCount / ${selectedStudents.length}',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (currentName.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '현재: $currentName',
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                ],
+                                const SizedBox(height: 12),
+                                LinearProgressIndicator(
+                                  value: selectedStudents.isEmpty
+                                      ? 0
+                                      : currentCount / selectedStudents.length,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  );
+
+                  // 4. 순차적으로 저장 처리
+                  int batchSuccessCount = 0;
+                  print(
+                    '📦 Total students to save: ${selectedStudents.length}',
+                  );
+
+                  for (var student in selectedStudents) {
+                    currentCount++;
+                    currentName = student.name;
+
+                    // 1. 캡처 슬롯에 학생 할당 (오프스크린 렌더링 시작)
+                    setState(() {
+                      _capturingItem = student;
+                    });
+
+                    // 다이얼로그 상태 업데이트
+                    if (setProgressState != null) {
+                      setProgressState!(() {});
+                    }
+
+                    // 2. 렌더링 엔진에 그릴 시간 제공
+                    await Future.delayed(
+                      Duration(milliseconds: kIsWeb ? 1500 : 800),
+                    );
+
+                    try {
+                      print('📸 Capturing image for ${student.name}');
+                      final bytes = await PrintingService.captureWidgetToImage(
+                        _captureSlotKey,
+                        pixelRatio: kIsWeb ? 2.0 : 3.0,
+                      );
+
+                      if (bytes == null) {
+                        print('❌ Capture failed for ${student.name}');
+                        continue;
+                      }
+
+                      final success = await PrintingService.saveImageToFile(
+                        bytes: bytes,
+                        fileName:
+                            '교육통지표_${student.name}_${DateFormat('yyyyMM').format(DateTime.now())}.png',
+                      );
+
+                      if (success) {
+                        print('💾 Save success for ${student.name}');
+                        batchSuccessCount++;
+
+                        // DB에 리포트 데이터 저장
+                        final progressList = progressProvider
+                            .getProgressForStudent(student.id);
+                        final report = EducationReportModel(
+                          id: '${student.id}_${DateFormat('yyyyMM').format(DateTime.now())}',
+                          academyId: widget.academy.id,
+                          ownerId: widget.academy.ownerId,
+                          studentId: student.id,
+                          startDate: DateTime.now().subtract(
+                            const Duration(days: 30),
+                          ),
+                          endDate: DateTime.now(),
+                          textbookIds: progressList
+                              .map((p) => p.textbookId)
+                              .toList(),
+                          scores:
+                              _customScores[student.id] ?? AchievementScores(),
+                          attendanceCount: 0,
+                          totalClasses: 0,
+                          teacherComment: _customComments[student.id] ?? '',
+                          createdAt: DateTime.now(),
+                          updatedAt: DateTime.now(),
+                          layouts: _studentLayouts[student.id],
+                        );
+                        await reportProvider.saveReport(report);
+
+                        // 웹에서는 브라우저 처리를 위해 약간 대기
+                        if (kIsWeb) {
+                          await Future.delayed(
+                            const Duration(milliseconds: 500),
+                          );
+                        }
+                      } else {
+                        print(
+                          '❌ Save failed (cancelled or error) for ${student.name}',
+                        );
+                      }
+                    } catch (e) {
+                      print(
+                        '❌ Error during batch process for ${student.name}: $e',
+                      );
+                    } finally {
+                      // 캡처 슬롯 비우기 (메모리 해제 유도)
+                      setState(() {
+                        _capturingItem = null;
+                      });
+                    }
+                  }
+
+                  // 5. 진행률 다이얼로그 닫기
+                  if (mounted) {
+                    Navigator.of(context, rootNavigator: true).pop();
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '통지표 저장 완료: $batchSuccessCount / ${selectedStudents.length}',
+                        ),
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                } catch (e, stack) {
+                  print('❌ Fatal error in batch save: $e');
+                  print('❌ Stack trace: $stack');
+                }
+              },
+            ),
+          ],
+        ),
+        body: Row(
+          children: [
+            // 1. 통지표 미리 보기 영역 (80%)
+            Expanded(
+              flex: 3,
+              child: Consumer2<StudentProvider, ProgressProvider>(
+                builder: (context, studentProvider, progressProvider, child) {
+                  final selectedStudents = studentProvider.students
+                      .where((s) => _selectedStudentIds.contains(s.id))
+                      .toList();
+
+                  // 학생이 선택되지 않았을 때 표시할 더미 데이터
+                  final List<dynamic> displayItems = selectedStudents.isEmpty
+                      ? [
+                          StudentModel(
+                            id: 'sample',
+                            academyId: widget.academy.id,
+                            ownerId: widget.academy.ownerId,
+                            name: '학생명 [샘플]',
+                            session: 1,
+                            grade: 1,
+                            createdAt: DateTime.now(),
+                            updatedAt: DateTime.now(),
+                          ),
+                        ]
+                      : selectedStudents;
+
+                  return Container(
+                    color: Colors.grey.shade200,
+                    child: Stack(
+                      children: [
+                        // 2. 캡처 전용 단일 슬롯
+                        // 실제 페인팅이 일어나야 하므로 화면 안에 배치하되 리스트 뒤에 숨김
+                        if (_capturingItem != null)
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            child: Opacity(
+                              opacity: 0.01, // 완전히 0이면 렌더링에서 제외될 수 있음
+                              child: _buildReportPaper(
+                                _capturingItem!,
+                                isBackground: true,
+                              ),
+                            ),
+                          ),
+
+                        // 1. 실제 보여지는 영역 (항상 리스트 모드)
+                        SingleChildScrollView(
+                          controller: _previewScrollController,
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          child: Column(
+                            children: displayItems.map((item) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 60),
+                                child: Column(
+                                  children: [
+                                    // 개별 저장 버튼
+                                    if (item.id != 'sample')
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 12,
+                                        ),
+                                        child: ElevatedButton.icon(
+                                          onPressed: () =>
+                                              _saveIndividualReport(item),
+                                          icon: const Icon(
+                                            Icons.download,
+                                            size: 16,
+                                          ),
+                                          label: Text(
+                                            '${item.name} 통지표만 저장',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.white,
+                                            foregroundColor: Colors.indigo,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 8,
+                                            ),
+                                            side: const BorderSide(
+                                              color: Colors.indigo,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    Center(
+                                      child: _buildReportPaper(
+                                        item,
+                                        useGlobalKey: true,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+
+                        // 안내 메시지 (학생이 선택되지 않았을 때)
+                        if (selectedStudents.isEmpty)
+                          Positioned(
+                            top: 10,
+                            left: 0,
+                            right: 0,
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                  horizontal: 20,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade50.withOpacity(0.8),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline,
+                                      size: 14,
+                                      color: Colors.amber.shade900,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '현재 샘플 양식입니다. 우측에서 학생을 선택하면 실제 데이터가 반영됩니다.',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.amber.shade900,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // 구분선
+            const VerticalDivider(width: 1, thickness: 1),
+
+            // 2. 편집창 영역 (20%)
+            Expanded(
+              flex: 1,
+              child: Container(
+                color: Colors.white,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primaryContainer.withOpacity(0.3),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.edit_note, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            '편집 도구',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 16,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              alignment: WrapAlignment.start,
+                              children: [
+                                _buildActionButton(
+                                  context,
+                                  label: '학생 선택',
+                                  icon: Icons.person_add_outlined,
+                                  color: Colors.indigo,
+                                  isPrimary: true,
+                                  onPressed: _showStudentSelectionDialog,
+                                ),
+                                _buildActionButton(
+                                  context,
+                                  label: _isLayoutEditing
+                                      ? '편집 완료'
+                                      : '위치/크기 편집',
+                                  icon: _isLayoutEditing
+                                      ? Icons.check_circle_outline
+                                      : Icons.open_with,
+                                  color: _isLayoutEditing
+                                      ? Colors.green
+                                      : Colors.orange,
+                                  isPrimary: _isLayoutEditing,
+                                  onPressed: () {
+                                    setState(() {
+                                      _isLayoutEditing = !_isLayoutEditing;
+                                    });
+                                  },
+                                ),
+                                if (_isLayoutEditing)
+                                  _buildActionButton(
+                                    context,
+                                    label: '레이아웃 초기화',
+                                    icon: Icons.restart_alt,
+                                    color: Colors.red,
+                                    onPressed: _resetCurrentStudentLayout,
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 보기 스타일 설정 섹션 (상단 배치)
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.style,
+                                  size: 16,
+                                  color: Colors.indigo,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  '보기 스타일 설정',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Colors.indigo,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // 1. 차트 모양 선택
+                            const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '차트 모양',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: BalanceChartType.values.map((type) {
+                                  final checkId = _selectedStudentIds.isNotEmpty
+                                      ? _selectedStudentIds.first
+                                      : 'sample';
+                                  final currentType =
+                                      _studentChartTypes[checkId] ??
+                                      BalanceChartType.radar;
+                                  final isSelected = type == currentType;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: InkWell(
+                                      onTap: () {
+                                        final bool wasSelectedStudentsEmpty =
+                                            _selectedStudentIds.isEmpty;
+                                        setState(() {
+                                          if (wasSelectedStudentsEmpty) {
+                                            final allStudents = context
+                                                .read<StudentProvider>()
+                                                .students;
+                                            for (var s in allStudents) {
+                                              _studentChartTypes[s.id] = type;
+                                              _storageService
+                                                  .saveStudentChartType(
+                                                    s.id,
+                                                    type,
+                                                  );
+                                            }
+                                            _studentChartTypes['sample'] = type;
+                                            _storageService
+                                                .saveStudentChartType(
+                                                  'sample',
+                                                  type,
+                                                );
+                                          } else {
+                                            for (var id
+                                                in _selectedStudentIds) {
+                                              _studentChartTypes[id] = type;
+                                              _storageService
+                                                  .saveStudentChartType(
+                                                    id,
+                                                    type,
+                                                  );
+                                            }
+                                          }
+                                        });
+                                      },
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? const Color(0xFF1A237E)
+                                              : Colors.white,
+                                          border: Border.all(
+                                            color: isSelected
+                                                ? const Color(0xFFFFD700)
+                                                : Colors.grey.shade300,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          type.icon,
+                                          size: 20,
+                                          color: isSelected
+                                              ? Colors.white
+                                              : Colors.grey,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // 2. 상세 보기 방식 선택
+                            const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '상세 내역 보기',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: DetailViewType.values.map((type) {
+                                  final checkId = _selectedStudentIds.isNotEmpty
+                                      ? _selectedStudentIds.first
+                                      : 'sample';
+                                  final currentType =
+                                      _studentDetailTypes[checkId] ??
+                                      DetailViewType.progressBar;
+                                  final isSelected = type == currentType;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: InkWell(
+                                      onTap: () {
+                                        final bool wasSelectedStudentsEmpty =
+                                            _selectedStudentIds.isEmpty;
+                                        setState(() {
+                                          if (wasSelectedStudentsEmpty) {
+                                            final allStudents = context
+                                                .read<StudentProvider>()
+                                                .students;
+                                            for (var s in allStudents) {
+                                              _studentDetailTypes[s.id] = type;
+                                              _storageService
+                                                  .saveStudentDetailType(
+                                                    s.id,
+                                                    type,
+                                                  );
+                                            }
+                                            _studentDetailTypes['sample'] =
+                                                type;
+                                            _storageService
+                                                .saveStudentDetailType(
+                                                  'sample',
+                                                  type,
+                                                );
+                                          } else {
+                                            for (var id
+                                                in _selectedStudentIds) {
+                                              _studentDetailTypes[id] = type;
+                                              _storageService
+                                                  .saveStudentDetailType(
+                                                    id,
+                                                    type,
+                                                  );
+                                            }
+                                          }
+                                        });
+                                      },
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? Colors.indigo.shade50
+                                              : Colors.white,
+                                          border: Border.all(
+                                            color: isSelected
+                                                ? Colors.indigo
+                                                : Colors.grey.shade300,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              type.icon,
+                                              size: 16,
+                                              color: isSelected
+                                                  ? Colors.indigo
+                                                  : Colors.grey,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              type.displayName,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: isSelected
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                                color: isSelected
+                                                    ? Colors.indigo
+                                                    : Colors.black87,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+
+                            const SizedBox(height: 16),
+                            const Divider(),
+
+                            // 데이터 표시 설정
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.visibility,
+                                  size: 16,
+                                  color: Colors.grey,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  '표시 항목 설정',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            SwitchListTile(
+                              title: const Text(
+                                '급수 정보 표시',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              value: _showLevel,
+                              onChanged: (val) {
+                                setState(() => _showLevel = val);
+                              },
+                              secondary: const Icon(
+                                Icons.military_tech_outlined,
+                              ),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                            SwitchListTile(
+                              title: const Text(
+                                '출석률 표시',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              value: _showAttendance,
+                              onChanged: (val) {
+                                setState(() => _showAttendance = val);
+                              },
+                              secondary: const Icon(
+                                Icons.event_available_outlined,
+                              ),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                            SwitchListTile(
+                              title: const Text(
+                                '역량 밸런스 차트 (그래프)',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              value: _showRadarChart,
+                              onChanged: (val) {
+                                setState(() => _showRadarChart = val);
+                              },
+                              secondary: const Icon(Icons.pie_chart_outline),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                            // 기존의 하위 차트 선택 UI 제거됨 (위로 이동)
+                            // 기존의 하위 상세 보기 방식 선택 UI 제거됨 (위로 이동)
+                            SwitchListTile(
+                              title: const Text(
+                                '교재 학습 현황',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              value: _showProgress,
+                              onChanged: (val) {
+                                setState(() => _showProgress = val);
+                              },
+                              secondary: const Icon(
+                                Icons.library_books_outlined,
+                              ),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                            SwitchListTile(
+                              title: const Text(
+                                '역량별 성취도 상세 (점수)',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              value: _showCompetency,
+                              onChanged: (val) {
+                                setState(() => _showCompetency = val);
+                              },
+                              secondary: const Icon(Icons.bar_chart_outlined),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Text(
+                        '대상 학생을 선택하고 내용을 편집하세요.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

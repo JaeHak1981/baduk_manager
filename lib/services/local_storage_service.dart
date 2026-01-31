@@ -4,13 +4,22 @@ import '../models/education_report_model.dart';
 
 class LocalStorageService {
   static const String _layoutKeyPrefix = 'student_layout_';
+  static const String _chartTypeKeyPrefix = 'student_chart_type_';
+  static const String _detailTypeKeyPrefix = 'student_detail_type_';
+
+  SharedPreferences? _prefs;
+
+  Future<SharedPreferences> get _getInstance async {
+    _prefs ??= await SharedPreferences.getInstance();
+    return _prefs!;
+  }
 
   /// 특정 학생의 레이아웃 정보 저장
   Future<void> saveStudentLayout(
     String studentId,
     Map<String, WidgetLayout> layout,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getInstance;
     final key = '$_layoutKeyPrefix$studentId';
 
     // Map<String, WidgetLayout> -> Map<String, dynamic> -> JSON String
@@ -22,7 +31,7 @@ class LocalStorageService {
 
   /// 특정 학생의 레이아웃 정보 로드
   Future<Map<String, WidgetLayout>> getStudentLayout(String studentId) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getInstance;
     final key = '$_layoutKeyPrefix$studentId';
 
     final jsonString = prefs.getString(key);
@@ -39,9 +48,57 @@ class LocalStorageService {
     }
   }
 
+  /// 특정 학생의 차트 타입 저장
+  Future<void> saveStudentChartType(
+    String studentId,
+    BalanceChartType type,
+  ) async {
+    final prefs = await _getInstance;
+    final key = '$_chartTypeKeyPrefix$studentId';
+    await prefs.setString(key, type.name);
+  }
+
+  /// 특정 학생의 차트 타입 로드
+  Future<BalanceChartType?> getStudentChartType(String studentId) async {
+    final prefs = await _getInstance;
+    final key = '$_chartTypeKeyPrefix$studentId';
+    final name = prefs.getString(key);
+    if (name == null) return null;
+
+    try {
+      return BalanceChartType.values.firstWhere((e) => e.name == name);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 특정 학생의 상세 보기 타입 저장
+  Future<void> saveStudentDetailType(
+    String studentId,
+    DetailViewType type,
+  ) async {
+    final prefs = await _getInstance;
+    final key = '$_detailTypeKeyPrefix$studentId';
+    await prefs.setString(key, type.name);
+  }
+
+  /// 특정 학생의 상세 보기 타입 로드
+  Future<DetailViewType?> getStudentDetailType(String studentId) async {
+    final prefs = await _getInstance;
+    final key = '$_detailTypeKeyPrefix$studentId';
+    final name = prefs.getString(key);
+    if (name == null) return null;
+
+    try {
+      return DetailViewType.values.firstWhere((e) => e.name == name);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// 레이아웃 정보 삭제 (초기화 시 사용)
   Future<void> clearStudentLayout(String studentId) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getInstance;
     final key = '$_layoutKeyPrefix$studentId';
     await prefs.remove(key);
   }

@@ -235,11 +235,28 @@ class ProgressProvider with ChangeNotifier {
 
         final newId = await _progressService.startProgress(progress);
         print('DEBUG: startProgress 성공 - New ID: $newId');
+
+        // [FIX] 로컬 데이터 즉시 갱신 (Optimistic Update)
+        // loadStudentProgress를 호출하기 전에 즉시 추가하여 UI 반영 속도 향상
+        final newProgress = progress.copyWith(id: newId);
+        _studentProgressMap[studentId] ??= [];
+
+        // 동일 교재/권수가 있는지 다시 확인 (레이스 컨디션 방지)
+        final alreadyExists = _studentProgressMap[studentId]!.any(
+          (p) => p.textbookId == textbook.id && p.volumeNumber == volumeNumber,
+        );
+
+        if (!alreadyExists) {
+          _studentProgressMap[studentId]!.insert(0, newProgress);
+          // 날짜순 정렬 유지
+          _studentProgressMap[studentId]!.sort(
+            (a, b) => b.updatedAt.compareTo(a.updatedAt),
+          );
+          notifyListeners();
+        }
       }
 
-      // 3. 개별 학생 정보 즉시 리프레시
-      // await loadStudentProgress(studentId, ownerId: ownerId);
-      // [FIX] 로컬 데이터 즉시 갱신 (네트워크 지연 대응)
+      // 최종적으로 서버 데이터와 동기화 확인
       await loadStudentProgress(studentId, ownerId: ownerId);
 
       return true;

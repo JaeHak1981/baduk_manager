@@ -1069,12 +1069,10 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
         ),
       ),
     ).then((_) {
-      if (mounted) {
-        context.read<ProgressProvider>().loadStudentProgress(
-          widget.student.id,
-          ownerId: widget.academy.ownerId,
-        );
-      }
+      // TextbookCenterScreen에서 이미 assignVolume을 통해 Provider 상태를 갱신하고
+      // notifyListeners()를 호출했으므로, 여기서 다시 load할 필요가 없거나
+      // 필요한 경우에만 전체 리프레시를 고려할 수 있습니다.
+      // 현재는 Provider가 전역이므로 자동으로 반영됩니다.
     });
   }
 

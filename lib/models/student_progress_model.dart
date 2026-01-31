@@ -119,6 +119,7 @@ class StudentProgressModel {
   }
 
   StudentProgressModel copyWith({
+    String? id,
     int? volumeNumber,
     int? totalVolumes,
     bool? isCompleted,
@@ -126,7 +127,7 @@ class StudentProgressModel {
     DateTime? updatedAt,
   }) {
     return StudentProgressModel(
-      id: id,
+      id: id ?? this.id,
       studentId: studentId,
       academyId: academyId,
       ownerId: ownerId,

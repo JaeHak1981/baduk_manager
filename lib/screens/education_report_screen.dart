@@ -170,7 +170,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
 
         teacherComment:
             _customComments[item.id] ??
-            '이번 달은 수읽기 교재를 중점적으로 학습하며 집중력이 많이 향상되었습니다. 특히 사활 문제 풀이 속도가 빨라진 점이 고무적입니다.',
+            '수읽기 교재를 중점적으로 학습하며 집중력이 많이 향상되었습니다. 특히 사활 문제 풀이 속도가 빨라진 점이 고무적입니다.',
         onAcademyNameChanged: (newName) {
           setState(() => _customAcademyName = newName);
         },
@@ -1452,7 +1452,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       CommentTemplateModel(
         id: 'i1',
         category: '인트로',
-        content: '이번 달 {{name}} 학생은 바둑의 깊은 묘미를 알아가며 한층 더 성장한 모습을 보여주었습니다.',
+        content: '{{name}} 학생은 바둑 실력이 향상되며 한층 더 성장한 모습을 보여주었습니다.',
       ),
       CommentTemplateModel(
         id: 'i2',
@@ -1473,6 +1473,21 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         id: 'i5',
         category: '인트로',
         content: '최근 {{name}} 학생은 기술적인 발전뿐만 아니라 바둑을 대하는 마음가짐도 더욱 성숙해졌습니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i6',
+        category: '인트로',
+        content: '{{name}} 학생은 꾸준히 학습하며 바둑의 기본기를 탄탄하게 다져가고 있습니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i7',
+        category: '인트로',
+        content: '정석과 수읽기를 익히며 실전 대국 능력이 크게 향상된 {{name}} 학생의 성장이 기쁩니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i8',
+        category: '인트로',
+        content: '{{name}} 학생은 바둑 학습에 집중하며 매 수업마다 눈에 띄는 발전을 이루고 있습니다.',
       ),
 
       // 1. 학습 성취 (Achievement) - 수준별로 구분

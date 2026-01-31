@@ -1340,11 +1340,10 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                     );
 
                     if (success) {
-                      // [핵심 수정] 문구 저장 성공 시 현재 상태를 즉시 임시 저장하고 자동 업데이트 모드로 전환
+                      // 문구 저장 성공 시 자동 업데이트 모드로 전환
                       setState(() {
                         _isManualEdit = false;
                       });
-                      await _handleSaveTemporary();
                     }
 
                     if (mounted) {
@@ -1404,8 +1403,6 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                         setState(() {
                           _isManualEdit = false;
                         });
-                        // 초기화 후에도 임시 저장 데이터를 업데이트하여 상태 유지
-                        await _handleSaveTemporary();
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('기본 메시지로 초기화되었습니다.')),

@@ -20,6 +20,8 @@ import 'components/comment_grid_picker.dart';
 import '../providers/education_report_provider.dart';
 import '../providers/attendance_provider.dart';
 import '../utils/report_comment_utils.dart';
+import '../services/local_storage_service.dart';
+import 'dart:async';
 
 class EducationReportScreen extends StatefulWidget {
   final AcademyModel academy;
@@ -55,6 +57,9 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
   dynamic _capturingItem; // 현재 순차적으로 캡처 중인 학생 아이템
   final GlobalKey _captureSlotKey = GlobalKey(); // 캡처 전용 단일 슬롯의 키
 
+  final LocalStorageService _storageService = LocalStorageService();
+  Timer? _saveDebounceTimer; // 레이아웃 저장 디바운싱 타이머
+
   @override
   void initState() {
     super.initState();
@@ -71,11 +76,16 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         widget.academy.id,
         ownerId: widget.academy.ownerId,
       );
+
+      // 저장된 레이아웃 로드 (약간의 딜레이 후 실행하여 학생 데이터 로드 완료 대기)
+      // 실제로는 학생 ID만 있으면 되므로 바로 호출해도 무방하지만 안전하게 처리
+      _loadAllStudentLayouts();
     });
   }
 
   @override
   void dispose() {
+    _saveDebounceTimer?.cancel();
     _previewScrollController.dispose();
     super.dispose();
   }
@@ -214,6 +224,8 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
             _studentLayouts[item.id] ??= {};
             _studentLayouts[item.id]![widgetId] = layout;
           });
+          // 변경 시 자동 저장 호출
+          _saveLayoutToLocal(item.id);
         },
         layoutVersion: _layoutVersion,
       ),
@@ -321,6 +333,8 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                             }
                           }
                         });
+                        // 선택된 학생들에 대해 레이아웃 로드 시도
+                        _loadAllStudentLayouts();
                       },
                     ),
                     const Divider(),
@@ -382,7 +396,39 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
     );
   }
 
-  // 개별 리포트 저장용 메서드
+  // --- 레이아웃 저장/로드 로직 ---
+
+  Future<void> _loadAllStudentLayouts() async {
+    // 현재 선택된 학생(또는 전체)에 대해 레이아웃 로드
+    // 성능을 위해 선택된 학생들과 샘플만 우선 로드
+    final targetIds = _selectedStudentIds.toList();
+    if (!targetIds.contains('sample')) targetIds.add('sample');
+
+    for (var id in targetIds) {
+      if (_studentLayouts.containsKey(id) && _studentLayouts[id]!.isNotEmpty) {
+        continue; // 이미 메모리에 있으면 패스
+      }
+      final savedLayout = await _storageService.getStudentLayout(id);
+      if (savedLayout.isNotEmpty) {
+        setState(() {
+          _studentLayouts[id] = savedLayout;
+        });
+      }
+    }
+  }
+
+  void _saveLayoutToLocal(String studentId) {
+    if (_saveDebounceTimer?.isActive ?? false) _saveDebounceTimer!.cancel();
+
+    _saveDebounceTimer = Timer(const Duration(seconds: 1), () async {
+      final layout = _studentLayouts[studentId];
+      if (layout != null) {
+        await _storageService.saveStudentLayout(studentId, layout);
+        print('💾 Layout saved for $studentId');
+      }
+    });
+  }
+
   Future<void> _saveIndividualReport(dynamic student) async {
     print('🚀 Individual save started for ${student.name}');
     setState(() {
@@ -1313,6 +1359,8 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
               setState(() {
                 for (var id in idsToReset) {
                   _studentLayouts.remove(id);
+                  // 로컬 저장소에서도 삭제
+                  _storageService.clearStudentLayout(id);
                 }
                 _layoutVersion++;
               });

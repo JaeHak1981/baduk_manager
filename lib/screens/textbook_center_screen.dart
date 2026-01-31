@@ -361,7 +361,6 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text('$result권이 할당되었습니다')));
-          Navigator.pop(context);
         } else {
           final errorMsg =
               context.read<ProgressProvider>().errorMessage ?? '할당에 실패했습니다.';

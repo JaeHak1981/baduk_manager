@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:intl/intl.dart';
 import '../models/academy_model.dart';
 import '../models/student_model.dart';
@@ -1233,119 +1234,6 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                 }).toList(),
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            // 2. 상세 보기 방식 선택
-                            const Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                '상세 내역 보기',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: DetailViewType.values.map((type) {
-                                  final checkId = _selectedStudentIds.isNotEmpty
-                                      ? _selectedStudentIds.first
-                                      : 'sample';
-                                  final currentType =
-                                      _studentDetailTypes[checkId] ??
-                                      DetailViewType.progressBar;
-                                  final isSelected = type == currentType;
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 8.0),
-                                    child: InkWell(
-                                      onTap: () {
-                                        final bool wasSelectedStudentsEmpty =
-                                            _selectedStudentIds.isEmpty;
-                                        setState(() {
-                                          if (wasSelectedStudentsEmpty) {
-                                            final allStudents = context
-                                                .read<StudentProvider>()
-                                                .students;
-                                            for (var s in allStudents) {
-                                              _studentDetailTypes[s.id] = type;
-                                              _storageService
-                                                  .saveStudentDetailType(
-                                                    s.id,
-                                                    type,
-                                                  );
-                                            }
-                                            _studentDetailTypes['sample'] =
-                                                type;
-                                            _storageService
-                                                .saveStudentDetailType(
-                                                  'sample',
-                                                  type,
-                                                );
-                                          } else {
-                                            for (var id
-                                                in _selectedStudentIds) {
-                                              _studentDetailTypes[id] = type;
-                                              _storageService
-                                                  .saveStudentDetailType(
-                                                    id,
-                                                    type,
-                                                  );
-                                            }
-                                          }
-                                        });
-                                      },
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isSelected
-                                              ? Colors.indigo.shade50
-                                              : Colors.white,
-                                          border: Border.all(
-                                            color: isSelected
-                                                ? Colors.indigo
-                                                : Colors.grey.shade300,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              type.icon,
-                                              size: 16,
-                                              color: isSelected
-                                                  ? Colors.indigo
-                                                  : Colors.grey,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              type.displayName,
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: isSelected
-                                                    ? FontWeight.bold
-                                                    : FontWeight.normal,
-                                                color: isSelected
-                                                    ? Colors.indigo
-                                                    : Colors.black87,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-
                             const SizedBox(height: 16),
                             const Divider(),
 
@@ -2155,7 +2043,7 @@ class _EducationReportPaper extends StatelessWidget {
       initialTop: layouts['competency']?.top ?? 345,
       initialLeft: layouts['competency']?.left ?? 250,
       initialWidth: layouts['competency']?.width ?? 280,
-      initialHeight: layouts['competency']?.height ?? 127,
+      initialHeight: layouts['competency']?.height ?? 145,
       isEditing: isLayoutEditing,
       onLayoutChanged: (t, l, w, h) => onLayoutChanged(
         'competency',
@@ -2168,18 +2056,7 @@ class _EducationReportPaper extends StatelessWidget {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '[ 역량별 성취도 상세 ]',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: _buildDetailContent(context),
-                ),
-              ),
-            ],
+            children: [Expanded(child: _buildDetailContent(context))],
           ),
         ),
       ),
@@ -2200,31 +2077,31 @@ class _EducationReportPaper extends StatelessWidget {
   Widget _buildDetailProgress(BuildContext context) {
     return Column(
       children: [
-        _buildScoreBar(
+        _buildScoreBarCompact(
           '집중력',
           scores.focus,
           Colors.blue.shade700,
           () => _showScoreEditDialog(context),
         ),
-        _buildScoreBar(
+        _buildScoreBarCompact(
           '응용력',
           scores.application,
           Colors.teal.shade600,
           () => _showScoreEditDialog(context),
         ),
-        _buildScoreBar(
+        _buildScoreBarCompact(
           '정확도',
           scores.accuracy,
           Colors.orange.shade700,
           () => _showScoreEditDialog(context),
         ),
-        _buildScoreBar(
+        _buildScoreBarCompact(
           '과제수행',
           scores.task,
           Colors.purple.shade600,
           () => _showScoreEditDialog(context),
         ),
-        _buildScoreBar(
+        _buildScoreBarCompact(
           '창의성',
           scores.creativity,
           Colors.pink.shade600,
@@ -2424,13 +2301,155 @@ class _EducationReportPaper extends StatelessWidget {
     return Colors.red.shade700;
   }
 
+  Widget _buildStrengthsSection(BuildContext context) {
+    // 자동으로 강점 생성
+    final strengths = _autoGenerateStrengths();
+
+    return ResizableDraggableWrapper(
+      key: ValueKey('strengths_$layoutVersion'),
+      initialTop: layouts['strengths']?.top ?? 345,
+      initialLeft: layouts['strengths']?.left ?? 250,
+      initialWidth: layouts['strengths']?.width ?? 280,
+      initialHeight: layouts['strengths']?.height ?? 120,
+      isEditing: isLayoutEditing,
+      onLayoutChanged: (t, l, w, h) => onLayoutChanged(
+        'strengths',
+        WidgetLayout(top: t, left: l, width: w, height: h),
+      ),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '[ 주목할 만한 성장 ]',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              if (strengths.isEmpty)
+                const Text(
+                  '90점 이상인 역량이 없습니다',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                )
+              else
+                Expanded(
+                  child: ListView(
+                    children: strengths
+                        .map(
+                          (strength) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  strength['icon']!,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        strength['title']!,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        strength['description']!,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, String>> _autoGenerateStrengths() {
+    final scoreMap = {
+      'focus': {
+        'score': scores.focus,
+        'icon': '🎯',
+        'title': '집중력',
+        'description': '50분 수업 내내 흐트러짐 없이 학습!',
+      },
+      'application': {
+        'score': scores.application,
+        'icon': '💡',
+        'title': '응용력',
+        'description': '배운 내용을 실전에 잘 적용합니다',
+      },
+      'accuracy': {
+        'score': scores.accuracy,
+        'icon': '✓',
+        'title': '정확도',
+        'description': '문제 풀이 정확도가 매우 우수합니다',
+      },
+      'task': {
+        'score': scores.task,
+        'icon': '📝',
+        'title': '과제수행',
+        'description': '매주 과제를 성실히 완수했습니다',
+      },
+      'creativity': {
+        'score': scores.creativity,
+        'icon': '🌟',
+        'title': '창의성',
+        'description': '독창적인 수 선택으로 깊은 사고력을 보여줍니다',
+      },
+    };
+
+    // 90점 이상인 역량만 필터링하고 점수순으로 정렬
+    final filteredScores =
+        scoreMap.entries
+            .where((entry) => entry.value['score'] as int >= 90)
+            .toList()
+          ..sort(
+            (a, b) =>
+                (b.value['score'] as int).compareTo(a.value['score'] as int),
+          );
+
+    // 상위 2개만 선택
+    return filteredScores
+        .take(2)
+        .map(
+          (entry) => {
+            'icon': entry.value['icon'] as String,
+            'title': entry.value['title'] as String,
+            'description': entry.value['description'] as String,
+          },
+        )
+        .toList();
+  }
+
   Widget _buildCommentSection(BuildContext context) {
     return ResizableDraggableWrapper(
       key: ValueKey('comment_$layoutVersion'),
       initialTop: layouts['comment']?.top ?? 500,
       initialLeft: layouts['comment']?.left ?? 0,
       initialWidth: layouts['comment']?.width ?? 530,
-      initialHeight: layouts['comment']?.height ?? 188,
+      initialHeight: layouts['comment']?.height ?? 250,
       isEditing: isLayoutEditing,
       onLayoutChanged: (t, l, w, h) => onLayoutChanged(
         'comment',
@@ -2484,16 +2503,17 @@ class _EducationReportPaper extends StatelessWidget {
                       border: Border.all(color: Colors.grey.shade300),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: SingleChildScrollView(
-                      child: Text(
-                        teacherComment,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          height: 1.6,
-                          fontStyle: FontStyle.italic,
-                          color: Colors.black87,
-                        ),
+                    child: AutoSizeText(
+                      teacherComment,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.6,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.black87,
                       ),
+                      minFontSize: 10,
+                      maxLines: null,
+                      overflow: TextOverflow.visible,
                     ),
                   ),
                 ),
@@ -2548,6 +2568,57 @@ class _EducationReportPaper extends StatelessWidget {
                 backgroundColor: color.withOpacity(0.1),
                 color: color,
                 minHeight: 5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScoreBarCompact(
+    String label,
+    int score,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(2),
+      hoverColor: color.withOpacity(0.05),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  '$score점',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 1),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(1),
+              child: LinearProgressIndicator(
+                value: score / 100,
+                backgroundColor: color.withOpacity(0.1),
+                color: color,
+                minHeight: 3,
               ),
             ),
           ],

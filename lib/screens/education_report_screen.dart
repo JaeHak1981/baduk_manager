@@ -18,6 +18,7 @@ import 'components/bar_horizontal_chart_widget.dart';
 import 'components/resizable_draggable_wrapper.dart';
 import 'components/comment_grid_picker.dart';
 import '../providers/education_report_provider.dart';
+import '../providers/attendance_provider.dart';
 import '../utils/report_comment_utils.dart';
 
 class EducationReportScreen extends StatefulWidget {
@@ -36,6 +37,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
   String? _customReportDate;
   Map<String, String> _customStudentLevels = {}; // 학생 ID -> 커스텀 급수
   bool _showLevel = true; // 급수 표시 여부
+  bool _showAttendance = true; // 출석률 표시 여부
   Map<String, AchievementScores> _customScores = {}; // 학생 ID -> 커스텀 점수
   Map<String, BalanceChartType> _studentChartTypes = {}; // 학생 ID -> 밸런스 차트 타입
   Map<String, DetailViewType> _studentDetailTypes = {}; // 학생 ID -> 상세 보기 타입
@@ -128,6 +130,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
             DateFormat('yyyy. MM. dd').format(DateTime.now()),
         studentLevel: _customStudentLevels[item.id] ?? item.levelDisplayName,
         showLevel: _showLevel,
+        showAttendance: _showAttendance,
         showRadarChart: _showRadarChart,
         showProgress: _showProgress,
         showCompetency: _showCompetency,
@@ -922,6 +925,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                         vertical: 16,
                       ),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Wrap(
                             spacing: 8,
@@ -1182,6 +1186,24 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                               setState(() => _showLevel = val);
                             },
                             secondary: const Icon(Icons.military_tech_outlined),
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                          SwitchListTile(
+                            title: const Text(
+                              '출석률 표시',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            value: _showAttendance,
+                            onChanged: (val) {
+                              setState(() => _showAttendance = val);
+                            },
+                            secondary: const Icon(
+                              Icons.event_available_outlined,
+                            ),
                             contentPadding: EdgeInsets.zero,
                             dense: true,
                           ),
@@ -1527,6 +1549,7 @@ class _EducationReportPaper extends StatelessWidget {
   final String reportDate;
   final String studentLevel;
   final bool showLevel;
+  final bool showAttendance;
   final bool showRadarChart;
   final bool showProgress;
   final bool showCompetency;
@@ -1563,6 +1586,7 @@ class _EducationReportPaper extends StatelessWidget {
     required this.reportDate,
     required this.studentLevel,
     required this.showLevel,
+    required this.showAttendance,
     required this.showRadarChart,
     required this.showProgress,
     required this.showCompetency,
@@ -1744,10 +1768,60 @@ class _EducationReportPaper extends StatelessWidget {
               _buildDivider(),
               _buildInfoItem('급수', studentLevel),
             ],
+            if (showAttendance) ...[
+              _buildDivider(),
+              FutureBuilder<double>(
+                future: _fetchAttendanceRate(context),
+                builder: (context, snapshot) {
+                  String text = '-';
+                  if (snapshot.hasData) {
+                    text = '${snapshot.data!.toStringAsFixed(0)}%';
+                  }
+                  return _buildInfoItem('출석률', text);
+                },
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Future<double> _fetchAttendanceRate(BuildContext context) async {
+    try {
+      // reportDate 문자열 ("2023. 05. 01")을 DateTime으로 파싱
+      final parts = reportDate.split('.');
+      if (parts.length < 3) return 0.0;
+
+      final year = int.parse(parts[0].trim());
+      final month = int.parse(parts[1].trim());
+      // 해당 월의 1일
+      final startDate = DateTime(year, month, 1);
+      // 해당 월의 마지막 날 (다음달 1일의 하루 전)
+      final endDate = DateTime(year, month + 1, 0);
+
+      final provider = context.read<AttendanceProvider>();
+      final records = await provider.getRecordsForPeriod(
+        academyId: academy.id,
+        ownerId: academy.ownerId,
+        start: startDate,
+        end: endDate,
+      );
+
+      // 해당 학생의 기록만 필터링
+      final studentRecords = records
+          .where((r) => r.studentId == student.id)
+          .toList();
+
+      if (studentRecords.isEmpty) return 0.0;
+
+      // 출석률 계산: (출석+지각) / 전체 기록 수
+      // 전체 기록 수는 '출석체크를 한 날의 수'로 가정 (결석 포함)
+      return provider.getAttendanceRate(studentRecords, studentRecords.length);
+    } catch (e) {
+      debugPrint('Error fetching attendance rate: $e');
+      return 0.0;
+    }
   }
 
   Widget _buildRadarChartSection(BuildContext context) {

@@ -182,13 +182,12 @@ class AttendanceScreenState extends State<AttendanceScreen>
       excel.rename('Sheet1', sheetName);
       var sheet = excel[sheetName];
 
-      // 2. 수업일 리스트 생성 (Header용)
+      // 2. 수업일 리스트 생성 (Header용) - 공휴일도 포함
       final List<DateTime> lessonDates = [];
       for (int i = 1; i <= endOfMonth.day; i++) {
         DateTime d = DateTime(_currentYear, _currentMonth, i);
-        if (widget.academy.lessonDays.contains(d.weekday) &&
-            !HolidayHelper.isHoliday(d) &&
-            !context.read<ScheduleProvider>().isDateHoliday(d)) {
+        // 수업 요일만 체크 (공휴일 필터 제거)
+        if (widget.academy.lessonDays.contains(d.weekday)) {
           lessonDates.add(d);
         }
       }
@@ -234,6 +233,13 @@ class AttendanceScreenState extends State<AttendanceScreen>
         fontFamily: excel_lib.getFontFamily(excel_lib.FontFamily.Arial),
         bold: true,
         horizontalAlign: excel_lib.HorizontalAlign.Left,
+      );
+
+      // 휴강일 셀 스타일 (가운데 정렬)
+      var holidayStyle = excel_lib.CellStyle(
+        fontFamily: excel_lib.getFontFamily(excel_lib.FontFamily.Arial),
+        horizontalAlign: excel_lib.HorizontalAlign.Center,
+        fontColorHex: excel_lib.ExcelColor.fromHexString('#FF0000'), // 빨간 글씨
       );
 
       for (var sIdx = 0; sIdx < sortedStudents.length; sIdx++) {
@@ -285,13 +291,12 @@ class AttendanceScreenState extends State<AttendanceScreen>
         // 날짜별 기록
         for (var dIdx = 0; dIdx < lessonDates.length; dIdx++) {
           final date = lessonDates[dIdx];
-          final dateStr =
-              "${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}";
-          final recordId = "${student.id}_$dateStr";
 
-          final record = records.any((r) => r.id == recordId)
-              ? records.firstWhere((r) => r.id == recordId)
-              : null;
+          // 휴강 체크
+          final holidayName = HolidayHelper.getHolidayName(date);
+          final isAcademyHoliday = context
+              .read<ScheduleProvider>()
+              .isDateHoliday(date);
 
           var cell = sheet.cell(
             excel_lib.CellIndex.indexByColumnRow(
@@ -299,15 +304,31 @@ class AttendanceScreenState extends State<AttendanceScreen>
               rowIndex: rowIndex,
             ),
           );
-          if (record != null) {
-            cell.value = excel_lib.TextCellValue(
-              record.type == AttendanceType.present ? 'O' : 'X',
-            );
-            if (record.type == AttendanceType.present) presentCount++;
-            if (record.type == AttendanceType.absent) absentCount++;
-            totalRecorded++;
+
+          if (holidayName != null || isAcademyHoliday) {
+            // 휴강인 경우
+            cell.value = excel_lib.TextCellValue(holidayName ?? "휴강");
+            cell.cellStyle = holidayStyle;
           } else {
-            cell.value = excel_lib.TextCellValue('');
+            // 정상 수업일
+            final dateStr =
+                "${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}";
+            final recordId = "${student.id}_$dateStr";
+
+            final record = records.any((r) => r.id == recordId)
+                ? records.firstWhere((r) => r.id == recordId)
+                : null;
+
+            if (record != null) {
+              cell.value = excel_lib.TextCellValue(
+                record.type == AttendanceType.present ? 'O' : 'X',
+              );
+              if (record.type == AttendanceType.present) presentCount++;
+              if (record.type == AttendanceType.absent) absentCount++;
+              totalRecorded++;
+            } else {
+              cell.value = excel_lib.TextCellValue('');
+            }
           }
         }
 

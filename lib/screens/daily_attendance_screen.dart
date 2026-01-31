@@ -281,7 +281,10 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
           }
         }
 
-        if (scheduleProvider.isDateHoliday(_selectedDate)) {
+        final holidayName = HolidayHelper.getHolidayName(_selectedDate);
+        final isAcademyHoliday = scheduleProvider.isDateHoliday(_selectedDate);
+
+        if (holidayName != null || isAcademyHoliday) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -289,7 +292,9 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                 const Icon(Icons.event_busy, size: 64, color: Colors.red),
                 const SizedBox(height: 16),
                 Text(
-                  '${_selectedDate.month}월 ${_selectedDate.day}일은 학원 휴강일입니다.',
+                  holidayName != null
+                      ? '${_selectedDate.month}월 ${_selectedDate.day}일은 $holidayName입니다.'
+                      : '${_selectedDate.month}월 ${_selectedDate.day}일은 학원 휴강일입니다.',
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,

@@ -397,15 +397,10 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                   child: const Text('취소'),
                 ),
                 ElevatedButton(
-                  onPressed: () async {
-                    // 확인 버튼 클릭 시 화면을 닫기 전에 모든 데이터 확정 로드
-                    try {
-                      await _loadAllStudentLayouts();
-                    } catch (e) {
-                      print('Error in confirm: $e');
-                    }
+                  onPressed: () {
+                    // 메모리에 이미 최신 데이터가 있으므로 재로드 불필요
                     if (mounted) {
-                      setState(() {});
+                      setState(() {}); // UI만 갱신
                       Navigator.pop(context);
                     }
                   },
@@ -434,9 +429,8 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       // 실질적인 데이터 로드 (병렬 처리로 속도 개선)
       await Future.wait(
         targetIds.map((id) async {
-          // 레이아웃 로드
-          if (!_studentLayouts.containsKey(id) ||
-              _studentLayouts[id]!.isEmpty) {
+          // 레이아웃 로드 - 메모리 우선 전략 (isEmpty 체크 제거)
+          if (!_studentLayouts.containsKey(id)) {
             final savedLayout = await _storageService.getStudentLayout(id);
             if (savedLayout.isNotEmpty) {
               _studentLayouts[id] = savedLayout;
@@ -483,7 +477,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
     _pendingSaveStudentId = studentId;
     if (_saveDebounceTimer?.isActive ?? false) _saveDebounceTimer!.cancel();
 
-    _saveDebounceTimer = Timer(const Duration(milliseconds: 500), () async {
+    _saveDebounceTimer = Timer(const Duration(milliseconds: 100), () async {
       final layout = _studentLayouts[studentId];
       if (layout != null) {
         await _storageService.saveStudentLayout(studentId, layout);

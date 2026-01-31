@@ -3,6 +3,8 @@ import 'package:uuid/uuid.dart';
 import '../models/education_report_model.dart';
 import '../services/education_report_service.dart';
 import '../utils/report_utils.dart';
+import '../services/ai_service.dart';
+import '../services/local_storage_service.dart';
 
 class EducationReportProvider with ChangeNotifier {
   final EducationReportService _service = EducationReportService();
@@ -10,12 +12,14 @@ class EducationReportProvider with ChangeNotifier {
   List<EducationReportModel> _reports = [];
   List<CommentTemplateModel> _templates = [];
   bool _isLoading = false;
+  bool _isGenerating = false; // 생성 로딩 상태 추가
   String? _errorMessage;
   ReportTemplateType _selectedTemplateType = ReportTemplateType.classic;
 
   List<EducationReportModel> get reports => _reports;
   List<CommentTemplateModel> get templates => _templates;
   bool get isLoading => _isLoading;
+  bool get isGenerating => _isGenerating;
   String? get errorMessage => _errorMessage;
   ReportTemplateType get selectedTemplateType => _selectedTemplateType;
 
@@ -80,6 +84,7 @@ class EducationReportProvider with ChangeNotifier {
     required List<int> volumes,
     required int attendanceCount,
     required int totalClasses,
+    String? userInstructions, // 파라미터 추가
   }) async {
     // 1. 성취도 점수 자동 산출 (교재 권수 등에 따른 베이스라인 + 가변성)
     final maxVolume = volumes.isNotEmpty
@@ -104,11 +109,65 @@ class EducationReportProvider with ChangeNotifier {
       ownerId: ownerId,
     );
 
-    // 3. 중복 방지 문구 추천
-    String recommendedComment = _recommendComment(
-      studentName,
-      textbookNames.isNotEmpty ? textbookNames.first : '교재',
-    );
+    // 3. 중복 방지 문구 추천 (Hybrid)
+    String recommendedComment;
+    String source = 'template'; // 'ai' or 'template'
+
+    // API 키 확인
+    final storage = LocalStorageService();
+    final apiKey = await storage.getAiApiKey();
+    final modelName = await storage.getAiModelName(); // 모델명 로드
+
+    if (apiKey != null && apiKey.isNotEmpty) {
+      // AI 생성 시도
+      _isGenerating = true; // 로딩 시작
+      notifyListeners(); // 로딩 상태 알림
+
+      try {
+        final aiService = AiService();
+        final aiComment = await aiService.generateReportComment(
+          apiKey: apiKey,
+          studentName: studentName,
+          textbookName: textbookNames.isNotEmpty ? textbookNames.first : '교재',
+          scores: scores,
+          attendanceRate: attendanceRate,
+          modelName: modelName, // 모델명 전달
+          userInstructions: userInstructions, // 지시사항 전달
+        );
+
+        if (aiComment != null) {
+          recommendedComment = aiComment;
+          source = 'ai';
+        } else {
+          // AI 실패 시 폴백
+          recommendedComment = _recommendComment(
+            studentName,
+            textbookNames.isNotEmpty ? textbookNames.first : '교재',
+          );
+        }
+      } catch (e) {
+        debugPrint('AI Generation Error: $e');
+        recommendedComment = _recommendComment(
+          studentName,
+          textbookNames.isNotEmpty ? textbookNames.first : '교재',
+        );
+      } finally {
+        _isGenerating = false; // 로딩 종료
+        notifyListeners();
+      }
+    } else {
+      // 키 없음 -> 기존 로직
+      recommendedComment = _recommendComment(
+        studentName,
+        textbookNames.isNotEmpty ? textbookNames.first : '교재',
+      );
+    }
+
+    // 소스 정보를 TeacherComment 앞부분에 메타데이터로 숨기거나, 별도 필드가 없으므로
+    // 임시로 Provider 상태에 저장하여 UI에서 읽을 수 있게 하거나,
+    // 여기서는 UI에서 확인하기 쉽게 스낵바 호출을 위해 리턴값에 포함하지 않고
+    // Provider의 멤버 변수로 최근 생성 소스를 저장함.
+    _lastGenerationSource = source;
 
     return EducationReportModel(
       id: const Uuid().v4(),
@@ -128,6 +187,9 @@ class EducationReportProvider with ChangeNotifier {
       updatedAt: DateTime.now(),
     );
   }
+
+  String _lastGenerationSource = 'none';
+  String get lastGenerationSource => _lastGenerationSource;
 
   // 문구 추천 로직 (간단한 버전)
   String _recommendComment(String name, String textbook) {

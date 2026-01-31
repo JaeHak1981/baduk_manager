@@ -31,6 +31,23 @@
                         "value": "no-cache, no-store, must-revalidate"
                     }
                 ]
+            },
+            {
+                "source": "**/*.zip",
+                "headers": [
+                    {
+                        "key": "Cache-Control",
+                        "value": "no-cache, no-store, must-revalidate"
+                    },
+                    {
+                        "key": "Content-Type",
+                        "value": "application/zip"
+                    },
+                    {
+                        "key": "Content-Disposition",
+                        "value": "attachment"
+                    }
+                ]
             }
         ]
     },

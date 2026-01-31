@@ -20,6 +20,7 @@ import 'components/resizable_draggable_wrapper.dart';
 import 'components/comment_grid_picker.dart';
 import '../providers/education_report_provider.dart';
 import '../providers/attendance_provider.dart';
+import '../models/attendance_model.dart';
 import '../utils/report_comment_utils.dart';
 import '../services/local_storage_service.dart';
 import 'dart:async';
@@ -63,6 +64,10 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
   String? _pendingSaveStudentId; // 저장이 예약된 학생 ID
   bool _isExiting = false; // 뒤로 가기 중복 방지 플래그
 
+  bool _hasApiKey = false; // API 키 존재 여부 (UI 제어용)
+  bool _isAiMode = true; // AI 모드 On/Off 스위치
+  bool _isAiGenerating = false; // AI 생성 중 여부
+
   @override
   void initState() {
     super.initState();
@@ -83,7 +88,18 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       // 저장된 레이아웃 로드 (약간의 딜레이 후 실행하여 학생 데이터 로드 완료 대기)
       // 실제로는 학생 ID만 있으면 되므로 바로 호출해도 무방하지만 안전하게 처리
       _loadAllStudentLayouts();
+      _checkAiKey();
     });
+  }
+
+  Future<void> _checkAiKey() async {
+    final key = await _storageService.getAiApiKey();
+    if (mounted) {
+      setState(() {
+        _hasApiKey = key != null && key.isNotEmpty;
+        if (!_hasApiKey) _isAiMode = false;
+      });
+    }
   }
 
   @override
@@ -413,6 +429,238 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         );
       },
     );
+  }
+
+  // --- AI 생성 로직 ---
+
+  void _handleAiGenerationRequest() {
+    if (_isAiMode) {
+      // 이제 스위치를 켤 때 키 체크를 하므로, 여기에 왔다는 것은 키가 있다는 뜻
+      _showAiInstructionsDialog();
+    } else {
+      _batchRegenerateComments(null);
+    }
+  }
+
+  void _showApiKeyRequiredDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.vpn_key, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('AI 설정 필요'),
+          ],
+        ),
+        content: const Text(
+          'AI 기능을 사용하려면 Gemini API 키를 먼저 등록해야 합니다.\n설정 화면으로 이동할까요?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('나중에 하기'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('[설정 > AI 설정] 메뉴에서 키를 등록해 주세요.'),
+                  duration: Duration(seconds: 5),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('설정하러 가기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAiInstructionsDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.auto_awesome, color: Colors.purple),
+            SizedBox(width: 8),
+            Text('AI 맞춤 일괄 요청'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '선택된 ${_selectedStudentIds.length}명의 학생에게 공통으로 적용할 요청 사항이 있나요?',
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              '(예: 칭찬 위주로, 단점 부드럽게 등)',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: '비워두면 데이터를 분석해 자동으로 작성합니다.',
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (val) {
+                Navigator.pop(context);
+                _batchRegenerateComments(val);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _batchRegenerateComments(null);
+            },
+            child: const Text('바로 생성'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _batchRegenerateComments(controller.text.trim());
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('반영하여 생성'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _batchRegenerateComments(String? instructions) async {
+    if (_selectedStudentIds.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('생성할 학생을 먼저 선택해 주세요.')));
+      return;
+    }
+
+    setState(() => _isAiGenerating = true);
+
+    final reportProvider = context.read<EducationReportProvider>();
+    final progressProvider = context.read<ProgressProvider>();
+    final attendanceProvider = context.read<AttendanceProvider>();
+    final studentProvider = context.read<StudentProvider>();
+
+    int successCount = 0;
+    int failCount = 0;
+
+    try {
+      for (final studentId in _selectedStudentIds) {
+        if (studentId == 'sample') continue;
+
+        final student = studentProvider.students.firstWhere(
+          (s) => s.id == studentId,
+        );
+
+        // 1. 해당 기간 출석 데이터 (임시 기간 설정 - 현재 통지표 날짜 기준이 좋지만 여기선 간단히)
+        // 실제로는 EducationReportFormScreen처럼 기간을 인자로 받아야 함.
+        // 여기서는 EducationReportScreen의 state에 기간 정보가 없으므로 현재 달 기준으로 처리하거나
+        // draft 생성 로직을 최소화함.
+
+        final now = DateTime.now();
+        final startDate = DateTime(now.year, now.month, 1);
+        final endDate = DateTime(now.year, now.month + 1, 0);
+
+        final attendanceRecords = await attendanceProvider.getRecordsForPeriod(
+          academyId: widget.academy.id,
+          ownerId: widget.academy.ownerId,
+          start: startDate,
+          end: endDate,
+        );
+
+        final totalClasses = attendanceRecords.length;
+        final presentCount = attendanceRecords
+            .where(
+              (r) =>
+                  r.type == AttendanceType.present ||
+                  r.type == AttendanceType.late,
+            )
+            .length;
+
+        // 2. 교재 현황
+        final progressList = progressProvider.getProgressForStudent(studentId);
+        final textbookIds = progressList.map((p) => p.textbookId).toList();
+        final textbookNames = progressList.map((p) => p.textbookName).toList();
+        final volumes = progressList.map((p) => p.volumeNumber).toList();
+
+        // 3. 초안 생성 요청
+        try {
+          final draft = await reportProvider.generateDraft(
+            academyId: widget.academy.id,
+            ownerId: widget.academy.ownerId,
+            studentId: studentId,
+            studentName: student.name,
+            startDate: startDate,
+            endDate: endDate,
+            textbookNames: textbookNames,
+            textbookIds: textbookIds,
+            volumes: volumes,
+            attendanceCount: presentCount,
+            totalClasses: totalClasses,
+            userInstructions: _isAiMode ? instructions : null,
+          );
+
+          if (mounted) {
+            setState(() {
+              _customComments[studentId] = draft.teacherComment;
+              // 점수도 함께 업데이트 (종합 의견 생성 시 점수 데이터가 활용되므로 같이 가져오는 게 자연스러움)
+              _customScores[studentId] = draft.scores;
+            });
+            successCount++;
+          }
+        } catch (e) {
+          failCount++;
+        }
+      }
+
+      if (mounted) {
+        final source = reportProvider.lastGenerationSource;
+        String message;
+        if (failCount == 0) {
+          message = source == 'ai'
+              ? '🤖 AI가 $successCount명의 의견을 작성했습니다.'
+              : '📝 시스템 문구로 $successCount명의 의견을 추천했습니다.';
+        } else {
+          message = '✅ 완료: $successCount명 성공, ❌ 실패: $failCount명';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: source == 'ai'
+                ? Colors.indigo
+                : (failCount > 0 ? Colors.red : Colors.grey[700]),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isAiGenerating = false);
+      }
+    }
   }
 
   // --- 레이아웃 저장/로드 로직 ---
@@ -1122,7 +1370,123 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                   ),
                               ],
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 24),
+
+                            // AI 스마트 도구 섹션
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.auto_awesome,
+                                  size: 16,
+                                  color: Colors.purple,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'AI 스마트 도구',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Colors.purple,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.purple.withOpacity(0.1),
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _isAiMode ? '✨ AI 모드' : '📝 일반 모드',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: _isAiMode
+                                              ? Colors.purple
+                                              : Colors.grey,
+                                        ),
+                                      ),
+                                      Transform.scale(
+                                        scale: 0.8,
+                                        child: Switch(
+                                          value: _isAiMode,
+                                          activeColor: Colors.purple,
+                                          onChanged: (val) {
+                                            if (val == true && !_hasApiKey) {
+                                              // 키 가 없는데 켜려고 하면 경고창 띄우고 상태 유지
+                                              _showApiKeyRequiredDialog();
+                                              return;
+                                            }
+                                            setState(() => _isAiMode = val);
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      icon: _isAiGenerating
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : Icon(
+                                              _isAiMode
+                                                  ? Icons.auto_awesome
+                                                  : Icons.refresh,
+                                              size: 16,
+                                            ),
+                                      label: Text(
+                                        _isAiGenerating
+                                            ? '작성 중...'
+                                            : '${_selectedStudentIds.isNotEmpty ? _selectedStudentIds.length : ""}명 AI 자동 완성',
+                                      ),
+                                      onPressed: _isAiGenerating
+                                          ? null
+                                          : _handleAiGenerationRequest,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.purple,
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (_isAiMode)
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 8),
+                                      child: Text(
+                                        '* 지시사항이 있으면 대화창이 뜹니다.',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 24),
 
                             // 보기 스타일 설정 섹션 (상단 배치)
                             const Row(

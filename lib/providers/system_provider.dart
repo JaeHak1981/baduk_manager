@@ -37,7 +37,7 @@ class SystemProvider extends ChangeNotifier {
         // 현재 플랫폼의 다운로드 링크가 있는지 확인 (링크가 없으면 업데이트 유도 안 함)
         String platform = '';
         if (kIsWeb) {
-          // 웹은 기본적으로 업데이트 대상이 아니지만, 다이얼로그 노출 여부 결정을 위해 체크
+          // 웹에서는 안드로이드일 경우 로컬 파일 다운로드 허용
           _isUpdateRequired = versionNewer;
         } else {
           platform = defaultTargetPlatform.name.toLowerCase();
@@ -58,6 +58,9 @@ class SystemProvider extends ChangeNotifier {
     if (_config == null) return '';
     switch (platform.toLowerCase()) {
       case 'android':
+        // 캐시 회피를 위해 쿼리 파라미터 추가
+        if (kIsWeb)
+          return '/app-release.zip?v=${DateTime.now().millisecondsSinceEpoch}';
         return _config!['downloadUrlAndroid'] ??
             _config!['downloadURLAndroid'] ??
             '';

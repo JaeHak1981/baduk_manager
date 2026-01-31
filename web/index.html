@@ -35,35 +35,7 @@
 </head>
 
 <body>
-  <script>
-    // 서비스 워커 업데이트 감지 및 자동 새로고침 로직
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () {
-        navigator.serviceWorker.register('flutter_service_worker.js').then(function (reg) {
-          reg.onupdatefound = function () {
-            const installingWorker = reg.installing;
-            installingWorker.onstatechange = function () {
-              if (installingWorker.state === 'installed') {
-                if (navigator.serviceWorker.controller) {
-                  // 새로운 버전이 감지되면 기존 버전을 밀어내고 즉시 활성화
-                  console.log('새로운 버전이 발견되었습니다. 자동 업데이트를 시작합니다.');
-                  installingWorker.postMessage({ type: 'SKIP_WAITING' });
-                }
-              }
-            };
-          };
-        });
 
-        // 새로운 서비스 워커가 제어권을 잡으면 페이지 새로고침
-        let refreshing = false;
-        navigator.serviceWorker.addEventListener('controllerchange', function () {
-          if (refreshing) return;
-          refreshing = true;
-          window.location.reload();
-        });
-      });
-    }
-  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 

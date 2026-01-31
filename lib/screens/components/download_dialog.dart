@@ -12,8 +12,8 @@ class DownloadDialog extends StatelessWidget {
   Future<void> _launchUrl(String url) async {
     if (url.isEmpty) return;
     final Uri uri = Uri.parse(url);
-    // 웹에서는 platformDefault가 더 안정적일 수 있으며, 모바일 브라우저에서 다운로드를 잘 유도함
-    if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+    // 모바일/태블릿에서 다운로드 처리를 확실하게 하기 위해 externalApplication 모드 권장
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       throw Exception('Could not launch $url');
     }
   }

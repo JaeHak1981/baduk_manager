@@ -81,7 +81,7 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
     final textbookNames = periodProgress.map((p) => p.textbookName).toList();
     final volumes = periodProgress.map((p) => p.volumeNumber).toList();
 
-    // 3. 초안 생성
+    // 3. 초안 생성 (여기서는 초기 진입 시 기본 AI 생성이 작동함)
     final draft = await reportProvider.generateDraft(
       academyId: widget.academy.id,
       ownerId: widget.academy.ownerId,
@@ -96,11 +96,13 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
       totalClasses: totalClasses,
     );
 
-    setState(() {
-      _report = draft;
-      _commentController.text = draft.teacherComment;
-      _isInitialized = true;
-    });
+    if (mounted) {
+      setState(() {
+        _report = draft;
+        _commentController.text = draft.teacherComment;
+        _isInitialized = true;
+      });
+    }
   }
 
   @override
@@ -132,12 +134,6 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
           children: [
             _buildInfoCard(),
             const SizedBox(height: 24),
-            const SizedBox(height: 24),
-            const Text(
-              '성취도 평가 (슬라이더로 조절)',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            const SizedBox(height: 16),
             _buildScoreSliders(),
             const SizedBox(height: 24),
             _buildRadarChart(), // 실제 차트 위젯
@@ -197,7 +193,13 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
 
   Widget _buildScoreSliders() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text(
+          '성취도 평가 (슬라이더로 조절)',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        const SizedBox(height: 16),
         _buildSliderItem('집중력', _report!.scores.focus, (v) {
           setState(
             () => _report = _report!.copyWith(
@@ -270,6 +272,9 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
   }
 
   Widget _buildCommentSection() {
+    final reportProvider = context.watch<EducationReportProvider>();
+    final isGenerating = reportProvider.isGenerating;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -280,19 +285,45 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
               '지도 교사 총평',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
-            TextButton.icon(
-              icon: const Icon(Icons.library_books, size: 16),
-              label: const Text('라이브러리'),
-              onPressed: _showTemplatePicker,
+            Row(
+              children: [
+                if (isGenerating)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  TextButton.icon(
+                    icon: const Icon(
+                      Icons.refresh,
+                      size: 16,
+                      color: Colors.blue,
+                    ),
+                    label: const Text(
+                      '다시 생성',
+                      style: TextStyle(color: Colors.blue),
+                    ),
+                    onPressed: _regenerateComment,
+                  ),
+                const SizedBox(width: 4),
+                TextButton.icon(
+                  icon: const Icon(Icons.library_books, size: 16),
+                  label: const Text('보관함'),
+                  onPressed: _showTemplatePicker,
+                ),
+              ],
             ),
           ],
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _commentController,
-          maxLines: 5,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
+          maxLines: 8,
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
+            filled: isGenerating,
+            fillColor: isGenerating ? Colors.grey.shade100 : null,
             hintText: '아이의 학습 태도와 성취에 대해 적어주세요.',
           ),
           onChanged: (v) {
@@ -301,6 +332,51 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _regenerateComment() async {
+    if (_report == null) return;
+
+    final reportProvider = context.read<EducationReportProvider>();
+    final progressProvider = context.read<ProgressProvider>();
+
+    final progressList = progressProvider.getProgressForStudent(
+      widget.student.id,
+    );
+    final periodProgress = progressList.where((p) {
+      return p.startDate.isAfter(widget.startDate) &&
+          p.startDate.isBefore(widget.endDate.add(const Duration(days: 1)));
+    }).toList();
+
+    final textbookNames = periodProgress.map((p) => p.textbookName).toList();
+    final textbookIds = periodProgress.map((p) => p.textbookId).toList();
+    final volumes = periodProgress.map((p) => p.volumeNumber).toList();
+
+    // 일반 모드로 재생성
+    final draft = await reportProvider.generateDraft(
+      academyId: widget.academy.id,
+      ownerId: widget.academy.ownerId,
+      studentId: widget.student.id,
+      studentName: widget.student.name,
+      startDate: widget.startDate,
+      endDate: widget.endDate,
+      textbookNames: textbookNames,
+      textbookIds: textbookIds,
+      volumes: volumes,
+      attendanceCount: _report!.attendanceCount,
+      totalClasses: _report!.totalClasses,
+    );
+
+    if (mounted) {
+      setState(() {
+        _report = _report!.copyWith(teacherComment: draft.teacherComment);
+        _commentController.text = draft.teacherComment;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('📝 시스템이 보관함 기반 의견을 추천했습니다.')),
+      );
+    }
   }
 
   void _showTemplatePicker() {

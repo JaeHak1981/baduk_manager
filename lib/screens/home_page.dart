@@ -17,6 +17,7 @@ import '../models/textbook_model.dart';
 import 'components/enrollment_statistics_dialog.dart';
 import 'components/download_dialog.dart';
 import '../providers/system_provider.dart';
+import 'settings/ai_settings_screen.dart';
 
 /// 홈 화면
 class HomePage extends StatefulWidget {
@@ -73,6 +74,18 @@ class _HomePageState extends State<HomePage> {
               showDialog(
                 context: context,
                 builder: (context) => const DownloadDialog(),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.smart_toy_outlined),
+            tooltip: 'AI 설정',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AiSettingsScreen(),
+                ),
               );
             },
           ),

@@ -108,28 +108,62 @@ extension ReportTemplateTypeExtension on ReportTemplateType {
   }
 }
 
-enum BalanceChartType { radar, bar, column }
+enum BalanceChartType { radar, line, barVertical, barHorizontal, doughnut }
 
 extension BalanceChartTypeExtension on BalanceChartType {
   String get displayName {
     switch (this) {
       case BalanceChartType.radar:
-        return '레이더 차트';
-      case BalanceChartType.bar:
-        return '가로 막대';
-      case BalanceChartType.column:
-        return '세로 막대';
+        return '레이더'; // 🕸️
+      case BalanceChartType.line:
+        return '꺾은선'; // 📈
+      case BalanceChartType.barVertical:
+        return '세로막대'; // 📊
+      case BalanceChartType.barHorizontal:
+        return '가로막대'; //
+      case BalanceChartType.doughnut:
+        return '도넛'; // 🍩
     }
   }
 
   IconData get icon {
     switch (this) {
       case BalanceChartType.radar:
-        return Icons.radar;
-      case BalanceChartType.bar:
-        return Icons.bar_chart_outlined;
-      case BalanceChartType.column:
-        return Icons.align_vertical_bottom_outlined;
+        return Icons.hexagon_outlined; // 오각형 느낌
+      case BalanceChartType.line:
+        return Icons.show_chart;
+      case BalanceChartType.barVertical:
+        return Icons.bar_chart;
+      case BalanceChartType.barHorizontal:
+        return Icons.notes; // 가로 막대 느낌 (혹은 menu) - notes가 비슷함
+      case BalanceChartType.doughnut:
+        return Icons.donut_large;
+    }
+  }
+}
+
+enum DetailViewType { progressBar, table, gridCards }
+
+extension DetailViewTypeExtension on DetailViewType {
+  String get displayName {
+    switch (this) {
+      case DetailViewType.progressBar:
+        return '막대형';
+      case DetailViewType.table:
+        return '표 형';
+      case DetailViewType.gridCards:
+        return '카드형';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case DetailViewType.progressBar:
+        return Icons.linear_scale;
+      case DetailViewType.table:
+        return Icons.table_chart;
+      case DetailViewType.gridCards:
+        return Icons.grid_view;
     }
   }
 }
@@ -152,6 +186,7 @@ class EducationReportModel {
   final DateTime updatedAt;
   final ReportTemplateType templateType;
   final BalanceChartType balanceChartType;
+  final DetailViewType detailViewType;
 
   EducationReportModel({
     required this.id,
@@ -171,6 +206,7 @@ class EducationReportModel {
     required this.updatedAt,
     this.templateType = ReportTemplateType.classic,
     this.balanceChartType = BalanceChartType.radar,
+    this.detailViewType = DetailViewType.progressBar,
   });
 
   Map<String, dynamic> toFirestore() {
@@ -192,6 +228,7 @@ class EducationReportModel {
       'updatedAt': Timestamp.fromDate(updatedAt),
       'templateType': templateType.name,
       'balanceChartType': balanceChartType.name,
+      'detailViewType': detailViewType.name,
     };
   }
 
@@ -226,13 +263,29 @@ class EducationReportModel {
           : null,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       updatedAt: (data['updatedAt'] as Timestamp).toDate(),
-      templateType: (data['templateType'] == 'classic')
-          ? ReportTemplateType.classic
-          : ReportTemplateType.classic,
-      balanceChartType: BalanceChartType.values.firstWhere(
-        (e) => e.name == (data['balanceChartType'] as String?),
-        orElse: () => BalanceChartType.radar,
-      ),
+      templateType: ReportTemplateType.classic,
+      balanceChartType: _parseChartType(data['balanceChartType'] as String?),
+      detailViewType: _parseDetailViewType(data['detailViewType'] as String?),
+    );
+  }
+
+  static BalanceChartType _parseChartType(String? value) {
+    if (value == null) return BalanceChartType.radar;
+    // 구 버전 데이터 호환성 처리
+    if (value == 'bar') return BalanceChartType.barHorizontal;
+    if (value == 'column') return BalanceChartType.barVertical;
+
+    return BalanceChartType.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => BalanceChartType.radar,
+    );
+  }
+
+  static DetailViewType _parseDetailViewType(String? value) {
+    if (value == null) return DetailViewType.progressBar;
+    return DetailViewType.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => DetailViewType.progressBar,
     );
   }
 
@@ -241,6 +294,7 @@ class EducationReportModel {
     String? teacherComment,
     ReportTemplateType? templateType,
     BalanceChartType? balanceChartType,
+    DetailViewType? detailViewType,
     Map<String, WidgetLayout>? layouts,
     DateTime? updatedAt,
   }) {
@@ -262,6 +316,7 @@ class EducationReportModel {
       layouts: layouts ?? this.layouts,
       createdAt: this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      detailViewType: detailViewType ?? this.detailViewType,
     );
   }
 }

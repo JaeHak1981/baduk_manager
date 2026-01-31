@@ -374,38 +374,6 @@ class ProgressProvider with ChangeNotifier {
     }
   }
 
-  /// 진도 권수 수정
-  Future<bool> updateVolume(
-    String progressId,
-    String studentId,
-    int newVolume, {
-    String? ownerId,
-  }) async {
-    try {
-      await _progressService.updateVolume(progressId, newVolume);
-
-      // [FIX] 로컬 데이터 즉시 업데이트
-      if (_studentProgressMap.containsKey(studentId)) {
-        final list = _studentProgressMap[studentId]!;
-        final index = list.indexWhere((p) => p.id == progressId);
-        if (index != -1) {
-          list[index] = list[index].copyWith(
-            volumeNumber: newVolume,
-            updatedAt: DateTime.now(),
-          );
-        }
-      }
-
-      notifyListeners();
-      await loadStudentProgress(studentId, ownerId: ownerId);
-      return true;
-    } catch (e) {
-      _errorMessage = '권수 수정 실패: $e';
-      notifyListeners();
-      return false;
-    }
-  }
-
   /// 에러 메시지 초기화
   void clearErrorMessage() {
     _errorMessage = null;

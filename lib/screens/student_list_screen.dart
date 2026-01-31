@@ -925,22 +925,19 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                     children: progressList.map((progress) {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 4.0),
-                        child: InkWell(
-                          onTap: () => _showEditVolumeDialog(context, progress),
-                          borderRadius: BorderRadius.circular(6),
-                          // 터치 영역 시각화 및 확장
-                          child: Container(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: Colors.blue.withOpacity(0.1),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
                               vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: Colors.blue.withOpacity(0.1),
-                                width: 0.5,
-                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1242,76 +1239,6 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
             ),
           );
         }
-      }
-    }
-  }
-
-  Future<void> _showEditVolumeDialog(
-    BuildContext context,
-    StudentProgressModel progress,
-  ) async {
-    final controller = TextEditingController(
-      text: progress.volumeNumber.toString(),
-    );
-
-    final newVolume = await showDialog<int?>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${progress.textbookName} 권수 수정'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('현재 학습 중인 권수를 입력하세요.'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: '권수 (최대 ${progress.totalVolumes})',
-                border: const OutlineInputBorder(),
-              ),
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () {
-              final val = int.tryParse(controller.text);
-              if (val != null && val > 0 && val <= progress.totalVolumes) {
-                Navigator.pop(context, val);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      '1에서 ${progress.totalVolumes} 사이의 숫자를 입력해주세요.',
-                    ),
-                  ),
-                );
-              }
-            },
-            child: const Text('수정'),
-          ),
-        ],
-      ),
-    );
-
-    if (newVolume != null && newVolume != progress.volumeNumber && mounted) {
-      final success = await context.read<ProgressProvider>().updateVolume(
-        progress.id,
-        widget.student.id,
-        newVolume,
-        ownerId: widget.academy.ownerId,
-      );
-      if (mounted && success) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('교재 권수가 수정되었습니다.')));
       }
     }
   }

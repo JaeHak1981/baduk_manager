@@ -148,7 +148,7 @@ class EducationReportProvider with ChangeNotifier {
           textbookName: textbookNames.isNotEmpty ? textbookNames.first : '교재',
           scores: scores,
           attendanceRate: attendanceRate,
-          modelName: modelName,
+          modelName: modelName ?? 'gemini-1.5-flash',
           userInstructions: userInstructions,
           referenceText: referenceText, // 고도화된 템플릿 문구를 참고용으로 전달
           isFastProgress:

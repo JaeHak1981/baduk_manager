@@ -6,6 +6,8 @@ class LocalStorageService {
   static const String _layoutKeyPrefix = 'student_layout_';
   static const String _chartTypeKeyPrefix = 'student_chart_type_';
   static const String _detailTypeKeyPrefix = 'student_detail_type_';
+  static const String _aiApiKey = 'ai_api_key';
+  static const String _aiModelName = 'ai_model_name';
 
   SharedPreferences? _prefs;
 
@@ -101,5 +103,29 @@ class LocalStorageService {
     final prefs = await _getInstance;
     final key = '$_layoutKeyPrefix$studentId';
     await prefs.remove(key);
+  }
+
+  /// AI API Key 저장
+  Future<void> setAiApiKey(String apiKey) async {
+    final prefs = await _getInstance;
+    await prefs.setString(_aiApiKey, apiKey);
+  }
+
+  /// AI API Key 로드
+  Future<String?> getAiApiKey() async {
+    final prefs = await _getInstance;
+    return prefs.getString(_aiApiKey);
+  }
+
+  /// AI Model Name 저장
+  Future<void> setAiModelName(String modelName) async {
+    final prefs = await _getInstance;
+    await prefs.setString(_aiModelName, modelName);
+  }
+
+  /// AI Model Name 로드
+  Future<String?> getAiModelName() async {
+    final prefs = await _getInstance;
+    return prefs.getString(_aiModelName);
   }
 }

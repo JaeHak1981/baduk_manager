@@ -65,7 +65,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
   bool _isExiting = false; // 뒤로 가기 중복 방지 플래그
 
   bool _hasApiKey = false; // API 키 존재 여부 (UI 제어용)
-  bool _isAiMode = true; // AI 모드 On/Off 스위치
+  bool _isAiMode = false; // AI 모드 On/Off 스위치 (기본값: Off)
   bool _isAiGenerating = false; // AI 생성 중 여부
 
   @override
@@ -81,6 +81,13 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         ownerId: widget.academy.ownerId,
       );
       progressProvider.loadAcademyProgress(
+        widget.academy.id,
+        ownerId: widget.academy.ownerId,
+      );
+
+      // 템플릿 로드 (기본 템플릿 또는 Firestore 템플릿)
+      final reportProvider = context.read<EducationReportProvider>();
+      reportProvider.loadTemplates(
         widget.academy.id,
         ownerId: widget.academy.ownerId,
       );
@@ -179,14 +186,16 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         onChartTypeChanged: (newType) {
           setState(() {
             _studentChartTypes[item.id] = newType;
+            _saveLayoutToLocal(item.id);
           });
-          // 차트 타입 변경 시에도 로컬에 저장
-          _storageService.saveStudentChartType(item.id, newType);
         },
-
-        teacherComment:
-            _customComments[item.id] ??
-            '수읽기 교재를 중점적으로 학습하며 집중력이 많이 향상되었습니다. 특히 사활 문제 풀이 속도가 빨라진 점이 고무적입니다.',
+        onDetailTypeChanged: (newType) {
+          setState(() {
+            _studentDetailTypes[item.id] = newType;
+            _saveLayoutToLocal(item.id);
+          });
+        },
+        teacherComment: _customComments[item.id] ?? '',
         onAcademyNameChanged: (newName) {
           setState(() => _customAcademyName = newName);
         },
@@ -206,7 +215,6 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
             _customScores[item.id] = newScores;
           });
         },
-
         onCommentChanged: (newComment) {
           setState(() {
             _customComments[item.id] = newComment;
@@ -218,7 +226,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
             isScrollControlled: true,
             builder: (context) => CommentGridPicker(
               templates: _getSampleTemplates(),
-              multiSelect: true, // 다중 선택 모드 활성화
+              multiSelect: true,
               studentName: item.name,
               textbookNames: progressProvider
                   .getProgressForStudent(item.id)
@@ -233,19 +241,10 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
           );
         },
         onRerollComment: () {
-          final progress = progressProvider.getProgressForStudent(item.id);
-          final textbookNames = progress.map((p) => p.textbookName).toList();
-          final volumes = progress.map((p) => p.volumeNumber).toList();
-
-          setState(() {
-            _customComments[item.id] = ReportCommentUtils.autoGenerateComment(
-              studentName: item.name,
-              scores: _customScores[item.id] ?? AchievementScores(),
-              textbookNames: textbookNames,
-              volumes: volumes,
-              templates: _getSampleTemplates(),
-            );
-          });
+          _regenerateSingleStudentComment(
+            studentId: item.id,
+            studentName: item.name,
+          );
         },
         isLayoutEditing: _isLayoutEditing,
         layouts: _studentLayouts[item.id] ?? {},
@@ -254,10 +253,13 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
             _studentLayouts[item.id] ??= {};
             _studentLayouts[item.id]![widgetId] = layout;
           });
-          // 변경 시 자동 저장 호출
           _saveLayoutToLocal(item.id);
         },
         layoutVersion: _layoutVersion,
+        hasApiKey: _hasApiKey,
+        isAiMode: _isAiMode,
+        isAiGenerating: _isAiGenerating,
+        onAiRegenerate: _regenerateSingleStudentComment,
       ),
     );
   }
@@ -621,6 +623,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
             attendanceCount: presentCount,
             totalClasses: totalClasses,
             userInstructions: _isAiMode ? instructions : null,
+            isAiMode: _isAiMode,
           );
 
           if (mounted) {
@@ -655,6 +658,105 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                 : (failCount > 0 ? Colors.red : Colors.grey[700]),
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isAiGenerating = false);
+      }
+    }
+  }
+
+  Future<void> _regenerateSingleStudentComment({
+    required String studentId,
+    required String studentName,
+    String? instructions,
+    TextEditingController? controller,
+  }) async {
+    // AI 모드이거나 맞춤 지시사항이 있는 경우에만 키 체크 (일반 모드 Reroll은 템플릿 생성을 위해 허용)
+    if (_isAiMode && instructions == null && !_hasApiKey) {
+      _showApiKeyRequiredDialog();
+      return;
+    }
+
+    // 맞춤 지시사항이 직접 들어온 경우 명시적 키 체크
+    if (instructions != null && !_hasApiKey) {
+      _showApiKeyRequiredDialog();
+      return;
+    }
+
+    // AI 모드일 때만 로딩 상태 표시 (일반 모드는 즉각 처리)
+    if (_isAiMode) {
+      setState(() => _isAiGenerating = true);
+    }
+
+    final reportProvider = context.read<EducationReportProvider>();
+    final progressProvider = context.read<ProgressProvider>();
+    final attendanceProvider = context.read<AttendanceProvider>();
+
+    try {
+      final now = DateTime.now();
+      final startDate = DateTime(now.year, now.month, 1);
+      final endDate = DateTime(now.year, now.month + 1, 0);
+
+      final attendanceRecords = await attendanceProvider.getRecordsForPeriod(
+        academyId: widget.academy.id,
+        ownerId: widget.academy.ownerId,
+        start: startDate,
+        end: endDate,
+      );
+
+      final totalClasses = attendanceRecords.length;
+      final presentCount = attendanceRecords
+          .where(
+            (r) =>
+                r.type == AttendanceType.present ||
+                r.type == AttendanceType.late,
+          )
+          .length;
+
+      final progressList = progressProvider.getProgressForStudent(studentId);
+      final textbookIds = progressList.map((p) => p.textbookId).toList();
+      final textbookNames = progressList.map((p) => p.textbookName).toList();
+      final volumes = progressList.map((p) => p.volumeNumber).toList();
+
+      final draft = await reportProvider.generateDraft(
+        academyId: widget.academy.id,
+        ownerId: widget.academy.ownerId,
+        studentId: studentId,
+        studentName: studentName,
+        startDate: startDate,
+        endDate: endDate,
+        textbookNames: textbookNames,
+        textbookIds: textbookIds,
+        volumes: volumes,
+        attendanceCount: presentCount,
+        totalClasses: totalClasses,
+        userInstructions: null, // Reroll은 항상 템플릿 기반 (AI 미사용)
+        isAiMode: false, // 항상 템플릿 생성 모드
+      );
+
+      if (mounted) {
+        setState(() {
+          _customScores[studentId] = draft.scores;
+          _customComments[studentId] = draft.teacherComment;
+        });
+
+        if (controller != null) {
+          controller.text = draft.teacherComment;
+        }
+
+        // Reroll은 항상 템플릿 기반이므로 메시지 고정
+        const message = '📝 시스템 문구로 추천했습니다.';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: Colors.grey[700]),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('생성 중 오류가 발생했습니다.')));
       }
     } finally {
       if (mounted) {
@@ -2296,6 +2398,7 @@ class _EducationReportPaper extends StatelessWidget {
   final Function(String) onLevelChanged;
   final Function(AchievementScores) onScoresChanged;
   final Function(BalanceChartType) onChartTypeChanged;
+  final Function(DetailViewType) onDetailTypeChanged;
 
   final Function(String) onCommentChanged;
   final VoidCallback onOpenCommentPicker;
@@ -2303,11 +2406,23 @@ class _EducationReportPaper extends StatelessWidget {
   final bool isLayoutEditing;
   final Map<String, WidgetLayout> layouts;
   final Function(String, WidgetLayout) onLayoutChanged;
-  final int layoutVersion; // 추가: 강제 리빌드를 위한 버전
-  final List<CommentTemplateModel> templates; // 추가: 문구 추천 데이터
+  final int layoutVersion;
+  final List<CommentTemplateModel> templates;
 
   final ReportTemplateType templateType;
-  final bool isPrinting; // 인쇄/저장 모드 플래그
+  final bool isPrinting;
+
+  // AI 관련 추가
+  final bool hasApiKey;
+  final bool isAiGenerating;
+  final Future<void> Function({
+    required String studentId,
+    required String studentName,
+    String? instructions,
+    TextEditingController? controller,
+  })
+  onAiRegenerate;
+  final bool isAiMode; // AI 모드 활성화 여부
 
   _EducationReportPaper({
     super.key,
@@ -2341,6 +2456,11 @@ class _EducationReportPaper extends StatelessWidget {
     required this.layouts,
     required this.onLayoutChanged,
     required this.layoutVersion,
+    required this.hasApiKey,
+    required this.isAiMode,
+    required this.isAiGenerating,
+    required this.onAiRegenerate,
+    required this.onDetailTypeChanged,
     this.templates = const [],
     this.templateType = ReportTemplateType.classic,
     this.isPrinting = false,
@@ -3115,13 +3235,83 @@ class _EducationReportPaper extends StatelessWidget {
                   if (!isPrinting)
                     Row(
                       children: [
+                        if (hasApiKey && isAiMode)
+                          isAiGenerating
+                              ? const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 8),
+                                  child: SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.purple,
+                                    ),
+                                  ),
+                                )
+                              : IconButton(
+                                  icon: const Icon(
+                                    Icons.auto_awesome,
+                                    size: 16,
+                                    color: Colors.purple,
+                                  ),
+                                  onPressed: () {
+                                    final instructionsController =
+                                        TextEditingController();
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('AI 맞춤 요청'),
+                                        content: TextField(
+                                          controller: instructionsController,
+                                          autofocus: true,
+                                          decoration: const InputDecoration(
+                                            hintText: '특별한 요청 사항이 있나요?',
+                                            border: OutlineInputBorder(),
+                                          ),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context),
+                                            child: const Text('취소'),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed: () async {
+                                              Navigator.pop(context);
+                                              await onAiRegenerate(
+                                                studentId: student.id,
+                                                studentName: student.name,
+                                                instructions:
+                                                    instructionsController.text
+                                                        .trim()
+                                                        .isEmpty
+                                                    ? null
+                                                    : instructionsController
+                                                          .text
+                                                          .trim(),
+                                              );
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.purple,
+                                              foregroundColor: Colors.white,
+                                            ),
+                                            child: const Text('AI 다시 작성'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                  tooltip: 'AI 다시 작성',
+                                ),
                         IconButton(
                           icon: const Icon(Icons.refresh, size: 16),
                           onPressed: onRerollComment,
+                          tooltip: '새로 생성',
                         ),
                         IconButton(
                           icon: const Icon(Icons.grid_view, size: 16),
                           onPressed: onOpenCommentPicker,
+                          tooltip: '문구 선택',
                         ),
                       ],
                     ),
@@ -3138,6 +3328,7 @@ class _EducationReportPaper extends StatelessWidget {
                     isMultiline: true,
                     templates: templates,
                     studentName: student.name,
+                    studentId: student.id,
                   ),
                   child: Container(
                     padding: const EdgeInsets.all(12),
@@ -3392,6 +3583,7 @@ class _EducationReportPaper extends StatelessWidget {
     bool isMultiline = false,
     List<CommentTemplateModel> templates = const [],
     String? studentName,
+    String? studentId,
     List<String>? textbookNames,
   }) {
     print(
@@ -3400,105 +3592,183 @@ class _EducationReportPaper extends StatelessWidget {
     final controller = TextEditingController(text: initialValue);
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('$title 수정'),
-        content: SizedBox(
-          width: 500,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              TextField(
-                controller: controller,
-                maxLines: isMultiline ? 8 : 1,
-                minLines: isMultiline ? 5 : 1,
-                decoration: InputDecoration(
-                  hintText: '새로운 $title을 입력하세요',
-                  border: const OutlineInputBorder(),
-                  alignLabelWithHint: true,
-                ),
-                autofocus: true,
-              ),
-              if (templates.isNotEmpty && isMultiline) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () {
-                      showModalBottomSheet(
-                        context: context, // 부모 컨텍스트 사용
-                        isScrollControlled: true,
-                        builder: (sheetContext) => CommentGridPicker(
-                          templates: templates,
-                          multiSelect: true, // 다중 선택 모드 활성화
-                          studentName: studentName,
-                          textbookNames: textbookNames,
-                          onSelected: (content) {
-                            // 커서 위치에 삽입하거나 끝에 추가
-                            final text = controller.text;
-                            final selection = controller.selection;
-                            String newText;
-
-                            if (selection.start >= 0 && selection.end >= 0) {
-                              final beforeText = text.substring(
-                                0,
-                                selection.start,
-                              );
-                              final afterText = text.substring(selection.end);
-
-                              // 기존 텍스트가 있으면 자연스럽게 연결
-                              if (beforeText.isNotEmpty &&
-                                  !beforeText.endsWith(' ') &&
-                                  !beforeText.endsWith('\n')) {
-                                newText = '$beforeText $content$afterText';
-                              } else {
-                                newText = '$beforeText$content$afterText';
-                              }
-                            } else {
-                              // 기존 내용 뒤에 추가
-                              if (text.isNotEmpty &&
-                                  !text.endsWith(' ') &&
-                                  !text.endsWith('\n')) {
-                                newText = '$text $content';
-                              } else {
-                                newText = '$text$content';
-                              }
-                            }
-
-                            // 최종 결합 로직 재적용 (마침표 등 보정)
-                            controller.text =
-                                ReportCommentUtils.combineFragments([newText]);
-                          },
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.grid_view, size: 16),
-                    label: const Text('문구 선택'),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      backgroundColor: Colors.indigo.withValues(alpha: 0.05),
-                    ),
+              Text('$title 수정'),
+              if (studentId != null && hasApiKey)
+                TextButton.icon(
+                  onPressed: isAiGenerating
+                      ? null
+                      : () {
+                          // 맞춤 요청 다이얼로그 띄우기 (별도 다이얼로그)
+                          final instructionsController =
+                              TextEditingController();
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('AI 맞춤 요청'),
+                              content: TextField(
+                                controller: instructionsController,
+                                autofocus: true,
+                                decoration: const InputDecoration(
+                                  hintText: '특별한 요청 사항이 있나요?',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('취소'),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    Navigator.pop(context);
+                                    // 대화방 다이얼로그의 로딩 상태를 반영하기 위해 setDialogState 호출
+                                    setDialogState(() {});
+                                    await onAiRegenerate(
+                                      studentId: studentId,
+                                      studentName: studentName ?? '',
+                                      instructions:
+                                          instructionsController.text
+                                              .trim()
+                                              .isEmpty
+                                          ? null
+                                          : instructionsController.text.trim(),
+                                      controller: controller,
+                                    );
+                                    setDialogState(() {});
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.purple,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  child: const Text('AI 다시 작성'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                  icon: isAiGenerating
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.purple,
+                          ),
+                        )
+                      : const Icon(Icons.auto_awesome, size: 16),
+                  label: Text(
+                    isAiGenerating ? '작성 중...' : 'AI 다시 작성',
+                    style: const TextStyle(fontSize: 12),
                   ),
+                  style: TextButton.styleFrom(foregroundColor: Colors.purple),
                 ),
-              ],
             ],
           ),
+          content: SizedBox(
+            width: 500,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  maxLines: isMultiline ? 8 : 1,
+                  minLines: isMultiline ? 5 : 1,
+                  decoration: InputDecoration(
+                    hintText: '새로운 $title을 입력하세요',
+                    border: const OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                  autofocus: true,
+                ),
+                if (templates.isNotEmpty && isMultiline) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        showModalBottomSheet(
+                          context: context, // 부모 컨텍스트 사용
+                          isScrollControlled: true,
+                          builder: (sheetContext) => CommentGridPicker(
+                            templates: templates,
+                            multiSelect: true, // 다중 선택 모드 활성화
+                            studentName: studentName,
+                            textbookNames: textbookNames,
+                            onSelected: (content) {
+                              // 커서 위치에 삽입하거나 끝에 추가
+                              final text = controller.text;
+                              final selection = controller.selection;
+                              String newText;
+
+                              if (selection.start >= 0 && selection.end >= 0) {
+                                final beforeText = text.substring(
+                                  0,
+                                  selection.start,
+                                );
+                                final afterText = text.substring(selection.end);
+
+                                // 기존 텍스트가 있으면 자연스럽게 연결
+                                if (beforeText.isNotEmpty &&
+                                    !beforeText.endsWith(' ') &&
+                                    !beforeText.endsWith('\n')) {
+                                  newText = '$beforeText $content$afterText';
+                                } else {
+                                  newText = '$beforeText$content$afterText';
+                                }
+                              } else {
+                                // 기존 내용 뒤에 추가
+                                if (text.isNotEmpty &&
+                                    !text.endsWith(' ') &&
+                                    !text.endsWith('\n')) {
+                                  newText = '$text $content';
+                                } else {
+                                  newText = '$text$content';
+                                }
+                              }
+
+                              // 최종 결합 로직 재적용 (마침표 등 보정)
+                              controller.text =
+                                  ReportCommentUtils.combineFragments([
+                                    newText,
+                                  ]);
+                            },
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.grid_view, size: 16),
+                      label: const Text('문구 선택'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        backgroundColor: Colors.indigo.withValues(alpha: 0.05),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                onSaved(controller.text.trim());
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('저장'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              onSaved(controller.text.trim());
-              Navigator.pop(dialogContext);
-            },
-            child: const Text('저장'),
-          ),
-        ],
       ),
     );
   }

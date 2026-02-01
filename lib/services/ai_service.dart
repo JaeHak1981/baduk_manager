@@ -6,12 +6,6 @@ import '../models/education_report_model.dart';
 
 class AiService {
   /// Gemini 모델을 사용하여 종합 의견 생성
-  /// [apiKey]: 사용자 API 키
-  /// [studentName]: 학생 이름
-  /// [textbookName]: 현재 진행 중인 교재 이름
-  /// [scores]: 성취도 점수 객체
-  /// [attendanceRate]: 출석률 (0.0 ~ 1.0)
-  /// [modelName]: 사용할 모델 이름 (기본값: gemini-1.5-flash)
   Future<String?> generateReportComment({
     required String apiKey,
     required String studentName,
@@ -19,7 +13,9 @@ class AiService {
     required AchievementScores scores,
     required double attendanceRate,
     String? recentTopic,
-    String? userInstructions, // 추가 지시사항 파라미터 추가
+    String? userInstructions,
+    String? referenceText, // TAG: 참고용 템플릿 문구
+    bool? isFastProgress, // 데이터 상세화: 빠른 진도 여부
     String modelName = 'gemini-1.5-flash',
   }) async {
     try {
@@ -40,7 +36,9 @@ class AiService {
         scores,
         attendanceRate,
         recentTopic,
-        userInstructions, // 지시사항 전달
+        userInstructions,
+        referenceText,
+        isFastProgress,
       );
 
       final content = [Content.text(prompt)];
@@ -49,7 +47,6 @@ class AiService {
       if (response.text != null && response.text!.isNotEmpty) {
         return response.text;
       } else {
-        // 텍스트가 없으면 차단 여부 등 확인
         if (response.promptFeedback?.blockReason != null) {
           throw 'AI 응답이 차단되었습니다. 사유: ${response.promptFeedback?.blockReason}';
         }
@@ -57,7 +54,7 @@ class AiService {
       }
     } catch (e) {
       debugPrint('Gemini API Error: $e');
-      rethrow; // 에러를 상위로 전파하여 UI에서 확인 가능하게 함
+      rethrow;
     }
   }
 
@@ -67,46 +64,49 @@ class AiService {
     AchievementScores scores,
     double attendanceRate,
     String? recentTopic,
-    String? userInstructions, // 파라미터 추가
+    String? userInstructions,
+    String? referenceText,
+    bool? isFastProgress,
   ) {
     String basePrompt =
         """
-다음 정보를 바탕으로 바둑 학원 학생의 '교육 통지표 종합 의견'을 3~4문장으로 작성해줘.
-학부모님에게 보내는 정중하고 격려가 담긴 어조로(해요체) 작성해줘.
+당신은 '20년 경력의 베테랑 바둑 사범님'입니다. 바둑 교육 전문가의 관점에서 학생의 학습 상태를 분석하고, 학부모님께 따뜻하면서도 전문적인 '교육 통지표 종합 의견'을 작성해야 합니다.
 
-학생 이름: $name
-학습 교재: $textbook
-출석률: ${(attendanceRate * 100).toStringAsFixed(0)}%
+[학생 정보]
+- 이름: $name
+- 현재 교재: $textbook
+- 출석률: ${(attendanceRate * 100).toStringAsFixed(0)}%
+- 진도 상태: ${isFastProgress == true ? '매우 빠름 (성실함)' : '보통'}
 
-[성취도 평가 (100점 만점 기준)]
-- 집중력: ${scores.focus}
-- 응용력: ${scores.application}
-- 정확도: ${scores.accuracy}
-- 과제수행: ${scores.task}
-- 창의성: ${scores.creativity}
+[성취도 점수 (100점 만점)]
+- 집중력: ${scores.focus}, 응용력: ${scores.application}, 정확도: ${scores.accuracy}, 과제수행: ${scores.task}, 창의성: ${scores.creativity}
 
-[작성 가이드]
-1. 먼저 학생의 강력한 장점(점수가 높은 항목)을 구체적으로 칭찬해줘.
-2. 부족한 부분이나 더 발전이 필요한 부분이 있다면 격려와 함께 언급해줘.
-3. 가정에서 도와주면 좋을 점이 있다면 간단히 덧붙여줘.
-4. $textbook 과정을 통해 바둑 실력이 어떻게 성장하고 있는지 설명해줘.
+[참고용 기초 문구 (TAG)]
+${referenceText ?? '없음'}
+
+[작성 가이드 - 필수 준수]
+1. [페르소나]: '해요체'를 사용하되, 가볍지 않고 전문가의 신뢰감이 느껴지는 격조 있는 어조를 유지하세요.
+2. [TAG 전략]: 위의 '참고용 기초 문구'를 단순히 나열하지 말고, 이를 배경 지식으로 삼아 학생의 구체적인 점수와 진도 상태를 결합하여 훨씬 더 풍성하고 전문적인 문단으로 확장(Expand)해주세요. 
+3. [구성]: 
+   - 도입: 이번 달 전반적인 학습 태도와 정서적 성장 언급
+   - 본론: 성취도 점수가 높은 항목(장점)을 바둑 전문 용어를 섞어 구체적으로 칭찬 (예: 행마가 조밀해짐, 수읽기가 깊어짐, 끝내기 능력이 향상됨 등)
+   - 결론: 앞으로의 학습 비전 제시 및 따뜻한 격려
+4. [분량]: 학부모님이 정성을 느낄 수 있도록 최소 5~6문장 내외의 하나의 완성된 문단으로 작성하세요.
 """;
 
-    // 지시사항이 있을 경우 최하단에 배치하여 강조 (Recent Bias 활용)
     if (userInstructions != null && userInstructions.trim().isNotEmpty) {
       basePrompt +=
           """
 
-[★선생님의 특별 요청 사항★]
+[★학부모/선생님 특별 요청 사항★]
 지시사항: $userInstructions
-(위 지시사항은 생성 시 가장 최우선으로 반영되어야 할 명령입니다.)
+(위의 지시사항은 생성 시 가장 최우선으로 반영하여 문단 전체의 뉘앙스를 조절해주세요.)
 """;
     }
 
     return basePrompt;
   }
 
-  /// 사용 가능한 모델 목록 조회 (디버깅용)
   Future<List<String>> listAvailableModels(String apiKey) async {
     try {
       final url = Uri.parse(
@@ -120,7 +120,7 @@ class AiService {
           final models = data['models'] as List;
           return models
               .map((m) => m['name'].toString().replaceFirst('models/', ''))
-              .where((name) => name.contains('gemini')) // gemini 모델만 필터링
+              .where((name) => name.contains('gemini'))
               .toList();
         }
       }

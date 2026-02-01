@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../models/education_report_model.dart';
@@ -5,6 +6,7 @@ import '../services/education_report_service.dart';
 import '../utils/report_utils.dart';
 import '../services/ai_service.dart';
 import '../services/local_storage_service.dart';
+import '../constants/default_comment_templates.dart';
 
 class EducationReportProvider with ChangeNotifier {
   final EducationReportService _service = EducationReportService();
@@ -57,17 +59,19 @@ class EducationReportProvider with ChangeNotifier {
         academyId,
         ownerId: ownerId,
       );
+
+      // Firestore에 데이터가 없으면 기본 템플릿 사용
       if (_templates.isEmpty) {
-        // 데이터가 없으면 초기 테스트 데이터 시딩
-        await _seedInitialTemplates(academyId, ownerId: ownerId);
-        _templates = await _service.getCommentTemplates(
-          academyId,
-          ownerId: ownerId,
-        );
+        debugPrint('Firestore 템플릿이 비어있음. 기본 템플릿 사용.');
+        _templates = getDefaultCommentTemplates();
       }
+
       notifyListeners();
     } catch (e) {
-      debugPrint('템플릿 로드 실패: $e');
+      debugPrint('템플릿 로드 실패: $e. 기본 템플릿으로 폴백.');
+      // 로드 실패 시에도 기본 템플릿 사용
+      _templates = getDefaultCommentTemplates();
+      notifyListeners();
     }
   }
 
@@ -84,7 +88,8 @@ class EducationReportProvider with ChangeNotifier {
     required List<int> volumes,
     required int attendanceCount,
     required int totalClasses,
-    String? userInstructions, // 파라미터 추가
+    String? userInstructions,
+    bool isAiMode = true, // 명시적 AI 모드 파라미터 추가
   }) async {
     // 1. 성취도 점수 자동 산출 (교재 권수 등에 따른 베이스라인 + 가변성)
     final maxVolume = volumes.isNotEmpty
@@ -113,26 +118,38 @@ class EducationReportProvider with ChangeNotifier {
     String recommendedComment;
     String source = 'template'; // 'ai' or 'template'
 
-    // API 키 확인
+    // [TAG 전략]: AI에게 전달할 기본 추천 문구(템플릿 기반) 먼저 생성
+    final referenceTemplates = _recommendComment(
+      studentName,
+      textbookNames.isNotEmpty ? textbookNames.first : '교재',
+      level: maxVolume,
+    );
+
+    // API 키 확인 및 AI 모드 활성화 여부 체크
     final storage = LocalStorageService();
     final apiKey = await storage.getAiApiKey();
     final modelName = await storage.getAiModelName(); // 모델명 로드
 
-    if (apiKey != null && apiKey.isNotEmpty) {
+    if (isAiMode && apiKey != null && apiKey.isNotEmpty) {
       // AI 생성 시도
       _isGenerating = true; // 로딩 시작
       notifyListeners(); // 로딩 상태 알림
 
       try {
         final aiService = AiService();
+        final isFastProgress =
+            totalClasses > 0 && (attendanceCount / totalClasses) > 0.8;
+
         final aiComment = await aiService.generateReportComment(
           apiKey: apiKey,
           studentName: studentName,
           textbookName: textbookNames.isNotEmpty ? textbookNames.first : '교재',
           scores: scores,
           attendanceRate: attendanceRate,
-          modelName: modelName, // 모델명 전달
-          userInstructions: userInstructions, // 지시사항 전달
+          modelName: modelName,
+          userInstructions: userInstructions,
+          referenceText: referenceTemplates, // TAG: 템플릿 문구를 참고용으로 전달
+          isFastProgress: isFastProgress, // 데이터 상세화
         );
 
         if (aiComment != null) {
@@ -140,27 +157,18 @@ class EducationReportProvider with ChangeNotifier {
           source = 'ai';
         } else {
           // AI 실패 시 폴백
-          recommendedComment = _recommendComment(
-            studentName,
-            textbookNames.isNotEmpty ? textbookNames.first : '교재',
-          );
+          recommendedComment = referenceTemplates;
         }
       } catch (e) {
         debugPrint('AI Generation Error: $e');
-        recommendedComment = _recommendComment(
-          studentName,
-          textbookNames.isNotEmpty ? textbookNames.first : '교재',
-        );
+        recommendedComment = referenceTemplates;
       } finally {
         _isGenerating = false; // 로딩 종료
         notifyListeners();
       }
     } else {
       // 키 없음 -> 기존 로직
-      recommendedComment = _recommendComment(
-        studentName,
-        textbookNames.isNotEmpty ? textbookNames.first : '교재',
-      );
+      recommendedComment = referenceTemplates;
     }
 
     // 소스 정보를 TeacherComment 앞부분에 메타데이터로 숨기거나, 별도 필드가 없으므로
@@ -192,15 +200,47 @@ class EducationReportProvider with ChangeNotifier {
   String get lastGenerationSource => _lastGenerationSource;
 
   // 문구 추천 로직 (간단한 버전)
-  String _recommendComment(String name, String textbook) {
-    if (_templates.isEmpty)
-      return '$name 학생은 이번 기간 동안 $textbook 학습을 성실히 수행하였습니다.';
+  String _recommendComment(String name, String textbook, {int? level}) {
+    if (_templates.isEmpty) {
+      return '$name 학생은 이번 기간 동안 $textbook 학습을 성실히 수행하였습니다. 대국 중 집중력이 눈에 띄게 좋아졌으며, 앞으로의 성장이 더욱 기대됩니다.';
+    }
 
-    // 랜덤하게 하나 선택 (실제로는 중복 필터링 로직 추가 필요)
-    final template = _templates[DateTime.now().millisecond % _templates.length];
-    return template.content
+    // 1. 카테고리별로 템플릿 분류
+    final achievement = _templates.where((t) => t.category == '학습 성취').toList();
+    final attitude = _templates.where((t) => t.category == '학습 태도').toList();
+    final encouragement = _templates.where((t) => t.category == '격려').toList();
+
+    String result = '';
+    final random = Random();
+
+    // 2. 학습 성취 (급수/레벨 고려)
+    if (achievement.isNotEmpty) {
+      final levelMatches = achievement.where((t) => t.level == level).toList();
+      final targetList = levelMatches.isNotEmpty ? levelMatches : achievement;
+      final t = targetList[random.nextInt(targetList.length)];
+      result += '${t.content} ';
+    }
+
+    // 3. 학습 태도
+    if (attitude.isNotEmpty) {
+      final t = attitude[random.nextInt(attitude.length)];
+      result += '${t.content} ';
+    }
+
+    // 4. 격려
+    if (encouragement.isNotEmpty) {
+      final t = encouragement[random.nextInt(encouragement.length)];
+      result += t.content;
+    }
+
+    if (result.trim().isEmpty) {
+      return '$name 학생은 이번 기간 동안 $textbook 학습을 성실히 수행하였습니다.';
+    }
+
+    return result
         .replaceAll('{{name}}', name)
-        .replaceAll('{{textbook}}', textbook);
+        .replaceAll('{{textbook}}', textbook)
+        .trim();
   }
 
   // 리포트 저장

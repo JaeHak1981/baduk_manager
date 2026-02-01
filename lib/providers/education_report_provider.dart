@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../models/education_report_model.dart';
@@ -6,7 +5,8 @@ import '../services/education_report_service.dart';
 import '../utils/report_utils.dart';
 import '../services/ai_service.dart';
 import '../services/local_storage_service.dart';
-import '../constants/default_comment_templates.dart';
+import '../utils/report_comment_utils.dart';
+import '../utils/default_report_templates.dart';
 
 class EducationReportProvider with ChangeNotifier {
   final EducationReportService _service = EducationReportService();
@@ -63,19 +63,21 @@ class EducationReportProvider with ChangeNotifier {
       // Firestore에 데이터가 없으면 기본 템플릿 사용
       if (_templates.isEmpty) {
         debugPrint('Firestore 템플릿이 비어있음. 기본 템플릿 사용.');
-        _templates = getDefaultCommentTemplates();
+        _templates = DefaultReportTemplates.getTemplates();
       }
 
       notifyListeners();
     } catch (e) {
       debugPrint('템플릿 로드 실패: $e. 기본 템플릿으로 폴백.');
       // 로드 실패 시에도 기본 템플릿 사용
-      _templates = getDefaultCommentTemplates();
+      _templates = DefaultReportTemplates.getTemplates();
       notifyListeners();
     }
   }
 
-  // 지능형 리포트 초안 생성 로직
+  String _lastGenerationSource = 'none';
+  String get lastGenerationSource => _lastGenerationSource;
+
   Future<EducationReportModel> generateDraft({
     required String academyId,
     required String ownerId,
@@ -104,42 +106,42 @@ class EducationReportProvider with ChangeNotifier {
       maxVolume: maxVolume,
       attendanceRate: attendanceRate,
       isFastProgress:
-          totalClasses > 0 && (attendanceCount / totalClasses) > 0.8, // 임시 로직
+          totalClasses > 0 && (attendanceCount / totalClasses) > 0.8,
     );
 
-    // 2. 가장 최근 리포트 조회 (성장 추합용, 보안 강화)
+    // 2. 가장 최근 리포트 조회 (보안 강화)
     final lastReport = await _service.getLastReport(
       studentId,
       academyId: academyId,
       ownerId: ownerId,
     );
 
-    // 3. 중복 방지 문구 추천 (Hybrid)
+    // 3. 문구 추천 (Hybrid: ReportCommentUtils 기반의 고품질 문구를 AI의 기초로 활용)
     String recommendedComment;
-    String source = 'template'; // 'ai' or 'template'
+    String source = 'template';
 
-    // [TAG 전략]: AI에게 전달할 기본 추천 문구(템플릿 기반) 먼저 생성
-    final referenceTemplates = _recommendComment(
-      studentName,
-      textbookNames.isNotEmpty ? textbookNames.first : '교재',
-      level: maxVolume,
+    // [고도화된 기초 문구 생성]
+    final referenceText = ReportCommentUtils.autoGenerateComment(
+      studentName: studentName,
+      scores: scores,
+      textbookNames: textbookNames,
+      volumes: volumes,
+      templates: _templates.isNotEmpty
+          ? _templates
+          : DefaultReportTemplates.getTemplates(),
     );
 
-    // API 키 확인 및 AI 모드 활성화 여부 체크
+    // AI 모드 가동 여부 확인
     final storage = LocalStorageService();
     final apiKey = await storage.getAiApiKey();
-    final modelName = await storage.getAiModelName(); // 모델명 로드
+    final modelName = await storage.getAiModelName();
 
     if (isAiMode && apiKey != null && apiKey.isNotEmpty) {
-      // AI 생성 시도
-      _isGenerating = true; // 로딩 시작
-      notifyListeners(); // 로딩 상태 알림
+      _isGenerating = true;
+      notifyListeners();
 
       try {
         final aiService = AiService();
-        final isFastProgress =
-            totalClasses > 0 && (attendanceCount / totalClasses) > 0.8;
-
         final aiComment = await aiService.generateReportComment(
           apiKey: apiKey,
           studentName: studentName,
@@ -148,38 +150,32 @@ class EducationReportProvider with ChangeNotifier {
           attendanceRate: attendanceRate,
           modelName: modelName,
           userInstructions: userInstructions,
-          referenceText: referenceTemplates, // TAG: 템플릿 문구를 참고용으로 전달
-          isFastProgress: isFastProgress, // 데이터 상세화
+          referenceText: referenceText, // 고도화된 템플릿 문구를 참고용으로 전달
+          isFastProgress:
+              totalClasses > 0 && (attendanceCount / totalClasses) > 0.8,
         );
 
         if (aiComment != null) {
           recommendedComment = aiComment;
           source = 'ai';
         } else {
-          // AI 실패 시 폴백
-          recommendedComment = referenceTemplates;
+          recommendedComment = referenceText;
         }
       } catch (e) {
         debugPrint('AI Generation Error: $e');
-        recommendedComment = referenceTemplates;
+        recommendedComment = referenceText;
       } finally {
-        _isGenerating = false; // 로딩 종료
+        _isGenerating = false;
         notifyListeners();
       }
     } else {
-      // 키 없음 -> 기존 로직
-      recommendedComment = referenceTemplates;
+      recommendedComment = referenceText;
     }
 
-    // 소스 정보를 TeacherComment 앞부분에 메타데이터로 숨기거나, 별도 필드가 없으므로
-    // 임시로 Provider 상태에 저장하여 UI에서 읽을 수 있게 하거나,
-    // 여기서는 UI에서 확인하기 쉽게 스낵바 호출을 위해 리턴값에 포함하지 않고
-    // Provider의 멤버 변수로 최근 생성 소스를 저장함.
     _lastGenerationSource = source;
 
     return EducationReportModel(
       id: const Uuid().v4(),
-
       academyId: academyId,
       ownerId: ownerId,
       studentId: studentId,
@@ -194,53 +190,6 @@ class EducationReportProvider with ChangeNotifier {
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
-  }
-
-  String _lastGenerationSource = 'none';
-  String get lastGenerationSource => _lastGenerationSource;
-
-  // 문구 추천 로직 (간단한 버전)
-  String _recommendComment(String name, String textbook, {int? level}) {
-    if (_templates.isEmpty) {
-      return '$name 학생은 이번 기간 동안 $textbook 학습을 성실히 수행하였습니다. 대국 중 집중력이 눈에 띄게 좋아졌으며, 앞으로의 성장이 더욱 기대됩니다.';
-    }
-
-    // 1. 카테고리별로 템플릿 분류
-    final achievement = _templates.where((t) => t.category == '학습 성취').toList();
-    final attitude = _templates.where((t) => t.category == '학습 태도').toList();
-    final encouragement = _templates.where((t) => t.category == '격려').toList();
-
-    String result = '';
-    final random = Random();
-
-    // 2. 학습 성취 (급수/레벨 고려)
-    if (achievement.isNotEmpty) {
-      final levelMatches = achievement.where((t) => t.level == level).toList();
-      final targetList = levelMatches.isNotEmpty ? levelMatches : achievement;
-      final t = targetList[random.nextInt(targetList.length)];
-      result += '${t.content} ';
-    }
-
-    // 3. 학습 태도
-    if (attitude.isNotEmpty) {
-      final t = attitude[random.nextInt(attitude.length)];
-      result += '${t.content} ';
-    }
-
-    // 4. 격려
-    if (encouragement.isNotEmpty) {
-      final t = encouragement[random.nextInt(encouragement.length)];
-      result += t.content;
-    }
-
-    if (result.trim().isEmpty) {
-      return '$name 학생은 이번 기간 동안 $textbook 학습을 성실히 수행하였습니다.';
-    }
-
-    return result
-        .replaceAll('{{name}}', name)
-        .replaceAll('{{textbook}}', textbook)
-        .trim();
   }
 
   // 리포트 저장

@@ -22,6 +22,7 @@ import '../providers/education_report_provider.dart';
 import '../providers/attendance_provider.dart';
 import '../models/attendance_model.dart';
 import '../utils/report_comment_utils.dart';
+import '../utils/default_report_templates.dart';
 import '../services/local_storage_service.dart';
 import 'dart:async';
 
@@ -93,21 +94,9 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         ownerId: widget.academy.ownerId,
       );
 
-      // 저장된 레이아웃 로드 (약간의 딜레이 후 실행하여 학생 데이터 로드 완료 대기)
-      // 실제로는 학생 ID만 있으면 되므로 바로 호출해도 무방하지만 안전하게 처리
+      // 저장된 레이아웃 로드
       _loadAllStudentLayouts();
-      _checkAiKey();
     });
-  }
-
-  Future<void> _checkAiKey() async {
-    final key = await _storageService.getAiApiKey();
-    if (mounted) {
-      setState(() {
-        _hasApiKey = key != null && key.isNotEmpty;
-        if (!_hasApiKey) _isAiMode = false;
-      });
-    }
   }
 
   @override
@@ -170,7 +159,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         progressList: progressList,
         academyName: _customAcademyName ?? widget.academy.name,
         reportTitle: _customReportTitle ?? '바둑 성장 레포트',
-        templates: _getSampleTemplates(),
+        templates: DefaultReportTemplates.getTemplates(),
         reportDate:
             _customReportDate ??
             DateFormat('yyyy. MM. dd').format(DateTime.now()),
@@ -226,7 +215,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
             context: context,
             isScrollControlled: true,
             builder: (context) => CommentGridPicker(
-              templates: _getSampleTemplates(),
+              templates: DefaultReportTemplates.getTemplates(),
               multiSelect: true,
               studentName: item.name,
               textbookNames: progressProvider
@@ -961,10 +950,13 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
           backgroundColor: Theme.of(context).colorScheme.inversePrimary,
           actions: [
             TextButton(
-              onPressed: () {
-                // 전체 자동 생성 로직
+              onPressed: () async {
+                // 전체 자동 생성 로직 (개별 생성 로직과 동기화)
                 final studentProvider = context.read<StudentProvider>();
                 final progressProvider = context.read<ProgressProvider>();
+                final reportProvider = context.read<EducationReportProvider>();
+                final attendanceProvider = context.read<AttendanceProvider>();
+
                 final selectedStudents = studentProvider.students
                     .where((s) => _selectedStudentIds.contains(s.id))
                     .toList();
@@ -976,45 +968,103 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                   return;
                 }
 
-                setState(() {
-                  for (var student in selectedStudents) {
-                    final progress = progressProvider.getProgressForStudent(
-                      student.id,
-                    );
-                    final textbookNames = progress
-                        .map((p) => p.textbookName)
-                        .toList();
-                    final volumes = progress
-                        .map((p) => p.volumeNumber)
-                        .toList();
+                // 현재 시점의 기본 기간 설정 (이번 달)
+                final now = DateTime.now();
+                final startDate = DateTime(now.year, now.month, 1);
+                final endDate = DateTime(now.year, now.month + 1, 0);
 
-                    final initialScores =
-                        ReportCommentUtils.generateInitialScores(
-                          textbookName: textbookNames.isNotEmpty
-                              ? textbookNames.first
-                              : '배우고 있는 교재',
-                          volumeNumber: volumes.isNotEmpty ? volumes.first : 1,
-                        );
-
-                    _customScores[student.id] = initialScores;
-                    _customComments[student.id] =
-                        ReportCommentUtils.autoGenerateComment(
-                          studentName: student.name,
-                          scores: initialScores,
-                          textbookNames: textbookNames,
-                          volumes: volumes,
-                          templates: _getSampleTemplates(),
-                        );
-                  }
-                });
-
+                // 진행 상황 표시를 위한 SnackBar
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      '${selectedStudents.length}명의 종합 의견이 자동 생성되어 리스트에 반영되었습니다.',
-                    ),
-                  ),
+                  const SnackBar(content: Text('의견 자동 생성을 시작합니다...')),
                 );
+
+                // 1. 해당 기간 전체 학원 출석 데이터 1회 통합 조회 (최적화)
+                final allAttendanceRecords = await attendanceProvider
+                    .getRecordsForPeriod(
+                      academyId: widget.academy.id,
+                      ownerId: widget.academy.ownerId,
+                      start: startDate,
+                      end: endDate,
+                    );
+
+                int successCount = 0;
+
+                for (var student in selectedStudents) {
+                  // 2. 학생별 진도 데이터 명시적 로드 (누락 방지)
+                  await progressProvider.loadStudentProgress(
+                    student.id,
+                    ownerId: widget.academy.ownerId,
+                  );
+
+                  // 3. 해당 학생의 출석 필터링
+                  final studentAttendance = allAttendanceRecords
+                      .where((r) => r.studentId == student.id)
+                      .toList();
+                  final totalClasses = studentAttendance.length;
+                  final presentCount = studentAttendance
+                      .where(
+                        (r) =>
+                            r.type == AttendanceType.present ||
+                            r.type == AttendanceType.late,
+                      )
+                      .length;
+
+                  // 4. 해당 학생의 진도 데이터 필터링 (첫날 포함 로직으로 통일)
+                  final progressList = progressProvider.getProgressForStudent(
+                    student.id,
+                  );
+                  final periodProgress = progressList.where((p) {
+                    return p.startDate.isAfter(
+                          startDate.subtract(const Duration(days: 1)),
+                        ) &&
+                        p.startDate.isBefore(
+                          endDate.add(const Duration(days: 1)),
+                        );
+                  }).toList();
+
+                  final textbookIds = periodProgress
+                      .map((p) => p.textbookId)
+                      .toList();
+                  final textbookNames = periodProgress
+                      .map((p) => p.textbookName)
+                      .toList();
+                  final volumes = periodProgress
+                      .map((p) => p.volumeNumber)
+                      .toList();
+
+                  // 5. 초안 생성 (EducationReportFormScreen과 동일한 generateDraft 사용)
+                  final draft = await reportProvider.generateDraft(
+                    academyId: widget.academy.id,
+                    ownerId: widget.academy.ownerId,
+                    studentId: student.id,
+                    studentName: student.name,
+                    startDate: startDate,
+                    endDate: endDate,
+                    textbookNames: textbookNames,
+                    textbookIds: textbookIds,
+                    volumes: volumes,
+                    attendanceCount: presentCount,
+                    totalClasses: totalClasses,
+                  );
+
+                  if (mounted) {
+                    setState(() {
+                      _customScores[student.id] = draft.scores;
+                      _customComments[student.id] = draft.teacherComment;
+                    });
+                    successCount++;
+                  }
+                }
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '$successCount명의 종합 의견이 템플릿 기반으로 자동 생성되었습니다.',
+                      ),
+                    ),
+                  );
+                }
               },
               child: const Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1483,131 +1533,53 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                                     });
                                   },
                                 ),
-                                if (_isLayoutEditing)
-                                  _buildActionButton(
-                                    context,
-                                    label: '레이아웃 초기화',
-                                    icon: Icons.restart_alt,
-                                    color: Colors.red,
-                                    onPressed: _resetCurrentStudentLayout,
-                                  ),
                               ],
+                            ),
+                            if (_isLayoutEditing)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: _buildActionButton(
+                                  context,
+                                  label: '레이아웃 초기화',
+                                  icon: Icons.restart_alt,
+                                  color: Colors.red,
+                                  onPressed: _resetCurrentStudentLayout,
+                                ),
+                              ),
+
+                            // 문구 일괄 생성 버튼 추가
+                            const SizedBox(height: 12),
+                            _buildActionButton(
+                              context,
+                              label: _isAiGenerating
+                                  ? '생성 중...'
+                                  : (_isAiMode ? 'AI 문구 생성' : '문구 일괄 추천'),
+                              icon: _isAiGenerating
+                                  ? Icons.hourglass_top
+                                  : (_isAiMode
+                                        ? Icons.auto_awesome
+                                        : Icons.refresh),
+                              color: _isAiGenerating
+                                  ? Colors.grey
+                                  : (_isAiMode ? Colors.purple : Colors.blue),
+                              onPressed: _isAiGenerating
+                                  ? null
+                                  : () {
+                                      if (_selectedStudentIds.isEmpty) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('학생을 먼저 선택해주세요.'),
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      _handleAiGenerationRequest();
+                                    },
                             ),
                             const SizedBox(height: 24),
-
-                            // AI 스마트 도구 섹션
-                            const Row(
-                              children: [
-                                Icon(
-                                  Icons.auto_awesome,
-                                  size: 16,
-                                  color: Colors.purple,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  'AI 스마트 도구',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                    color: Colors.purple,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.purple.withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: Colors.purple.withOpacity(0.1),
-                                ),
-                              ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        _isAiMode ? '✨ AI 모드' : '📝 일반 모드',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          color: _isAiMode
-                                              ? Colors.purple
-                                              : Colors.grey,
-                                        ),
-                                      ),
-                                      Transform.scale(
-                                        scale: 0.8,
-                                        child: Switch(
-                                          value: _isAiMode,
-                                          activeColor: Colors.purple,
-                                          onChanged: (val) {
-                                            if (val == true && !_hasApiKey) {
-                                              // 키 가 없는데 켜려고 하면 경고창 띄우고 상태 유지
-                                              _showApiKeyRequiredDialog();
-                                              return;
-                                            }
-                                            setState(() => _isAiMode = val);
-                                          },
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: ElevatedButton.icon(
-                                      icon: _isAiGenerating
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white,
-                                              ),
-                                            )
-                                          : Icon(
-                                              _isAiMode
-                                                  ? Icons.auto_awesome
-                                                  : Icons.refresh,
-                                              size: 16,
-                                            ),
-                                      label: Text(
-                                        _isAiGenerating
-                                            ? '작성 중...'
-                                            : '${_selectedStudentIds.isNotEmpty ? _selectedStudentIds.length : ""}명 AI 자동 완성',
-                                      ),
-                                      onPressed: _isAiGenerating
-                                          ? null
-                                          : _handleAiGenerationRequest,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.purple,
-                                        foregroundColor: Colors.white,
-                                        elevation: 0,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 12,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  if (_isAiMode)
-                                    const Padding(
-                                      padding: EdgeInsets.only(top: 8),
-                                      child: Text(
-                                        '* 지시사항이 있으면 대화창이 뜹니다.',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
 
                             const SizedBox(height: 24),
 
@@ -1932,467 +1904,6 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       ),
     );
   }
-
-  List<CommentTemplateModel> _getSampleTemplates() {
-    return [
-      // 0. 인트로 (Intro) - 문단의 시작을 다양하게
-      CommentTemplateModel(
-        id: 'i1',
-        category: '인트로',
-        content: '{{name}} 학생은 바둑 실력이 향상되며 한층 더 성장한 모습을 보여주었습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'i2',
-        category: '인트로',
-        content: '꾸준한 노력과 열정으로 실력을 쌓아가고 있는 {{name}} 학생의 학습 현황을 전해드립니다.',
-      ),
-      CommentTemplateModel(
-        id: 'i3',
-        category: '인트로',
-        content: '선생님과 함께 호흡하며 바둑판 위에서 자신만의 길을 찾아가는 {{name}} 학생이 대견합니다.',
-      ),
-      CommentTemplateModel(
-        id: 'i4',
-        category: '인트로',
-        content: '집중력 있는 모습으로 매 수업에 임하는 {{name}} 학생의 바둑 공부는 매우 순조롭게 진행 중입니다.',
-      ),
-      CommentTemplateModel(
-        id: 'i5',
-        category: '인트로',
-        content: '최근 {{name}} 학생은 기술적인 발전뿐만 아니라 바둑을 대하는 마음가짐도 더욱 성숙해졌습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'i6',
-        category: '인트로',
-        content: '{{name}} 학생은 꾸준히 학습하며 바둑의 기본기를 탄탄하게 다져가고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'i7',
-        category: '인트로',
-        content: '정석과 수읽기를 익히며 실전 대국 능력이 크게 향상된 {{name}} 학생의 성장이 기쁩니다.',
-      ),
-      CommentTemplateModel(
-        id: 'i8',
-        category: '인트로',
-        content: '{{name}} 학생은 바둑 학습에 집중하며 매 수업마다 눈에 띄는 발전을 이루고 있습니다.',
-      ),
-
-      // 1. 학습 성취 (Achievement) - 수준별로 구분
-      // [입문/기초 - Level 1]
-      CommentTemplateModel(
-        id: 'a1',
-        category: '학습 성취',
-        level: 1,
-        content: '기초 규칙을 완벽히 이해하고 돌의 활로와 집의 개념을 정확히 구분하여 적용합니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a10',
-        category: '학습 성취',
-        level: 1,
-        content: '단수와 따내기 등 바둑의 가장 기본이 되는 원리를 실전 대국에서 실수 없이 수행해냅니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a11',
-        category: '학습 성취',
-        level: 1,
-        content: '착수 금지와 패의 규칙 등 자칫 헷갈리기 쉬운 부분들도 이제는 정확히 숙지하고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a100',
-        category: '학습 성취',
-        level: 1,
-        content: '두 집을 만들어야 산다는 삶과 죽음의 기본 개념을 이해하고 실전에서 적용하려 노력합니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a101',
-        category: '학습 성취',
-        level: 1,
-        content: '상대방 돌을 잡는 것에만 몰두하지 않고 내 돌을 연결하여 튼튼하게 만드는 법을 익히고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a102',
-        category: '학습 성취',
-        level: 1,
-        content: '서로 단수에 걸린 상황에서 침착하게 먼저 따내는 수를 찾아내는 감각이 좋아졌습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a103',
-        category: '학습 성취',
-        level: 1,
-        content: '바둑판의 귀와 변, 중앙의 명칭을 명확히 알고 있으며 첫 수를 어디에 두어야 할지 이해하고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a104',
-        category: '학습 성취',
-        level: 1,
-        content: '내 돌이 위험할 때 달아나는 방법과 상대 돌을 포위하는 방법을 구별하여 사용할 줄 압니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a105',
-        category: '학습 성취',
-        level: 1,
-        content: '옥집과 진짜 집을 구별하는 눈을 가지게 되었으며, 집을 짓는 기초 원리를 잘 따르고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a106',
-        category: '학습 성취',
-        level: 1,
-        content: '끝내기의 개념을 조금씩 배워가며, 대국이 끝난 후 스스로 집을 세어보는 연습을 하고 있습니다.',
-      ),
-
-      // [초급/실전 - Level 2]
-      CommentTemplateModel(
-        id: 'a2',
-        category: '학습 성취',
-        level: 2,
-        content: '착점의 우선순위인 \'큰 자리\'를 스스로 찾아내며 형세를 분석하는 안목이 생겼습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a12',
-        category: '학습 성취',
-        level: 2,
-        content: '축과 장문, 환격 등 기본적인 맥점을 발견하고 이를 이용해 이득을 보는 감각이 매우 좋습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a13',
-        category: '학습 성취',
-        level: 2,
-        content: '집 짓기의 효율성을 이해하기 시작했으며, 돌이 끊기지 않도록 연결하는 능력이 향상되었습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a200',
-        category: '학습 성취',
-        level: 2,
-        content: '수상전 상황에서 상대의 수를 줄이고 나의 수를 늘리는 요령을 터득하여 승률이 높아졌습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a201',
-        category: '학습 성취',
-        level: 2,
-        content: '빈삼각과 같은 나쁜 모양을 피하고 호구와 같은 탄력 있는 좋은 모양을 갖추려 노력합니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a202',
-        category: '학습 성취',
-        level: 2,
-        content: '상대의 세력을 삭감하거나 내 영역을 넓히는 행마법을 실전에서 자연스럽게 구사합니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a203',
-        category: '학습 성취',
-        level: 2,
-        content: '포석 단계에서 귀-변-중앙의 순서로 집을 넓혀가는 기본 원리를 잘 지키고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a204',
-        category: '학습 성취',
-        level: 2,
-        content: '침입해온 상대 돌을 무조건 잡으러 가기보다 공격을 통해 이득을 취하는 유연한 사고가 돋보입니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a205',
-        category: '학습 성취',
-        level: 2,
-        content: '간단한 사활 문제는 한 눈에 정답을 찾아낼 정도로 기본적인 수읽기 속도가 빨라졌습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a206',
-        category: '학습 성취',
-        level: 2,
-        content: '패를 활용하여 불리한 상황을 반전시키거나 상대를 굴복시키는 전술적 활용 능력이 생겼습니다.',
-      ),
-
-      // [중고급/심화 - Level 3]
-      CommentTemplateModel(
-        id: 'a3',
-        category: '학습 성취',
-        level: 3,
-        content: '복잡한 사활 문제도 침착하게 수읽기하여 정답을 찾아내는 해결 능력이 우수합니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a14',
-        category: '학습 성취',
-        level: 3,
-        content: '중반 전투 시 상대의 약점을 예리하게 파고드는 공격적인 수읽기가 돋보입니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a15',
-        category: '학습 성취',
-        level: 3,
-        content: '형세 판단을 통해 현재의 유불리를 파악하고, 그에 맞는 전략을 세우는 능력이 탁월합니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a300',
-        category: '학습 성취',
-        level: 3,
-        content: '부분적인 전투 승리보다 전체적인 판의 균형을 중시하는 대세관이 형성되고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a301',
-        category: '학습 성취',
-        level: 3,
-        content: '상대의 의도를 미리 파악하고 그에 대응하는 반격 수단을 준비하는 등 수읽기의 깊이가 깊어졌습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a302',
-        category: '학습 성취',
-        level: 3,
-        content: '두터움을 활용하여 장기적인 이득을 도모하거나 상대를 압박하는 운영 능력이 수준급입니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a303',
-        category: '학습 성취',
-        level: 3,
-        content: '사석 작전을 통해 불필요한 돌을 버리고 더 큰 이익을 취하는 고도의 전술을 구사하기도 합니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a304',
-        category: '학습 성취',
-        level: 3,
-        content: '정교한 끝내기 수순을 통해 미세한 승부에서도 역전승을 이끌어내는 뒷심이 강해졌습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a305',
-        category: '학습 성취',
-        level: 3,
-        content: '고정관념에 얽매이지 않는 창의적인 수를 시도하며 자신만의 기풍을 만들어가고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'a306',
-        category: '학습 성취',
-        level: 3,
-        content: '약한 돌을 수습하는 타개 능력이 뛰어나 위기 상황에서도 쉽게 무너지지 않는 끈기를 보여줍니다.',
-      ),
-
-      // 2. 학습 태도 (Attitude)
-      CommentTemplateModel(
-        id: 't1',
-        category: '학습 태도',
-        content: '수업 시간 내내 높은 몰입도를 유지하며 선생님의 설명에 귀를 기울이는 자세가 매우 좋습니다.',
-      ),
-      CommentTemplateModel(
-        id: 't2',
-        category: '학습 태도',
-        content: '궁금한 원리에 대해 적극적으로 질문하고 답을 찾으려는 탐구적인 태도가 훌륭합니다.',
-      ),
-      CommentTemplateModel(
-        id: 't10',
-        category: '학습 태도',
-        content: '패배에 실망하기보다 복기를 통해 자신의 실수를 돌아보는 진지한 자세를 갖고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 't11',
-        category: '학습 태도',
-        content: '한 수 한 수 신중하게 생각하고 두려는 노력이 보이며, 경솔한 착점이 눈에 띄게 줄었습니다.',
-      ),
-      CommentTemplateModel(
-        id: 't12',
-        category: '학습 태도',
-        content: '모르는 문제가 나와도 포기하지 않고 스스로 끝까지 해결해 보려는 의지가 강합니다.',
-      ),
-      CommentTemplateModel(
-        id: 't100',
-        category: '학습 태도',
-        content: '바른 자세로 앉아 흐트러짐 없이 대국에 임하며, 상대를 배려하는 마음가짐이 돋보입니다.',
-      ),
-      CommentTemplateModel(
-        id: 't101',
-        category: '학습 태도',
-        content: '자신의 차례가 아닐 때도 상대의 수를 주의 깊게 관찰하며 생각하는 습관이 잘 잡혀 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 't102',
-        category: '학습 태도',
-        content: '어려운 상황에서도 쉽게 포기하거나 짜증 내지 않고 차분함을 유지하는 마인드 컨트롤 능력이 좋습니다.',
-      ),
-      CommentTemplateModel(
-        id: 't103',
-        category: '학습 태도',
-        content: '과제를 성실하게 수행해 오며, 배운 내용을 복습하려는 자기 주도적인 학습 태도를 갖추고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 't104',
-        category: '학습 태도',
-        content: '친구들과의 대국이나 교류 활동에도 적극적으로 참여하며 즐겁게 바둑을 배우고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 't105',
-        category: '학습 태도',
-        content: '선생님의 조언을 열린 마음으로 받아들이고 즉시 자신의 플레이에 적용하려는 유연함이 장점입니다.',
-      ),
-
-      // 3. 대국 예절 (Etiquette)
-      CommentTemplateModel(
-        id: 'e1',
-        category: '대국 매너',
-        content: '대국 전후의 인사를 빠뜨리지 않으며 상대방을 존중하는 바둑인의 자세가 매우 바릅니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e2',
-        category: '대국 매너',
-        content: '승패 결과보다는 대국의 과정에 집중하며 승부의 세계를 건전하게 즐기는 모습이 보기 좋습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e10',
-        category: '대국 매너',
-        content: '대국 중 정숙을 유지하고 상대방의 생각 시간을 배려하는 매너 있는 태도가 돋보입니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e11',
-        category: '대국 매너',
-        content: '바둑판과 바둑알을 소중히 다루며, 대국 후 정리 정돈까지 완벽하게 해냅니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e100',
-        category: '대국 매너',
-        content: '상대가 장고할 때 재촉하지 않고 기다려주는 인내심과 배려심을 갖추고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e101',
-        category: '대국 매너',
-        content: '승리했을 때 자만하지 않고 패배한 상대를 위로할 줄 아는 성숙한 태도를 보여줍니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e102',
-        category: '대국 매너',
-        content: '패배했을 때도 상대방의 좋은 수를 칭찬하며 깨끗하게 결과에 승복하는 스포츠맨십이 훌륭합니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e103',
-        category: '대국 매너',
-        content: '대국 중 불필요한 말이나 행동을 삼가고 오직 반상 승부에만 집중하는 진지함을 갖추었습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e104',
-        category: '대국 매너',
-        content: '돌을 놓을 때 바른 손모양과 자세를 유지하며 품격 있는 대국 태도를 보여줍니다.',
-      ),
-      CommentTemplateModel(
-        id: 'e105',
-        category: '대국 매너',
-        content: '계가 과정에서 상대방과 협력하여 정확하게 집을 세고 결과를 확인하는 절차를 잘 따릅니다.',
-      ),
-
-      // 4. 성장 변화 (Growth)
-      CommentTemplateModel(
-        id: 'g1',
-        category: '성장 변화',
-        content: '초기 대비 바둑판을 보는 시야가 넓어졌으며 착점 시의 자신감이 크게 향상되었습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g10',
-        category: '성장 변화',
-        content: '단순히 돌을 따내기보다 판 전체를 보며 집을 지으려는 거시적인 안목이 생기기 시작했습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g11',
-        category: '성장 변화',
-        content: '수읽기 능력이 정교해지면서 실전 대국에서의 승률 또한 눈에 띄게 상승하고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g100',
-        category: '성장 변화',
-        content: '자신보다 상위 급수의 친구에게도 위축되지 않고 대등한 경기를 펼칠 만큼 담력이 커졌습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g101',
-        category: '성장 변화',
-        content: '예전에는 실수하면 당황했으나, 이제는 침착하게 수습하고 다음 기회를 노리는 위기관리 능력이 생겼습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g102',
-        category: '성장 변화',
-        content: '단수만 보던 시야에서 벗어나 돌의 연결과 끊음을 동시에 고려하는 입체적인 사고가 가능해졌습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g103',
-        category: '성장 변화',
-        content: '기보를 보거나 문제를 풀 때 정답을 맞히는 속도가 빨라졌으며 직관적인 감각이 발달하고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g104',
-        category: '성장 변화',
-        content: '바둑을 통해 키워진 집중력과 인내심이 평소 생활 태도에서도 긍정적인 변화로 나타나고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g105',
-        category: '성장 변화',
-        content: '자신만의得意戰法(특기 전법)이 생기기 시작하여 바둑 두는 재미를 한층 더 느끼고 있습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'g106',
-        category: '성장 변화',
-        content: '어려운 사활 문제에 도전하는 것을 즐기며, 끈기 있게 생각하는 힘이 몰라보게 길러졌습니다.',
-      ),
-
-      // 5. 마무리 (Conclusion)
-      CommentTemplateModel(
-        id: 'c1',
-        category: '마무리',
-        content: '지금처럼 바둑을 즐기며 성실하게 노력한다면 머지않아 훌륭한 기량을 갖추게 될 것입니다.',
-      ),
-      CommentTemplateModel(
-        id: 'c2',
-        category: '마무리',
-        content: '앞으로도 {{name}} 학생의 멋진 성장을 기대하며 적극적으로 지원하고 지도하겠습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'c5',
-        category: '마무리',
-        content: '꾸준함이 가장 큰 무기입니다. {{name}} 학생의 밝은 미래를 응원합니다.',
-      ),
-      CommentTemplateModel(
-        id: 'c100',
-        category: '마무리',
-        content: '가정에서도 {{name}} 학생이 바둑을 통해 얻는 성취감을 함께 나누고 격려해 주시기 바랍니다.',
-      ),
-      CommentTemplateModel(
-        id: 'c101',
-        category: '마무리',
-        content: '다음 단계로 도약하기 위한 중요한 시기인 만큼, 더욱 세심한 지도로 이끌어 나가겠습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'c102',
-        category: '마무리',
-        content: '바둑을 통해 배운 지혜가 {{name}} 학생의 삶에 든든한 밑거름이 되기를 소망합니다.',
-      ),
-      CommentTemplateModel(
-        id: 'c103',
-        category: '마무리',
-        content: '{{name}} 학생의 무한한 잠재력을 믿으며, 앞으로도 즐거운 바둑 수업이 되도록 노력하겠습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'c104',
-        category: '마무리',
-        content: '한 판의 바둑을 완성하듯, {{name}} 학생이 자신의 꿈을 멋지게 그려나갈 수 있도록 돕겠습니다.',
-      ),
-      CommentTemplateModel(
-        id: 'c105',
-        category: '마무리',
-        content: '함께 바둑을 공부하는 시간이 {{name}} 학생에게 행복한 추억이자 성장의 기회가 되길 바랍니다.',
-      ),
-      CommentTemplateModel(
-        id: 'c106',
-        category: '마무리',
-        content: '승급을 목표로 더욱 정진할 {{name}} 학생에게 아낌없는 칭찬과 응원을 부탁드립니다.',
-      ),
-      CommentTemplateModel(
-        id: 'c3',
-        category: '마무리',
-        content: '바둑을 통해 키운 수읽기 능력과 인내심이 다른 학습에도 긍정적인 영향을 미치길 바랍니다.',
-      ),
-      CommentTemplateModel(
-        id: 'c4',
-        category: '마무리',
-        content: '다음 달에는 더욱 발전된 모습으로 깊이 있는 바둑을 함께 연구해 나가기를 희망합니다.',
-      ),
-      CommentTemplateModel(
-        id: 'c5',
-        category: '마무리',
-        content: '꾸준함이 가장 큰 무기입니다. {{name}} 학생의 밝은 미래를 응원합니다.',
-      ),
-    ];
-  }
 }
 
 /// A4 용지 스타일의 통지표 미리보기 위젯
@@ -2420,7 +1931,6 @@ class _EducationReportPaper extends StatelessWidget {
   final Function(AchievementScores) onScoresChanged;
   final Function(BalanceChartType) onChartTypeChanged;
   final Function(DetailViewType) onDetailTypeChanged;
-
   final Function(String) onCommentChanged;
   final VoidCallback onOpenCommentPicker;
   final VoidCallback onRerollComment;
@@ -2429,7 +1939,6 @@ class _EducationReportPaper extends StatelessWidget {
   final Function(String, WidgetLayout) onLayoutChanged;
   final int layoutVersion;
   final List<CommentTemplateModel> templates;
-
   final ReportTemplateType templateType;
   final bool isPrinting;
 
@@ -2445,7 +1954,7 @@ class _EducationReportPaper extends StatelessWidget {
   onAiRegenerate;
   final bool isAiMode; // AI 모드 활성화 여부
 
-  _EducationReportPaper({
+  const _EducationReportPaper({
     super.key,
     required this.student,
     required this.academy,
@@ -2468,8 +1977,6 @@ class _EducationReportPaper extends StatelessWidget {
     required this.onReportDateChanged,
     required this.onLevelChanged,
     required this.onScoresChanged,
-    required this.onChartTypeChanged,
-
     required this.onCommentChanged,
     required this.onOpenCommentPicker,
     required this.onRerollComment,
@@ -2477,19 +1984,58 @@ class _EducationReportPaper extends StatelessWidget {
     required this.layouts,
     required this.onLayoutChanged,
     required this.layoutVersion,
+    required this.onChartTypeChanged,
+    required this.onDetailTypeChanged,
+    this.templateType = ReportTemplateType.classic,
+    required this.templates,
+    this.isPrinting = false,
     required this.hasApiKey,
-    required this.isAiMode,
     required this.isAiGenerating,
     required this.onAiRegenerate,
-    required this.onDetailTypeChanged,
-    this.templates = const [],
-    this.templateType = ReportTemplateType.classic,
-    this.isPrinting = false,
+    required this.isAiMode,
   });
 
   @override
   Widget build(BuildContext context) {
     return _buildClassicLayout(context);
+  }
+
+  Widget _buildDivider() {
+    return Container(width: 1, height: 20, color: Colors.grey.shade300);
+  }
+
+  void _showDatePicker(
+    BuildContext context,
+    Function(String) onDateChanged,
+  ) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      locale: const Locale('ko', 'KR'),
+    );
+
+    if (picked != null) {
+      final formattedDate = DateFormat('yyyy. MM. dd').format(picked);
+      onDateChanged(formattedDate);
+    }
+  }
+
+  Widget _buildInfoItem(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
   }
 
   Widget _buildClassicLayout(BuildContext context) {
@@ -2566,7 +2112,7 @@ class _EducationReportPaper extends StatelessWidget {
             ),
           ),
           InkWell(
-            onTap: () => _showDatePicker(context),
+            onTap: () => _showDatePicker(context, onReportDateChanged),
             child: Text(
               reportDate,
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
@@ -3084,148 +2630,6 @@ class _EducationReportPaper extends StatelessWidget {
     return Colors.red.shade700;
   }
 
-  Widget _buildStrengthsSection(BuildContext context) {
-    // 자동으로 강점 생성
-    final strengths = _autoGenerateStrengths();
-
-    return ResizableDraggableWrapper(
-      key: ValueKey('strengths_$layoutVersion'),
-      initialTop: layouts['strengths']?.top ?? 345,
-      initialLeft: layouts['strengths']?.left ?? 250,
-      initialWidth: layouts['strengths']?.width ?? 280,
-      initialHeight: layouts['strengths']?.height ?? 120,
-      isEditing: isLayoutEditing,
-      onLayoutChanged: (t, l, w, h) => onLayoutChanged(
-        'strengths',
-        WidgetLayout(top: t, left: l, width: w, height: h),
-      ),
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '[ 주목할 만한 성장 ]',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              if (strengths.isEmpty)
-                const Text(
-                  '90점 이상인 역량이 없습니다',
-                  style: TextStyle(fontSize: 11, color: Colors.grey),
-                )
-              else
-                Expanded(
-                  child: ListView(
-                    children: strengths
-                        .map(
-                          (strength) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8.0),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  strength['icon']!,
-                                  style: const TextStyle(fontSize: 16),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        strength['title']!,
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        strength['description']!,
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  List<Map<String, String>> _autoGenerateStrengths() {
-    final scoreMap = {
-      'focus': {
-        'score': scores.focus,
-        'icon': '🎯',
-        'title': '집중력',
-        'description': '50분 수업 내내 흐트러짐 없이 학습!',
-      },
-      'application': {
-        'score': scores.application,
-        'icon': '💡',
-        'title': '응용력',
-        'description': '배운 내용을 실전에 잘 적용합니다',
-      },
-      'accuracy': {
-        'score': scores.accuracy,
-        'icon': '✓',
-        'title': '정확도',
-        'description': '문제 풀이 정확도가 매우 우수합니다',
-      },
-      'task': {
-        'score': scores.task,
-        'icon': '📝',
-        'title': '과제수행',
-        'description': '매주 과제를 성실히 완수했습니다',
-      },
-      'creativity': {
-        'score': scores.creativity,
-        'icon': '🌟',
-        'title': '창의성',
-        'description': '독창적인 수 선택으로 깊은 사고력을 보여줍니다',
-      },
-    };
-
-    // 90점 이상인 역량만 필터링하고 점수순으로 정렬
-    final filteredScores =
-        scoreMap.entries
-            .where((entry) => entry.value['score'] as int >= 90)
-            .toList()
-          ..sort(
-            (a, b) =>
-                (b.value['score'] as int).compareTo(a.value['score'] as int),
-          );
-
-    // 상위 2개만 선택
-    return filteredScores
-        .take(2)
-        .map(
-          (entry) => {
-            'icon': entry.value['icon'] as String,
-            'title': entry.value['title'] as String,
-            'description': entry.value['description'] as String,
-          },
-        )
-        .toList();
-  }
-
   Widget _buildCommentSection(BuildContext context) {
     return ResizableDraggableWrapper(
       key: ValueKey('comment_$layoutVersion'),
@@ -3374,57 +2778,6 @@ class _EducationReportPaper extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScoreBar(
-    String label,
-    int score,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      hoverColor: color.withOpacity(0.05),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  '$score점',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: color,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: LinearProgressIndicator(
-                value: score / 100,
-                backgroundColor: color.withOpacity(0.1),
-                color: color,
-                minHeight: 5,
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -3792,40 +3145,5 @@ class _EducationReportPaper extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  void _showDatePicker(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-      locale: const Locale('ko', 'KR'),
-    );
-
-    if (picked != null) {
-      final formattedDate = DateFormat('yyyy. MM. dd').format(picked);
-      onReportDateChanged(formattedDate);
-    }
-  }
-
-  Widget _buildInfoItem(String label, String value) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDivider() {
-    return Container(width: 1, height: 20, color: Colors.grey.shade300);
   }
 }

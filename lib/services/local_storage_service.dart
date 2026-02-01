@@ -102,36 +102,4 @@ class LocalStorageService {
     final key = '$_layoutKeyPrefix$studentId';
     await prefs.remove(key);
   }
-
-  // --- AI API Key 관리 ---
-  static const String _aiApiKey = 'gemini_api_key';
-
-  Future<void> saveAiApiKey(String apiKey) async {
-    final prefs = await _getInstance;
-    await prefs.setString(_aiApiKey, apiKey);
-  }
-
-  Future<String?> getAiApiKey() async {
-    final prefs = await _getInstance;
-    return prefs.getString(_aiApiKey);
-  }
-
-  Future<void> removeAiApiKey() async {
-    final prefs = await _getInstance;
-    await prefs.remove(_aiApiKey);
-  }
-
-  // --- AI Model Name 관리 ---
-  static const String _aiModelName = 'gemini_model_name';
-
-  Future<void> saveAiModelName(String modelName) async {
-    final prefs = await _getInstance;
-    await prefs.setString(_aiModelName, modelName);
-  }
-
-  Future<String> getAiModelName() async {
-    final prefs = await _getInstance;
-    // 기본값은 gemini-1.5-flash
-    return prefs.getString(_aiModelName) ?? 'gemini-1.5-flash';
-  }
 }

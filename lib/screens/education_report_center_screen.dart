@@ -361,7 +361,6 @@ class _EducationReportCenterScreenState
         try {
           await progressProvider.loadStudentProgress(
             student.id,
-            academyId: widget.academy.id,
             ownerId: widget.academy.ownerId,
           );
         } catch (e) {

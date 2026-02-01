@@ -52,12 +52,17 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
     );
 
     // 1. 해당 기간 출석 데이터 조회
-    final attendanceRecords = await attendanceProvider.getRecordsForPeriod(
+    final allAttendanceRecords = await attendanceProvider.getRecordsForPeriod(
       academyId: widget.academy.id,
       ownerId: widget.academy.ownerId,
       start: widget.startDate,
       end: widget.endDate,
     );
+
+    // 해당 학생의 데이터만 필터링 (필수)
+    final attendanceRecords = allAttendanceRecords
+        .where((r) => r.studentId == widget.student.id)
+        .toList();
 
     // 해당 기간에 수업이 있었던 것으로 간주되는 총 일수 (간단히 계산)
     final totalClasses = attendanceRecords.length;
@@ -73,7 +78,9 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
       widget.student.id,
     );
     final periodProgress = progressList.where((p) {
-      return p.startDate.isAfter(widget.startDate) &&
+      return p.startDate.isAfter(
+            widget.startDate.subtract(const Duration(days: 1)),
+          ) &&
           p.startDate.isBefore(widget.endDate.add(const Duration(days: 1)));
     }).toList();
 
@@ -81,7 +88,7 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
     final textbookNames = periodProgress.map((p) => p.textbookName).toList();
     final volumes = periodProgress.map((p) => p.volumeNumber).toList();
 
-    // 3. 초안 생성 (여기서는 초기 진입 시 기본 AI 생성이 작동함)
+    // 3. 초안 생성 (기본 템플릿 기반 총평 생성)
     final draft = await reportProvider.generateDraft(
       academyId: widget.academy.id,
       ownerId: widget.academy.ownerId,
@@ -272,9 +279,6 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
   }
 
   Widget _buildCommentSection() {
-    final reportProvider = context.watch<EducationReportProvider>();
-    final isGenerating = reportProvider.isGenerating;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -287,25 +291,14 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
             ),
             Row(
               children: [
-                if (isGenerating)
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  TextButton.icon(
-                    icon: const Icon(
-                      Icons.refresh,
-                      size: 16,
-                      color: Colors.blue,
-                    ),
-                    label: const Text(
-                      '다시 생성',
-                      style: TextStyle(color: Colors.blue),
-                    ),
-                    onPressed: _regenerateComment,
+                TextButton.icon(
+                  icon: const Icon(Icons.refresh, size: 16, color: Colors.blue),
+                  label: const Text(
+                    '다시 생성',
+                    style: TextStyle(color: Colors.blue),
                   ),
+                  onPressed: _regenerateComment,
+                ),
                 const SizedBox(width: 4),
                 TextButton.icon(
                   icon: const Icon(Icons.library_books, size: 16),
@@ -322,8 +315,8 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
           maxLines: 8,
           decoration: InputDecoration(
             border: const OutlineInputBorder(),
-            filled: isGenerating,
-            fillColor: isGenerating ? Colors.grey.shade100 : null,
+            filled: false,
+            fillColor: null,
             hintText: '아이의 학습 태도와 성취에 대해 적어주세요.',
           ),
           onChanged: (v) {
@@ -344,15 +337,37 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
       widget.student.id,
     );
     final periodProgress = progressList.where((p) {
-      return p.startDate.isAfter(widget.startDate) &&
+      return p.startDate.isAfter(
+            widget.startDate.subtract(const Duration(days: 1)),
+          ) &&
           p.startDate.isBefore(widget.endDate.add(const Duration(days: 1)));
     }).toList();
 
-    final textbookNames = periodProgress.map((p) => p.textbookName).toList();
     final textbookIds = periodProgress.map((p) => p.textbookId).toList();
+    final textbookNames = periodProgress.map((p) => p.textbookName).toList();
     final volumes = periodProgress.map((p) => p.volumeNumber).toList();
 
-    // 일반 모드로 재생성
+    final allAttendanceRecords = await context
+        .read<AttendanceProvider>()
+        .getRecordsForPeriod(
+          academyId: widget.academy.id,
+          ownerId: widget.academy.ownerId,
+          start: widget.startDate,
+          end: widget.endDate,
+        );
+
+    // 해당 학생의 데이터만 필터링
+    final attendanceRecords = allAttendanceRecords
+        .where((r) => r.studentId == widget.student.id)
+        .toList();
+
+    final presentCount = attendanceRecords
+        .where(
+          (r) =>
+              r.type == AttendanceType.present || r.type == AttendanceType.late,
+        )
+        .length;
+
     final draft = await reportProvider.generateDraft(
       academyId: widget.academy.id,
       ownerId: widget.academy.ownerId,
@@ -363,8 +378,8 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
       textbookNames: textbookNames,
       textbookIds: textbookIds,
       volumes: volumes,
-      attendanceCount: _report!.attendanceCount,
-      totalClasses: _report!.totalClasses,
+      attendanceCount: presentCount,
+      totalClasses: attendanceRecords.length,
     );
 
     if (mounted) {

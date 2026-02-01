@@ -66,7 +66,8 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
 
   bool _hasApiKey = false; // API 키 존재 여부 (UI 제어용)
   bool _isAiMode = false; // AI 모드 On/Off 스위치 (기본값: Off)
-  bool _isAiGenerating = false; // AI 생성 중 여부
+  bool _isAiGenerating = false; // AI 생성 중 여부 (일괄 생성 등에 사용)
+  Map<String, bool> _studentLoadingStates = {}; // 학생별 로딩 상태
 
   @override
   void initState() {
@@ -258,7 +259,8 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         layoutVersion: _layoutVersion,
         hasApiKey: _hasApiKey,
         isAiMode: _isAiMode,
-        isAiGenerating: _isAiGenerating,
+        isAiGenerating:
+            _studentLoadingStates[item.id] ?? false, // 개별 학생 로딩 상태 전달
         onAiRegenerate: _regenerateSingleStudentComment,
       ),
     );
@@ -610,6 +612,10 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
 
         // 3. 초안 생성 요청
         try {
+          setState(() {
+            _studentLoadingStates[studentId] = true;
+          });
+
           final draft = await reportProvider.generateDraft(
             academyId: widget.academy.id,
             ownerId: widget.academy.ownerId,
@@ -631,10 +637,16 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
               _customComments[studentId] = draft.teacherComment;
               // 점수도 함께 업데이트 (종합 의견 생성 시 점수 데이터가 활용되므로 같이 가져오는 게 자연스러움)
               _customScores[studentId] = draft.scores;
+              _studentLoadingStates[studentId] = false;
             });
             successCount++;
           }
         } catch (e) {
+          if (mounted) {
+            setState(() {
+              _studentLoadingStates[studentId] = false;
+            });
+          }
           failCount++;
         }
       }
@@ -672,22 +684,18 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
     String? instructions,
     TextEditingController? controller,
   }) async {
-    // AI 모드이거나 맞춤 지시사항이 있는 경우에만 키 체크 (일반 모드 Reroll은 템플릿 생성을 위해 허용)
-    if (_isAiMode && instructions == null && !_hasApiKey) {
+    // 1. 모드 결정: 지시사항이 있으면 AI 재생성, 없으면 일반 Reroll(템플릿)
+    final bool isRequestedAi = instructions != null;
+
+    if (isRequestedAi && !_hasApiKey) {
       _showApiKeyRequiredDialog();
       return;
     }
 
-    // 맞춤 지시사항이 직접 들어온 경우 명시적 키 체크
-    if (instructions != null && !_hasApiKey) {
-      _showApiKeyRequiredDialog();
-      return;
-    }
-
-    // AI 모드일 때만 로딩 상태 표시 (일반 모드는 즉각 처리)
-    if (_isAiMode) {
-      setState(() => _isAiGenerating = true);
-    }
+    // 학생별 로딩 시작
+    setState(() {
+      _studentLoadingStates[studentId] = true;
+    });
 
     final reportProvider = context.read<EducationReportProvider>();
     final progressProvider = context.read<ProgressProvider>();
@@ -731,36 +739,49 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         volumes: volumes,
         attendanceCount: presentCount,
         totalClasses: totalClasses,
-        userInstructions: null, // Reroll은 항상 템플릿 기반 (AI 미사용)
-        isAiMode: false, // 항상 템플릿 생성 모드
+        userInstructions: instructions, // AI 모드일 때만 전달됨
+        isAiMode: isRequestedAi, // 지시사항이 있을 때만 AI 모드 가동
       );
 
       if (mounted) {
         setState(() {
-          _customScores[studentId] = draft.scores;
+          if (!isRequestedAi) {
+            _customScores[studentId] = draft.scores;
+          }
           _customComments[studentId] = draft.teacherComment;
+          _studentLoadingStates[studentId] = false;
         });
 
         if (controller != null) {
           controller.text = draft.teacherComment;
         }
 
-        // Reroll은 항상 템플릿 기반이므로 메시지 고정
-        const message = '📝 시스템 문구로 추천했습니다.';
+        final source = reportProvider.lastGenerationSource;
+        final message = source == 'ai'
+            ? '🤖 AI가 새로운 의견을 작성했습니다.'
+            : '📝 시스템 문구로 추천했습니다.';
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.grey[700]),
+          SnackBar(
+            content: Text(message),
+            backgroundColor: source == 'ai' ? Colors.indigo : Colors.grey[700],
+          ),
         );
       }
     } catch (e) {
+      debugPrint('재생성 중 오류 발생: $e');
       if (mounted) {
+        setState(() {
+          _studentLoadingStates[studentId] = false;
+        });
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('생성 중 오류가 발생했습니다.')));
       }
     } finally {
       if (mounted) {
-        setState(() => _isAiGenerating = false);
+        // 일괄 생성 상태도 혹시 모르니 해제 (단일 생성 시에는 무영향)
+        // setState(() => _isAiGenerating = false);
       }
     }
   }

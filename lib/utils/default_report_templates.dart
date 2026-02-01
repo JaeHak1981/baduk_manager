@@ -402,7 +402,7 @@ class DefaultReportTemplates {
       CommentTemplateModel(
         id: 'c2',
         category: '마무리',
-        content: '앞으로도 {{name}} 학생의 멋진 성장을 기대하며 적극적으로 지원하고 지도하겠습니다.',
+        content: '앞으로의 멋진 성장을 기대하며 적극적으로 지원하고 지도하겠습니다.',
       ),
       CommentTemplateModel(
         id: 'c3',
@@ -417,12 +417,12 @@ class DefaultReportTemplates {
       CommentTemplateModel(
         id: 'c5',
         category: '마무리',
-        content: '꾸준함이 가장 큰 무기입니다. {{name}} 학생의 밝은 미래를 응원합니다.',
+        content: '꾸준함이 가장 큰 무기입니다. 밝은 미래를 응원합니다.',
       ),
       CommentTemplateModel(
         id: 'c100',
         category: '마무리',
-        content: '가정에서도 {{name}} 학생이 바둑을 통해 얻는 성취감을 함께 나누고 격려해 주시기 바랍니다.',
+        content: '가정에서도 바둑을 통해 얻는 성취감을 함께 나누고 격려해 주시기 바랍니다.',
       ),
       CommentTemplateModel(
         id: 'c101',
@@ -432,27 +432,27 @@ class DefaultReportTemplates {
       CommentTemplateModel(
         id: 'c102',
         category: '마무리',
-        content: '바둑을 통해 배운 지혜가 {{name}} 학생의 삶에 든든한 밑거름이 되기를 소망합니다.',
+        content: '바둑을 통해 배운 지혜가 앞으로의 삶에 든든한 밑거름이 되기를 소망합니다.',
       ),
       CommentTemplateModel(
         id: 'c103',
         category: '마무리',
-        content: '{{name}} 학생의 무한한 잠재력을 믿으며, 앞으로도 즐거운 바둑 수업이 되도록 노력하겠습니다.',
+        content: '무한한 잠재력을 믿으며, 앞으로도 즐거운 바둑 수업이 되도록 노력하겠습니다.',
       ),
       CommentTemplateModel(
         id: 'c104',
         category: '마무리',
-        content: '한 판의 바둑을 완성하듯, {{name}} 학생이 자신의 꿈을 멋지게 그려나갈 수 있도록 돕겠습니다.',
+        content: '한 판의 바둑을 완성하듯, 자신의 꿈을 멋지게 그려나갈 수 있도록 돕겠습니다.',
       ),
       CommentTemplateModel(
         id: 'c105',
         category: '마무리',
-        content: '함께 바둑을 공부하는 시간이 {{name}} 학생에게 행복한 추억이자 성장의 기회가 되길 바랍니다.',
+        content: '함께 바둑을 공부하는 시간이 행복한 추억이자 성장의 기회가 되길 바랍니다.',
       ),
       CommentTemplateModel(
         id: 'c106',
         category: '마무리',
-        content: '승급을 목표로 더욱 정진할 {{name}} 학생에게 아낌없는 칭찬과 응원을 부탁드립니다.',
+        content: '승급을 목표로 더욱 정진하는 모습에 아낌없는 칭찬과 응원을 부탁드립니다.',
       ),
     ];
   }

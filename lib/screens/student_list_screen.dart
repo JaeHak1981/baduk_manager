@@ -12,6 +12,7 @@ import 'textbook_center_screen.dart';
 import 'attendance_tab_screen.dart';
 import 'batch_add_student_dialog.dart';
 import 'student_history_screen.dart'; // 학생 히스토리 화면 import
+import '../constants/ui_constants.dart';
 
 /// 학생 목록 화면
 class StudentListScreen extends StatefulWidget {
@@ -255,7 +256,12 @@ class _StudentListScreenState extends State<StudentListScreen> {
                           _loadData();
                         },
                         child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            16,
+                            16,
+                            AppDimensions.getBottomInset(context),
+                          ),
                           itemCount: filteredStudents.length,
                           itemBuilder: (context, index) {
                             final student = filteredStudents[index];

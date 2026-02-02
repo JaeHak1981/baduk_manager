@@ -17,6 +17,7 @@ import '../models/textbook_model.dart';
 import 'components/enrollment_statistics_dialog.dart';
 import 'components/download_dialog.dart';
 import '../providers/system_provider.dart';
+import '../constants/ui_constants.dart';
 
 /// 홈 화면
 class HomePage extends StatefulWidget {
@@ -147,7 +148,6 @@ class _HomePageState extends State<HomePage> {
                                         .titleLarge
                                         ?.copyWith(fontWeight: FontWeight.bold),
                                   ),
-                                  // 상단 관리 아이콘 제거 (하단 버튼으로 이동)
                                 ],
                               ),
                             ),
@@ -180,7 +180,7 @@ class _HomePageState extends State<HomePage> {
                                       ),
                                     ),
                             ),
-                            // 하단에 기관 관리 버튼 배치 (교재 관리와 대칭)
+                            // 하단에 기관 관리 버튼 배치
                             Padding(
                               padding: const EdgeInsets.all(16.0),
                               child: Column(
@@ -241,6 +241,13 @@ class _HomePageState extends State<HomePage> {
                                 ],
                               ),
                             ),
+                            // 시스템 바 간섭 방지 (SafeArea 및 동적 여백)
+                            SafeArea(
+                              top: false,
+                              child: SizedBox(
+                                height: AppDimensions.getBottomInset(context),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -264,7 +271,6 @@ class _HomePageState extends State<HomePage> {
                                         .titleLarge
                                         ?.copyWith(fontWeight: FontWeight.bold),
                                   ),
-                                  // 기존 상단 아이콘 버튼 제거
                                 ],
                               ),
                             ),
@@ -334,6 +340,13 @@ class _HomePageState extends State<HomePage> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
+                              ),
+                            ),
+                            // 시스템 바 간섭 방지
+                            SafeArea(
+                              top: false,
+                              child: SizedBox(
+                                height: AppDimensions.getBottomInset(context),
                               ),
                             ),
                           ],

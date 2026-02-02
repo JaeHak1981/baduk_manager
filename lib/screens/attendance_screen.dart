@@ -13,6 +13,7 @@ import '../utils/file_download_helper.dart';
 import 'components/statistics_dialog.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../providers/schedule_provider.dart';
+import '../constants/ui_constants.dart';
 
 class AttendanceScreen extends StatefulWidget {
   final AcademyModel academy;
@@ -799,7 +800,9 @@ class AttendanceScreenState extends State<AttendanceScreen>
                     key: const PageStorageKey('attendance_scroll_vertical'),
                     scrollDirection: Axis.vertical,
                     child: Padding(
-                      padding: const EdgeInsets.only(bottom: 100),
+                      padding: EdgeInsets.only(
+                        bottom: AppDimensions.getBottomInset(context),
+                      ),
                       child: SingleChildScrollView(
                         key: const PageStorageKey(
                           'attendance_scroll_horizontal',

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/academy_model.dart';
 import '../models/student_model.dart';
 import '../providers/student_provider.dart';
+import '../constants/ui_constants.dart';
 
 /// 학생 등록/수정 화면
 class AddStudentScreen extends StatefulWidget {
@@ -378,14 +379,40 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
                 ),
                 maxLines: 2,
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
+              // 버튼에 가려지지 않도록 하단부 여백 확보
+              SizedBox(height: AppDimensions.getFormBottomInset(context)),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _handleSubmit,
                   child: _isLoading
-                      ? const CircularProgressIndicator()
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : Text(
                           widget.student != null ? '정보 수정하기' : '학생 등록하기',
                           style: const TextStyle(
@@ -395,9 +422,8 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
                         ),
                 ),
               ),
-
               if (widget.student != null) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   child: TextButton.icon(

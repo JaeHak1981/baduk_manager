@@ -4,6 +4,7 @@ import '../models/student_model.dart';
 import '../models/academy_model.dart';
 import '../models/education_report_model.dart';
 import '../providers/education_report_provider.dart';
+import '../constants/ui_constants.dart';
 import '../providers/attendance_provider.dart';
 import '../providers/progress_provider.dart';
 import '../models/attendance_model.dart';
@@ -146,7 +147,9 @@ class _EducationReportFormScreenState extends State<EducationReportFormScreen> {
             _buildRadarChart(), // 실제 차트 위젯
             const SizedBox(height: 24),
             _buildCommentSection(),
-            const SizedBox(height: 100), // 여백
+            SizedBox(
+              height: AppDimensions.getFormBottomInset(context),
+            ), // 가변 여백
           ],
         ),
       ),

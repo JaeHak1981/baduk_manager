@@ -29,7 +29,14 @@ if [ $? -eq 0 ]; then
     
     cp build/app/outputs/flutter-apk/app-release.apk "$TARGET_PATH"
     
-    echo ""
+    # 4-1. OneDrive 경로로 추가 복사 (사용자 요청)
+    ONEDRIVE_PATH="/Users/jae_hak/Library/CloudStorage/OneDrive-개인/baduk_manager_개발"
+    if [ -d "$ONEDRIVE_PATH" ]; then
+        cp "$TARGET_PATH" "$ONEDRIVE_PATH/$NEW_FILENAME"
+        echo "📂 OneDrive로 복사 완료: $ONEDRIVE_PATH/$NEW_FILENAME"
+    else
+        echo "⚠️ 경고: OneDrive 경로를 찾을 수 없어 복사를 건너뜁니다: $ONEDRIVE_PATH"
+    fi
     echo "=================================================="
     echo "✅ 빌드 및 아카이빙 완료!"
     echo "파일 위치: $TARGET_PATH"

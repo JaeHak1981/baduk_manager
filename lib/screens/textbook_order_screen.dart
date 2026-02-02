@@ -516,11 +516,11 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                               _buildTableHeader(),
                               Expanded(
                                 child: ListView.separated(
-                                  padding: const EdgeInsets.fromLTRB(
+                                  padding: EdgeInsets.fromLTRB(
                                     16,
                                     8,
                                     16,
-                                    100,
+                                    AppDimensions.getBottomInset(context),
                                   ),
                                   itemCount: filteredStudents.length,
                                   separatorBuilder: (context, index) =>
@@ -550,22 +550,49 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                               ),
                               color: Colors.grey.shade50,
                             ),
-                            child: SingleChildScrollView(
-                              child: Column(
-                                children: [
-                                  _buildAggregationDashboard(
-                                    textbooks,
-                                    progressProvider,
-                                    isWide: true,
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    child: Column(
+                                      children: [
+                                        _buildAggregationDashboard(
+                                          textbooks,
+                                          progressProvider,
+                                          isWide: true,
+                                        ),
+                                        const Divider(height: 1),
+                                        // 메시지 미리보기 영역까지만 스크롤에 포함
+                                        _buildBottomSummary(
+                                          textbooks,
+                                          latestAcademy,
+                                          isWide: true,
+                                          onlyMessage: true,
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  const Divider(height: 1),
-                                  _buildBottomSummary(
+                                ),
+                                // 버튼 영역은 하단에 고정
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.05),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, -5),
+                                      ),
+                                    ],
+                                  ),
+                                  child: _buildBottomSummary(
                                     textbooks,
                                     latestAcademy,
                                     isWide: true,
+                                    onlyButtons: true,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -1211,6 +1238,8 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     List<TextbookModel> textbooks,
     AcademyModel latestAcademy, {
     bool isWide = false,
+    bool onlyMessage = false,
+    bool onlyButtons = false,
   }) {
     /* // 주문이 없어도 항상 표시하도록 주석 처리
     bool hasOrder = _orderEntries.values.any(
@@ -1230,248 +1259,257 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                '메시지 미리보기 (편집 가능)',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                ),
-              ),
-              if (_isManualEdit)
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _isManualEdit = false;
-                      _messageController.text = _generateDefaultMessage(
-                        textbooks,
-                        latestAcademy,
-                        context.read<ProgressProvider>(),
-                      );
-                    });
-                  },
-
-                  icon: const Icon(Icons.refresh, size: 14),
-                  label: const Text(
-                    '자동완성으로 복구',
-                    style: TextStyle(fontSize: 11),
-                  ),
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
+          if (!onlyButtons) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '메시지 미리보기 (편집 가능)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          TextField(
-            controller: _messageController,
-            maxLines: null,
-            style: const TextStyle(fontSize: 12, color: Colors.black87),
-            decoration: const InputDecoration(
-              isDense: true,
-              contentPadding: EdgeInsets.all(8),
-              border: OutlineInputBorder(),
-              fillColor: Colors.white,
-              filled: true,
-            ),
-            onChanged: (val) {
-              if (!_isManualEdit) {
-                setState(() {
-                  _isManualEdit = true;
-                });
-              }
-            },
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Clipboard.setData(
-                      ClipboardData(text: _messageController.text),
-                    );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('메시지가 복사되었습니다.')),
-                    );
-                  },
-                  icon: const Icon(Icons.copy, size: 14),
-                  label: const Text('복사'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade700,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    textStyle: const TextStyle(fontSize: 11),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final academyProvider = context.read<AcademyProvider>();
-
-                    // 현재 주문 상태 집계
-                    Map<String, Map<int, int>> summary = {};
-                    int totalAll = 0;
-                    _orderEntries.forEach((studentId, entry) {
-                      if (entry.type == OrderType.select &&
-                          entry.textbook != null) {
-                        final tName = entry.textbook!.name;
-                        summary[tName] ??= {};
-                        summary[tName]![entry.volume] =
-                            (summary[tName]![entry.volume] ?? 0) + 1;
-                        totalAll++;
-                      }
-                    });
-
-                    final itemsText = _getItemsText(summary, totalAll);
-                    final templateToSave = _convertToTemplate(
-                      _messageController.text,
-                      itemsText,
-                    );
-
-                    final academyToSave = academyProvider.academies.firstWhere(
-                      (a) => a.id == widget.academy.id,
-                      orElse: () => widget.academy,
-                    );
-
-                    final updatedAcademy = academyToSave.copyWith(
-                      customMessageTemplate: templateToSave,
-                    );
-
-                    final success = await academyProvider.updateAcademy(
-                      updatedAcademy,
-                    );
-
-                    if (success) {
-                      // 문구 저장 성공 시 자동 업데이트 모드로 전환
+                if (_isManualEdit)
+                  TextButton.icon(
+                    onPressed: () {
                       setState(() {
                         _isManualEdit = false;
+                        _messageController.text = _generateDefaultMessage(
+                          textbooks,
+                          latestAcademy,
+                          context.read<ProgressProvider>(),
+                        );
                       });
-                    }
-
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(success ? '기본 메시지로 저장되었습니다.' : '저장 실패'),
-                        ),
+                    },
+                    icon: const Icon(Icons.refresh, size: 14),
+                    label: const Text(
+                      '자동완성으로 복구',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            TextField(
+              controller: _messageController,
+              maxLines: null,
+              style: const TextStyle(fontSize: 12, color: Colors.black87),
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.all(8),
+                border: OutlineInputBorder(),
+                fillColor: Colors.white,
+                filled: true,
+              ),
+              onChanged: (val) {
+                if (!_isManualEdit) {
+                  setState(() {
+                    _isManualEdit = true;
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Clipboard.setData(
+                        ClipboardData(text: _messageController.text),
                       );
-                    }
-                  },
-                  icon: const Icon(Icons.save, size: 14),
-                  label: const Text('문구 저장'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade700,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    textStyle: const TextStyle(fontSize: 11),
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('메시지가 복사되었습니다.')),
+                      );
+                    },
+                    icon: const Icon(Icons.copy, size: 14),
+                    label: const Text('복사'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      textStyle: const TextStyle(fontSize: 11),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final academyProvider = context.read<AcademyProvider>();
-                    final academyToReset = academyProvider.academies.firstWhere(
-                      (a) => a.id == widget.academy.id,
-                      orElse: () => widget.academy,
-                    );
+                const SizedBox(width: 4),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final academyProvider = context.read<AcademyProvider>();
 
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('메시지 초기화'),
-                        content: const Text(
-                          '저장된 맞춤 메시지를 삭제하고\n기본 메시지로 되돌리시겠습니까?',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('취소'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: const Text('초기화'),
-                          ),
-                        ],
-                      ),
-                    );
+                      // 현재 주문 상태 집계
+                      Map<String, Map<int, int>> summary = {};
+                      int totalAll = 0;
+                      _orderEntries.forEach((studentId, entry) {
+                        if (entry.type == OrderType.select &&
+                            entry.textbook != null) {
+                          final tName = entry.textbook!.name;
+                          summary[tName] ??= {};
+                          summary[tName]![entry.volume] =
+                              (summary[tName]![entry.volume] ?? 0) + 1;
+                          totalAll++;
+                        }
+                      });
 
-                    if (confirm == true) {
-                      final updatedAcademy = academyToReset.copyWith(
-                        customMessageTemplate: '',
+                      final itemsText = _getItemsText(summary, totalAll);
+                      final templateToSave = _convertToTemplate(
+                        _messageController.text,
+                        itemsText,
                       );
-                      await academyProvider.updateAcademy(updatedAcademy);
-                      if (mounted) {
+
+                      final academyToSave = academyProvider.academies
+                          .firstWhere(
+                            (a) => a.id == widget.academy.id,
+                            orElse: () => widget.academy,
+                          );
+
+                      final updatedAcademy = academyToSave.copyWith(
+                        customMessageTemplate: templateToSave,
+                      );
+
+                      final success = await academyProvider.updateAcademy(
+                        updatedAcademy,
+                      );
+
+                      if (success) {
+                        // 문구 저장 성공 시 자동 업데이트 모드로 전환
                         setState(() {
                           _isManualEdit = false;
                         });
+                      }
 
+                      if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('기본 메시지로 초기화되었습니다.')),
+                          SnackBar(
+                            content: Text(
+                              success ? '기본 메시지로 저장되었습니다.' : '저장 실패',
+                            ),
+                          ),
                         );
                       }
-                    }
-                  },
-                  icon: const Icon(Icons.refresh, size: 14),
-                  label: const Text('초기화'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade700,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    textStyle: const TextStyle(fontSize: 11),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _handleSaveTemporary,
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('임시 저장'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.blue,
-                    side: const BorderSide(color: Colors.blue),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                    },
+                    icon: const Icon(Icons.save, size: 14),
+                    label: const Text('문구 저장'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      textStyle: const TextStyle(fontSize: 11),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: ElevatedButton.icon(
-                  onPressed: _handleOrderComplete,
-                  icon: const Icon(Icons.check_circle),
-                  label: const Text(
-                    '진도 반영 및 주문',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final academyProvider = context.read<AcademyProvider>();
+                      final academyToReset = academyProvider.academies
+                          .firstWhere(
+                            (a) => a.id == widget.academy.id,
+                            orElse: () => widget.academy,
+                          );
+
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('메시지 초기화'),
+                          content: const Text(
+                            '저장된 맞춤 메시지를 삭제하고\n기본 메시지로 되돌리시겠습니까?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('취소'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('초기화'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirm == true) {
+                        final updatedAcademy = academyToReset.copyWith(
+                          customMessageTemplate: '',
+                        );
+                        await academyProvider.updateAcademy(updatedAcademy);
+                        if (mounted) {
+                          setState(() {
+                            _isManualEdit = false;
+                          });
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('기본 메시지로 초기화되었습니다.')),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.refresh, size: 14),
+                    label: const Text('초기화'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      textStyle: const TextStyle(fontSize: 11),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
+          if (!onlyMessage) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _handleSaveTemporary,
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('임시 저장'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.blue,
+                      side: const BorderSide(color: Colors.blue),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleOrderComplete,
+                    icon: const Icon(Icons.check_circle),
+                    label: const Text(
+                      '진도 반영 및 주문',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          // 최하단 시스템 바 여백 추가 (모바일 및 고정 버튼 영역 대응)
+          if (!onlyMessage)
+            SizedBox(height: AppDimensions.getBottomInset(context)),
         ],
       ),
     );

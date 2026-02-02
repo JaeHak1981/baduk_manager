@@ -1,10 +1,9 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:open_file_plus/open_file_plus.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -92,7 +91,7 @@ class UpdateService {
       }
 
       // 2. 다운로드 시작 (이어받기 지원)
-      final response = await _dio.download(
+      await _dio.download(
         updateUrl,
         filePath,
         onReceiveProgress: (received, total) {
@@ -123,7 +122,7 @@ class UpdateService {
       }
 
       // 4. 설치 실행
-      final result = await OpenFile.open(filePath);
+      final result = await OpenFilex.open(filePath);
       if (result.type != ResultType.done) {
         onError('설치 실행 실패: ${result.message}');
       } else {

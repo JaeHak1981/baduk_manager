@@ -41,7 +41,10 @@ class _EnrollmentStatisticsDialogState
     super.initState();
     _selectedYear = widget.initialYear;
     _selectedMonth = widget.initialMonth;
-    _fetchData();
+    // 빌드가 완료된 후 데이터 로드 시작하여 setState() 에러 방지
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchData();
+    });
   }
 
   Future<void> _fetchData() async {
@@ -73,7 +76,6 @@ class _EnrollmentStatisticsDialogState
     // 선택된 기간만큼 반복
     for (int i = _selectedPeriod - 1; i >= 0; i--) {
       DateTime monthDate = DateTime(_selectedYear, _selectedMonth - i, 1);
-      final monthStart = DateTime(monthDate.year, monthDate.month, 1);
       final monthEnd = DateTime(
         monthDate.year,
         monthDate.month + 1,
@@ -92,23 +94,11 @@ class _EnrollmentStatisticsDialogState
         return isAssigned && wasCreatedBefore;
       }).length;
 
-      // 해당 월 신규 인원 (미배정 학생 제외)
-      final newCount = _allStudents.where((s) {
-        final isAssigned = s.session != null && s.session != 0;
-        final wasCreatedInMonth =
-            s.createdAt.isAfter(
-              monthStart.subtract(const Duration(seconds: 1)),
-            ) &&
-            s.createdAt.isBefore(monthEnd.add(const Duration(seconds: 1)));
-        return isAssigned && wasCreatedInMonth;
-      }).length;
-
       stats.add(
         _MonthlyStat(
           year: monthDate.year,
           month: monthDate.month,
           total: activeCount,
-          newbies: newCount,
         ),
       );
 
@@ -162,24 +152,10 @@ class _EnrollmentStatisticsDialogState
                 )
               else ...[
                 // 상단 요약 요약 정보
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildSimpleSummaryCard(
-                        '총 인원',
-                        '${currentStat.total}명',
-                        Colors.blue.shade700,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildSimpleSummaryCard(
-                        '이번 달 신규',
-                        '${currentStat.newbies}명',
-                        Colors.green.shade600,
-                      ),
-                    ),
-                  ],
+                _buildSimpleSummaryCard(
+                  '총 인원',
+                  '${currentStat.total}명',
+                  Colors.blue.shade700,
                 ),
                 const SizedBox(height: 32),
 
@@ -227,14 +203,7 @@ class _EnrollmentStatisticsDialogState
 
                 const SizedBox(height: 16),
                 // 범례
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildLegendItem('기존 인원', Colors.blue.shade300),
-                    const SizedBox(width: 16),
-                    _buildLegendItem('신규 인원', Colors.blue.shade800),
-                  ],
-                ),
+                _buildLegendItem('현재 부별 인원', Colors.blue.shade600),
               ],
             ],
           ),
@@ -404,23 +373,18 @@ class _EnrollmentStatisticsDialogState
   }
 
   Widget _buildBar(_MonthlyStat stat) {
-    // 최대 높이 기준 비율 계산
     double totalHeightRatio = _maxCount == 0 ? 0 : stat.total / _maxCount;
-    double newHeightRatio = stat.total == 0 ? 0 : stat.newbies / stat.total;
 
     return Tooltip(
-      message:
-          '${stat.year}.${stat.month}\n전체: ${stat.total}명\n신규: ${stat.newbies}명',
+      message: '${stat.year}.${stat.month}\n총 인원: ${stat.total}명',
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                // 상단 인원수 텍스트 공간 확보를 위해 가용 높이 조정
                 double availableH = constraints.maxHeight - 20;
                 double totalH = availableH * totalHeightRatio;
-                double newH = totalH * newHeightRatio;
 
                 return Column(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -446,29 +410,15 @@ class _EnrollmentStatisticsDialogState
                           color: Colors.blue.shade700.withValues(alpha: 0.1),
                         ),
                       ),
-                      child: Stack(
-                        alignment: Alignment.bottomCenter,
-                        children: [
-                          // 기존 인원 (바탕)
-                          Container(
-                            width: double.infinity,
-                            height: totalH,
-                            color: Colors.blue.shade300,
+                      child: Container(
+                        width: double.infinity,
+                        height: totalH,
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade600,
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(2),
                           ),
-                          // 신규 인원 (가장 진한색)
-                          Container(
-                            width: double.infinity,
-                            height: newH,
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade800,
-                              borderRadius: newH >= totalH
-                                  ? const BorderRadius.vertical(
-                                      top: Radius.circular(2),
-                                    )
-                                  : null,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ],
@@ -497,12 +447,6 @@ class _MonthlyStat {
   final int year;
   final int month;
   final int total;
-  final int newbies;
 
-  _MonthlyStat({
-    required this.year,
-    required this.month,
-    required this.total,
-    required this.newbies,
-  });
+  _MonthlyStat({required this.year, required this.month, required this.total});
 }

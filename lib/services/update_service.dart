@@ -19,7 +19,7 @@ class UpdateService {
         fetchTimeout: const Duration(minutes: 1),
         minimumFetchInterval: kDebugMode
             ? Duration.zero
-            : const Duration(hours: 1),
+            : const Duration(minutes: 1),
       ),
     );
     await _remoteConfig.setDefaults({

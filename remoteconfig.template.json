@@ -1,0 +1,40 @@
+{
+  "parameters": {
+    "latest_version": {
+      "defaultValue": {
+        "value": "1.2.2"
+      },
+      "valueType": "STRING"
+    },
+    "update_url": {
+      "defaultValue": {
+        "value": "https://drive.google.com/uc?export=download&id=1m2foYK4mGr-Phcrnahsj3DSGBm4ARDsJ"
+      },
+      "valueType": "STRING"
+    },
+    "checksum_sha256": {
+      "defaultValue": {
+        "value": "3390630e4bea69508e28cb0f566ddd13663bfbde091fa74d11e36e03e6a5e488"
+      },
+      "valueType": "STRING"
+    },
+    "changelog": {
+      "defaultValue": {
+        "value": "v1.2.2 업데이트: 태블릿 UI 최적화 및 주문 화면 하단 버튼 고정 적용, 업데이트 체크 주기 개선"
+      },
+      "valueType": "STRING"
+    },
+    "is_mandatory": {
+      "defaultValue": {
+        "value": "false"
+      },
+      "valueType": "BOOLEAN"
+    },
+    "is_under_maintenance": {
+      "defaultValue": {
+        "value": "false"
+      },
+      "valueType": "BOOLEAN"
+    }
+  }
+}

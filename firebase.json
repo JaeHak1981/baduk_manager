@@ -1,4 +1,5 @@
 {
+  "remoteconfig": { "template": "remoteconfig.template.json" },
     "hosting": {
         "site": "baduk-teacher",
         "public": "build/web",

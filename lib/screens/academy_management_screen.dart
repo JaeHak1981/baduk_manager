@@ -7,6 +7,7 @@ import '../providers/academy_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/progress_provider.dart';
 import 'create_academy_screen.dart';
+import '../constants/ui_constants.dart';
 
 /// 기관 관리 화면 (등록 및 삭제)
 class AcademyManagementScreen extends StatefulWidget {
@@ -157,7 +158,12 @@ class _AcademyManagementScreenState extends State<AcademyManagementScreen> {
           return RefreshIndicator(
             onRefresh: _loadAcademies,
             child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                AppDimensions.getBottomInset(context),
+              ),
               itemCount: academyProvider.academies.length,
               itemBuilder: (context, index) {
                 final academy = academyProvider.academies[index];

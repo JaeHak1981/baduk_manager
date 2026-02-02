@@ -6,6 +6,7 @@ import '../models/student_model.dart';
 import '../models/textbook_model.dart';
 import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
+import '../constants/ui_constants.dart';
 import '../providers/academy_provider.dart';
 import '../providers/order_provider.dart';
 import '../providers/temporary_order_provider.dart';
@@ -579,7 +580,12 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                         _buildTableHeader(),
                         Expanded(
                           child: ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                            padding: EdgeInsets.fromLTRB(
+                              16,
+                              8,
+                              16,
+                              AppDimensions.getBottomInset(context),
+                            ),
                             itemCount: filteredStudents.length,
                             separatorBuilder: (context, index) =>
                                 const Divider(height: 1, color: Colors.black12),

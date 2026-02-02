@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/academy_model.dart';
 import '../models/textbook_model.dart';
 import '../providers/progress_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // 디버깅용
+import '../constants/ui_constants.dart';
 import 'add_textbook_screen.dart';
 
 /// 교재 센터 화면 (기관별 교재 목록 조회 및 권수별 할당)
@@ -61,7 +61,12 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
                 onRefresh: () =>
                     provider.loadOwnerTextbooks(widget.academy.ownerId),
                 child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    16,
+                    16,
+                    AppDimensions.getBottomInset(context),
+                  ),
                   itemCount: () {
                     var list = provider.allOwnerTextbooks;
                     if (widget.academy.usingTextbookIds.isNotEmpty) {
@@ -294,17 +299,7 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
     int selectedVolume = 1;
     final volumesCount = textbook.totalVolumes;
 
-    // 디버그 로그 추가
-    print('DEBUG: Assigning textbook...');
-    try {
-      final curUid = FirebaseAuth.instance.currentUser?.uid;
-      print('DEBUG: Current User ID: $curUid');
-      print('DEBUG: Academy ID: ${widget.academy.id}');
-      print('DEBUG: Academy Owner ID: ${widget.academy.ownerId}');
-      print('DEBUG: Student ID: ${widget.studentId}');
-    } catch (e) {
-      print('DEBUG: Error printing debug info: $e');
-    }
+    // 할당 로직 시작
 
     final result = await showDialog<int?>(
       context: context,

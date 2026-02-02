@@ -16,7 +16,8 @@ import '../providers/progress_provider.dart';
 import '../models/textbook_model.dart';
 import 'components/enrollment_statistics_dialog.dart';
 import 'components/download_dialog.dart';
-import '../providers/system_provider.dart';
+import '../providers/update_provider.dart';
+import 'components/update_dialog.dart';
 import '../constants/ui_constants.dart';
 
 /// 홈 화면
@@ -34,8 +35,25 @@ class _HomePageState extends State<HomePage> {
     // 초기 데이터 로드
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
-      context.read<SystemProvider>().checkUpdate(); // 업데이트 체크 추가
+      _checkUpdate();
     });
+  }
+
+  Future<void> _checkUpdate() async {
+    final updateProvider = context.read<UpdateProvider>();
+    await updateProvider.checkUpdate();
+
+    if (mounted && updateProvider.showUpdateDialog) {
+      _showUpdatePopup();
+    }
+  }
+
+  void _showUpdatePopup() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const UpdateDialog(),
+    );
   }
 
   void _loadInitialData() {
@@ -58,6 +76,32 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final updateProvider = context.watch<UpdateProvider>();
+
+    // 점검 모드 대응
+    if (updateProvider.isUnderMaintenance) {
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.engineering, size: 80, color: Colors.orange),
+              SizedBox(height: 24),
+              Text(
+                '시스템 정기 점검 중',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 12),
+              Text(
+                '더 안정적인 서비스를 위해 서버 점검 중입니다.\n잠시 후 다시 이용해 주세요.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final academyProvider = context.watch<AcademyProvider>();
     final progressProvider = context.watch<ProgressProvider>();
     final user = authProvider.currentUser;

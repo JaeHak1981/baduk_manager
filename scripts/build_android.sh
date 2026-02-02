@@ -35,7 +35,16 @@ if [ $? -eq 0 ]; then
         cp "$TARGET_PATH" "$ONEDRIVE_PATH/$NEW_FILENAME"
         echo "📂 OneDrive로 복사 완료: $ONEDRIVE_PATH/$NEW_FILENAME"
     else
-        echo "⚠️ 경고: OneDrive 경로를 찾을 수 없어 복사를 건너뜁니다: $ONEDRIVE_PATH"
+        echo "⚠️ 경고: OneDrive 경로를 찾을 수 없어 복사를 건너뜜: $ONEDRIVE_PATH"
+    fi
+
+    # 4-2. Google Drive 경로로 추가 복사 (사용자 요청)
+    GDRIVE_PATH="/Users/jae_hak/Library/CloudStorage/GoogleDrive-vulcanus1981@gmail.com/내 드라이브/baduk_manager"
+    if [ -d "$GDRIVE_PATH" ]; then
+        cp "$TARGET_PATH" "$GDRIVE_PATH/$NEW_FILENAME"
+        echo "📂 Google Drive로 복사 완료: $GDRIVE_PATH/$NEW_FILENAME"
+    else
+        echo "⚠️ 경고: Google Drive 경로를 찾을 수 없어 복사를 건너뜜: $GDRIVE_PATH"
     fi
     echo "=================================================="
     echo "✅ 빌드 및 아카이빙 완료!"

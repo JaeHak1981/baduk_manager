@@ -132,14 +132,11 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
         _isManualEdit = false;
       }
     } else {
-      // 2. 임시 저장 데이터가 없으면 기존 로직대로 초기화
+      // 2. 임시 저장 데이터가 없으면 '없음'으로 깨끗하게 시작 (자동 연장 비활성화)
       _isManualEdit = false;
       for (var student in students) {
-        final currentP = progressProvider.getProgressForStudent(student.id);
-        final hasActiveProgress = currentP.any((p) => !p.isCompleted);
-
         _orderEntries[student.id] = _OrderEntry(
-          type: hasActiveProgress ? OrderType.extension : OrderType.none,
+          type: OrderType.none,
           textbook: null,
           volume: 1,
         );
@@ -220,22 +217,49 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
       // 주문 이력 저장 (추가된 부분)
       try {
         final Map<String, Map<int, int>> summary = {};
+        int totalSelect = 0;
+        int totalExtension = 0;
         _orderEntries.forEach((studentId, entry) {
           if (entry.type == OrderType.select && entry.textbook != null) {
             final tName = entry.textbook!.name;
             summary[tName] ??= {};
             summary[tName]![entry.volume] =
                 (summary[tName]![entry.volume] ?? 0) + 1;
+            totalSelect++;
+          } else if (entry.type == OrderType.extension) {
+            final currentProgress = progressProvider.getProgressForStudent(
+              studentId,
+            );
+            if (currentProgress.isNotEmpty) {
+              final lastP = currentProgress.first;
+              final textbook = progressProvider.allOwnerTextbooks.firstWhere(
+                (t) => t.id == lastP.textbookId,
+                orElse: () => TextbookModel(
+                  id: '',
+                  name: '알수없음',
+                  ownerId: '',
+                  totalVolumes: 0,
+                  createdAt: DateTime.now(),
+                ),
+              );
+              if (textbook.id.isNotEmpty) {
+                final tName = textbook.name;
+                summary[tName] ??= {};
+                summary[tName]![lastP.volumeNumber] =
+                    (summary[tName]![lastP.volumeNumber] ?? 0) + 1;
+                totalExtension++;
+              }
+            }
           }
         });
 
-        int totalAll = 0;
+        int totalAll = totalSelect + totalExtension;
         List<OrderItem> orderItems = [];
         summary.forEach((tName, volumes) {
           orderItems.add(OrderItem(textbookName: tName, volumeCounts: volumes));
-          totalAll += volumes.values.fold(0, (sum, c) => sum + c);
         });
 
+        bool success = true;
         if (totalAll > 0) {
           final order = OrderModel(
             id: '',
@@ -246,36 +270,115 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             totalCount: totalAll,
             message: _messageController.text,
           );
-          await orderProvider.saveOrder(order);
+          success = await orderProvider.saveOrder(order);
+        }
+
+        if (mounted) {
+          Navigator.pop(context); // 로딩 다이얼로그 닫기
+
+          if (success) {
+            // [NEW] 최종 주문 성공 시 임시 저장 데이터 삭제
+            await context.read<TemporaryOrderProvider>().deleteTemporaryOrder(
+              widget.academy.id,
+            );
+
+            // [NEW] 가독성 높은 결과 팝업 노출
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('주문 완료'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('교재 주문 및 진도 반영이 성공적으로 완료되었습니다.'),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('신규 교재'),
+                              Text(
+                                '$totalSelect권',
+                                style: const TextStyle(
+                                  color: Colors.blue,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Divider(),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('기존 연장'),
+                              Text(
+                                '$totalExtension권',
+                                style: const TextStyle(
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Divider(thickness: 2),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                '총 합계',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                '$totalAll권',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('확인'),
+                  ),
+                ],
+              ),
+            );
+
+            // 성공 시에만 화면 상태 초기화 (0권 상태로)
+            setState(() {
+              _orderEntries.clear();
+              _isManualEdit = false;
+            });
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('주문 저장 실패: ${orderProvider.errorMessage}'),
+              ),
+            );
+          }
         }
       } catch (e) {
         debugPrint('주문 이력 저장 중 오류 (진도 반영은 완료됨): $e');
-      }
-
-      if (mounted) {
-        // [NEW] 최종 주문 성공 시 임시 저장 데이터 삭제
-        await context.read<TemporaryOrderProvider>().deleteTemporaryOrder(
-          widget.academy.id,
-        );
-
-        Navigator.pop(context); // 로딩 다이얼로그 닫기
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${entriesToAssign.length}명의 진도 반영 및 주문 기록이 완료되었습니다. (임시 저장 초기화됨)',
-            ),
-          ),
-        );
-        // 화면을 닫지 않고 유지 (메시지 복사 등을 위해)
-        setState(() {
-          _isInitialized = false; // 진도 정보를 다시 불러오기 위해 초기화 플래그 리셋
-          _orderEntries.clear(); // 현재 선택 목록 초기화
-          _isManualEdit = false;
-        });
+        if (mounted && Navigator.canPop(context)) Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        Navigator.pop(context);
+        if (Navigator.canPop(context)) Navigator.pop(context);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('할당 중 오류: $e')));
@@ -404,6 +507,81 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     }
 
     return template;
+  }
+
+  /// [NEW] 기존 진도 불러오기 (연장 대상자 자동 설정)
+  Future<void> _loadCurrentProgressAsExtension() async {
+    final studentProvider = context.read<StudentProvider>();
+    final progressProvider = context.read<ProgressProvider>();
+    final orderProvider = context.read<OrderProvider>();
+
+    // 1. 기존 작업 내용이 있는지 확인 (있으면 컨펌)
+    bool hasEdits = _orderEntries.values.any((e) => e.type != OrderType.none);
+    if (hasEdits) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('기존 내용 초기화'),
+          content: const Text(
+            '현재 작성 중인 주문서 내용이 사라지고, 기존 진도 데이터를 다시 불러옵니다. 계속하시겠습니까?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('초기화 후 불러오기'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    // 2. 당월 주문 이력이 있는 학생 필터링을 위해 최근 주문 로드
+    final now = DateTime.now();
+    final firstDayOfMonth = DateTime(now.year, now.month, 1);
+
+    // 3. 학생별로 순회하며 연장 대상자 설정
+    final students = studentProvider.students;
+    final Map<String, _OrderEntry> newEntries = {};
+
+    for (var student in students) {
+      // 당월 주문 여부 체크 (최적화를 위해 OrderProvider의 데이터를 활용)
+      // OrderModel.message 필드를 활용하여 {items} 태그 여부 등을 통해 실제 제품 주문 여부 판단 가능
+      // 여기서는 간소하게 해당 학원의 해당 월 주문 존재 여부를 체크 (필요시 도메인 로직 고도화 가능)
+      final hasOrderedThisMonth = orderProvider.orders.any(
+        (order) =>
+            order.academyId == widget.academy.id &&
+            order.orderDate.isAfter(firstDayOfMonth),
+      );
+
+      // 이번 프로젝트의 특성상 '진도 미완료' 상태가 곧 연장 가능 상태임
+      final currentP = progressProvider.getProgressForStudent(student.id);
+      final hasActiveProgress = currentP.any((p) => !p.isCompleted);
+
+      // 당월 주문한 학생은 '없음', 아직 주문 안 했고 진도가 있으면 '연장'
+      newEntries[student.id] = _OrderEntry(
+        type: (hasActiveProgress && !hasOrderedThisMonth)
+            ? OrderType.extension
+            : OrderType.none,
+      );
+    }
+
+    setState(() {
+      _orderEntries.clear();
+      _orderEntries.addAll(newEntries);
+      _isManualEdit = false; // 메시지도 자동 갱신되도록 리셋
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('기존 진도 데이터를 불러왔습니다. (당월 주문자 제외)')),
+      );
+    }
   }
 
   /// 교재 주문 내역 (목록 팝업)
@@ -768,97 +946,130 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '■ 실시간 주문 집계 (자동)',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                '■ 실시간 주문 집계 (자동)',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              TextButton.icon(
+                onPressed: _loadCurrentProgressAsExtension,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('기존 진도 불러오기', style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(color: Colors.orange.shade300),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Table(
-              defaultColumnWidth: const FixedColumnWidth(90),
-              border: TableBorder.all(color: Colors.orange.shade200),
-              children: [
-                // 헤더 Row (교재명)
-                TableRow(
-                  children: [
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Text(
-                          '권수/교재',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                    ...textbooks.map(
-                      (t) => Center(
+          if (totalCount == 0)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              alignment: Alignment.center,
+              child: Text(
+                '현재 작성 중인 주문서가 없습니다.\n[기존 진도 불러오기]를 눌러 준비하세요.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              ),
+            ),
+          if (totalCount > 0)
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Table(
+                defaultColumnWidth: const FixedColumnWidth(90),
+                border: TableBorder.all(color: Colors.orange.shade200),
+                children: [
+                  // 헤더 Row (교재명)
+                  TableRow(
+                    children: [
+                      const Center(
                         child: Padding(
-                          padding: const EdgeInsets.all(8),
+                          padding: EdgeInsets.all(8),
                           child: Text(
-                            t.name,
-                            style: const TextStyle(
+                            '권수/교재',
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                // 상세 데이터 Row (권수별)
-                for (
-                  int v = 1;
-                  v <=
-                      textbooks.fold(
-                        1,
-                        (max, t) => t.totalVolumes > max ? t.totalVolumes : max,
-                      );
-                  v++
-                )
-                  if (matrix.values.any((m) => m.containsKey(v)))
-                    TableRow(
-                      children: [
-                        Center(
+                      ...textbooks.map(
+                        (t) => Center(
                           child: Padding(
                             padding: const EdgeInsets.all(8),
                             child: Text(
-                              '${v}권',
+                              t.name,
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
-                        ...textbooks.map((t) {
-                          final count = matrix[t.name]?[v] ?? 0;
-                          return Center(
+                      ),
+                    ],
+                  ),
+                  // 상세 데이터 Row (권수별)
+                  for (
+                    int v = 1;
+                    v <=
+                        textbooks.fold(
+                          1,
+                          (max, t) =>
+                              t.totalVolumes > max ? t.totalVolumes : max,
+                        );
+                    v++
+                  )
+                    if (matrix.values.any((m) => m.containsKey(v)))
+                      TableRow(
+                        children: [
+                          Center(
                             child: Padding(
                               padding: const EdgeInsets.all(8),
                               child: Text(
-                                count > 0 ? '$count' : '-',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: count > 0
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: count > 0 ? Colors.red : Colors.grey,
+                                '${v}권',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
-                          );
-                        }),
-                      ],
-                    ),
-              ],
+                          ),
+                          ...textbooks.map((t) {
+                            final count = matrix[t.name]?[v] ?? 0;
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Text(
+                                  count > 0 ? '$count' : '-',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: count > 0
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: count > 0 ? Colors.red : Colors.grey,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                ],
+              ),
             ),
-          ),
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerRight,
@@ -1347,6 +1558,8 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                       // 현재 주문 상태 집계
                       Map<String, Map<int, int>> summary = {};
                       int totalAll = 0;
+                      final progressProvider = context.read<ProgressProvider>();
+
                       _orderEntries.forEach((studentId, entry) {
                         if (entry.type == OrderType.select &&
                             entry.textbook != null) {
@@ -1355,6 +1568,31 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
                           summary[tName]![entry.volume] =
                               (summary[tName]![entry.volume] ?? 0) + 1;
                           totalAll++;
+                        } else if (entry.type == OrderType.extension) {
+                          final currentProgress = progressProvider
+                              .getProgressForStudent(studentId);
+                          if (currentProgress.isNotEmpty) {
+                            final lastP = currentProgress.first;
+                            final textbook = progressProvider.allOwnerTextbooks
+                                .firstWhere(
+                                  (t) => t.id == lastP.textbookId,
+                                  orElse: () => TextbookModel(
+                                    id: '',
+                                    name: '알수없음',
+                                    ownerId: '',
+                                    totalVolumes: 0,
+                                    createdAt: DateTime.now(),
+                                  ),
+                                );
+                            if (textbook.id.isNotEmpty) {
+                              final tName = textbook.name;
+                              summary[tName] ??= {};
+                              summary[tName]![lastP.volumeNumber] =
+                                  (summary[tName]![lastP.volumeNumber] ?? 0) +
+                                  1;
+                              totalAll++;
+                            }
+                          }
                         }
                       });
 

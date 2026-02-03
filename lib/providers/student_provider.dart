@@ -8,14 +8,26 @@ class StudentProvider with ChangeNotifier {
 
   List<StudentModel> _students = [];
   bool _isLoading = false;
+  bool _showDeleted = false; // [ADDED] 종료생 보기 여부
   String? _errorMessage;
 
   List<StudentModel> get students => _students;
   bool get isLoading => _isLoading;
+  bool get showDeleted => _showDeleted; // [ADDED]
   String? get errorMessage => _errorMessage;
 
+  /// 종료생 보기 토글 [NEW]
+  void toggleShowDeleted() {
+    _showDeleted = !_showDeleted;
+    notifyListeners();
+  }
+
   /// 특정 기관의 학생 목록 로드
-  Future<void> loadStudents(String academyId, {String? ownerId}) async {
+  Future<void> loadStudents(
+    String academyId, {
+    String? ownerId,
+    bool? includeDeleted,
+  }) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -24,6 +36,7 @@ class StudentProvider with ChangeNotifier {
       _students = await _studentService.getStudentsByAcademy(
         academyId,
         ownerId: ownerId,
+        includeDeleted: includeDeleted ?? _showDeleted,
       );
     } catch (e) {
       _errorMessage = '학생 목록을 불러오지 못했습니다: $e';
@@ -131,6 +144,58 @@ class StudentProvider with ChangeNotifier {
       return true;
     } catch (e) {
       _errorMessage = '학생 이동에 실패했습니다: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 학생 일괄 처리 (등록/수정/종료) [NEW]
+  Future<bool> batchProcessStudents({
+    List<StudentModel>? toUpdate,
+    List<StudentModel>? toAdd,
+    List<String>? toDelete,
+    required String academyId,
+    required String ownerId,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _studentService.batchProcessStudents(
+        toUpdate: toUpdate,
+        toAdd: toAdd,
+        toDelete: toDelete,
+      );
+      await loadStudents(academyId, ownerId: ownerId);
+      return true;
+    } catch (e) {
+      _errorMessage = '일괄 처리에 실패했습니다: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 학생 복구 [NEW]
+  Future<bool> restoreStudent(
+    String studentId, {
+    required String academyId,
+    required String ownerId,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _studentService.restoreStudent(studentId);
+      await loadStudents(academyId, ownerId: ownerId);
+      return true;
+    } catch (e) {
+      _errorMessage = '학생 복구에 실패했습니다: $e';
       return false;
     } finally {
       _isLoading = false;

@@ -18,6 +18,23 @@ class AttendanceService {
         .set(record.toFirestore());
   }
 
+  /// 출결 기록 일괄 저장 (Firestore Batch 사용)
+  Future<void> saveAttendanceBatch(List<AttendanceRecord> records) async {
+    if (records.isEmpty) return;
+
+    final batch = _firestore.batch();
+
+    for (var record in records) {
+      final dateStr =
+          "${record.timestamp.year}${record.timestamp.month.toString().padLeft(2, '0')}${record.timestamp.day.toString().padLeft(2, '0')}";
+      final docId = "${record.studentId}_$dateStr";
+      final docRef = _firestore.collection(_collection).doc(docId);
+      batch.set(docRef, record.toFirestore());
+    }
+
+    await batch.commit();
+  }
+
   /// 특정 학생의 출결 내역 조회
   Future<List<AttendanceRecord>> getAttendanceByStudent(
     String studentId,

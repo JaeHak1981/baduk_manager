@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../utils/holiday_helper.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../providers/schedule_provider.dart';
+import 'components/batch_attendance_dialog.dart'; // [ADDED]
 
 class DailyAttendanceScreen extends StatefulWidget {
   final AcademyModel academy;
@@ -251,6 +252,27 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
     });
   }
 
+  /// 오늘 날짜로 상태 초기화 및 데이터 리로드
+  void _resetToToday() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    if (isSameDay(_selectedDate, today)) return;
+
+    setState(() {
+      final oldMonth = _selectedDate.month;
+      final oldYear = _selectedDate.year;
+
+      _selectedDate = today;
+      _focusedDay = today;
+
+      // 달이나 연도가 바뀌었다면 데이터 새로고침
+      if (oldMonth != today.month || oldYear != today.year) {
+        _loadData();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -341,6 +363,8 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                             backgroundColor: Colors.green,
                           ),
                         );
+                        // 저장 후 오늘 날짜로 자동 복귀
+                        _resetToToday();
                       }
                     },
                     icon: const Icon(Icons.save, color: Colors.black),
@@ -517,16 +541,63 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                                         onTap: isSelectionMode
                                             ? () => toggleSelection(student.id)
                                             : null,
-                                        child: SizedBox(
-                                          width: 60,
-                                          child: Text(
-                                            student.name,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 13,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            SizedBox(
+                                              width: 45, // 너비 약간 줄임
+                                              child: Text(
+                                                student.name,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 13,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                             ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
+                                            if (!isSelectionMode)
+                                              IconButton(
+                                                onPressed: () async {
+                                                  final success =
+                                                      await showDialog<bool>(
+                                                        context: context,
+                                                        builder: (context) =>
+                                                            BatchAttendanceDialog(
+                                                              student: student,
+                                                              academyId: widget
+                                                                  .academy
+                                                                  .id,
+                                                              ownerId: ownerId,
+                                                              initialDate:
+                                                                  _selectedDate,
+                                                            ),
+                                                      );
+                                                  if (success == true &&
+                                                      mounted) {
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                          '기간별 일괄 출결이 적용되었습니다.',
+                                                        ),
+                                                        backgroundColor:
+                                                            Colors.green,
+                                                      ),
+                                                    );
+                                                  }
+                                                },
+                                                icon: const Icon(
+                                                  Icons.date_range,
+                                                  size: 14,
+                                                ),
+                                                padding: EdgeInsets.zero,
+                                                constraints:
+                                                    const BoxConstraints(),
+                                                color: Colors.blueGrey,
+                                                tooltip: '기간별 일괄 출결',
+                                              ),
+                                          ],
                                         ),
                                       ),
                                     ),

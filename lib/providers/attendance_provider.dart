@@ -11,6 +11,7 @@ class AttendanceProvider with ChangeNotifier {
   Map<String, List<AttendanceRecord>> _historyMap = {}; // Key: studentId
   bool _isLoading = false;
   int _stateCounter = 0; // UI 강제 갱신을 위한 카운터
+  String? _errorMessage;
 
   // --- 수동 저장용 필드 ---
   // Key: studentId_YYYYMMDD, Value: AttendanceRecord
@@ -23,6 +24,7 @@ class AttendanceProvider with ChangeNotifier {
   List<AttendanceRecord> get todayRecords => _todayRecords;
   List<AttendanceRecord> get monthlyRecords => _monthlyRecords;
   bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
   int get stateCounter => _stateCounter;
 
   /// 월별 출결 기록 로드
@@ -368,5 +370,89 @@ class AttendanceProvider with ChangeNotifier {
     await _attendanceService.deleteAttendance(id);
     // 삭제 후 해당 학생의 기록 다시 로드
     await loadStudentAttendance(studentId);
+  }
+
+  /// 기간별 출결 일괄 업데이트
+  Future<bool> updateAttendanceForPeriod({
+    required String studentId,
+    required String academyId,
+    required String ownerId,
+    required DateTime startDate,
+    required DateTime endDate,
+    required AttendanceType type,
+    bool skipWeekends = true,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final List<AttendanceRecord> records = [];
+      DateTime current = DateTime(
+        startDate.year,
+        startDate.month,
+        startDate.day,
+      );
+      final last = DateTime(endDate.year, endDate.month, endDate.day);
+
+      while (!current.isAfter(last)) {
+        // 주말 제외 로직
+        if (skipWeekends &&
+            (current.weekday == DateTime.saturday ||
+                current.weekday == DateTime.sunday)) {
+          current = current.add(const Duration(days: 1));
+          continue;
+        }
+
+        records.add(
+          AttendanceRecord(
+            id: '', // 서비스에서 생성되므로 비워둠
+            studentId: studentId,
+            academyId: academyId,
+            ownerId: ownerId,
+            timestamp: current,
+            type: type, // status -> type
+            note: '[일괄 처리]',
+          ),
+        );
+
+        current = current.add(const Duration(days: 1));
+      }
+
+      if (records.isNotEmpty) {
+        await _attendanceService.saveAttendanceBatch(records);
+
+        // 현재 로드된 월별 데이터 새로고침 (기간이 여러 달에 걸쳐있을 수 있으므로 주의)
+        // 여기서는 단순함을 위해 시작일과 종료일이 포함된 달을 모두 리로드할 수도 있지만,
+        // 가장 많이 사용될 상황(한 달 안에서의 기간)을 고려하여 시작일 기준으로 우선 리로드
+        await loadMonthlyAttendance(
+          academyId: academyId,
+          ownerId: ownerId,
+          year: startDate.year,
+          month: startDate.month,
+          showLoading: false,
+        );
+
+        // 만약 종료일이 다른 달이라면 종료일 달도 리로드
+        if (startDate.month != endDate.month ||
+            startDate.year != endDate.year) {
+          await loadMonthlyAttendance(
+            academyId: academyId,
+            ownerId: ownerId,
+            year: endDate.year,
+            month: endDate.month,
+            showLoading: false,
+          );
+        }
+      }
+
+      return true;
+    } catch (e) {
+      _errorMessage = '일괄 출결 업데이트 중 오류가 발생했습니다: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 }

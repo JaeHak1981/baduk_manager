@@ -13,6 +13,7 @@ import 'attendance_tab_screen.dart';
 import 'batch_add_student_dialog.dart';
 import 'student_history_screen.dart'; // 학생 히스토리 화면 import
 import '../constants/ui_constants.dart';
+import '../utils/excel_utils.dart'; // [ADDED]
 
 /// 학생 목록 화면
 class StudentListScreen extends StatefulWidget {
@@ -168,7 +169,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
           IconButton(
             icon: const Icon(Icons.file_upload_outlined), // 내보내기 아이콘
             tooltip: '학생 명단 내보내기',
-            onPressed: _handleExport,
+            onPressed: _showExportOptionsDialog,
           ),
           if (!_isSelectionMode)
             IconButton(
@@ -320,6 +321,18 @@ class _StudentListScreenState extends State<StudentListScreen> {
                   onSelected: (selected) {
                     if (selected) setState(() => _selectedFilterSession = null);
                   },
+                ),
+                const SizedBox(width: 8),
+                // [ADDED] 종료생 보기 토글
+                InputChip(
+                  label: const Text('퇴원 / 수강종료 포함'),
+                  selected: context.watch<StudentProvider>().showDeleted,
+                  onSelected: (selected) {
+                    context.read<StudentProvider>().toggleShowDeleted();
+                    _loadData(); // 다시 로드
+                  },
+                  selectedColor: Colors.grey[300],
+                  checkmarkColor: Colors.grey[700],
                 ),
                 const SizedBox(width: 8),
                 ChoiceChip(
@@ -513,7 +526,59 @@ class _StudentListScreenState extends State<StudentListScreen> {
     }
 
     // 1. 컬럼 선택 다이얼로그 표시
-    final selectedColumns = await _showExportOptionsDialog();
+    final Map<String, bool>? selectedColumns =
+        await showDialog<Map<String, bool>>(
+          context: context,
+          builder: (context) {
+            // 초기값: 모두 선택
+            Map<String, bool> columns = {
+              '이름': true,
+              '학년': true,
+              '반': true,
+              '번호': true,
+              '보호자 연락처': true,
+              '현재 급수': true,
+              '부': true,
+              '메모': true,
+            };
+
+            return StatefulBuilder(
+              builder: (context, setState) {
+                return AlertDialog(
+                  title: const Text('내보내기 항목 선택'),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: columns.keys.map((key) {
+                        return CheckboxListTile(
+                          title: Text(key),
+                          value: columns[key],
+                          onChanged: (val) {
+                            setState(() {
+                              columns[key] = val ?? false;
+                            });
+                          },
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('취소'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context, columns),
+                      child: const Text('텍스트 생성'),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
     if (selectedColumns == null || selectedColumns.isEmpty) return; // 취소됨
 
     // 2. 텍스트 생성
@@ -546,56 +611,40 @@ class _StudentListScreenState extends State<StudentListScreen> {
     _showExportResultDialog(buffer.toString());
   }
 
-  Future<Map<String, bool>?> _showExportOptionsDialog() {
-    // 초기값: 모두 선택
-    Map<String, bool> columns = {
-      '이름': true,
-      '학년': true,
-      '반': true,
-      '번호': true,
-      '보호자 연락처': true,
-      '현재 급수': true,
-      '부': true,
-      '메모': true,
-    };
-
-    return showDialog<Map<String, bool>>(
+  void _showExportOptionsDialog() {
+    showModalBottomSheet(
       context: context,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('내보내기 항목 선택'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: columns.keys.map((key) {
-                    return CheckboxListTile(
-                      title: Text(key),
-                      value: columns[key],
-                      onChanged: (val) {
-                        setState(() {
-                          columns[key] = val ?? false;
-                        });
-                      },
-                      dense: true,
-                      controlAffinity: ListTileControlAffinity.leading,
-                    );
-                  }).toList(),
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(
+                  Icons.file_download_outlined,
+                  color: Colors.green,
                 ),
+                title: const Text('일괄 수정용 엑셀 다운로드 (ID 포함)'),
+                subtitle: const Text('학년, 반, 번호 등을 한 번에 수정할 때 사용하세요.'),
+                onTap: () {
+                  Navigator.pop(context);
+                  ExcelUtils.exportStudentListForUpdate(
+                    students: context.read<StudentProvider>().students,
+                    academyName: widget.academy.name,
+                  );
+                },
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('취소'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context, columns),
-                  child: const Text('텍스트 생성'),
-                ),
-              ],
-            );
-          },
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.copy_all),
+                title: const Text('전체 복사 (표 형식)'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _handleExport();
+                },
+              ),
+            ],
+          ),
         );
       },
     );
@@ -873,36 +922,27 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                                   fontSize: 16,
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .primaryContainer
-                                      .withOpacity(0.7),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary.withOpacity(0.4),
-                                    width: 1.0,
+                              if (widget.student.isDeleted) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade100,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    '수강종료',
+                                    style: TextStyle(
+                                      color: Colors.red,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
-                                child: Text(
-                                  widget.student.levelDisplayName,
-                                  style: TextStyle(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
+                              ],
                             ],
                           ),
                           Text(
@@ -1043,17 +1083,62 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('교재 할당', style: TextStyle(fontSize: 11)),
                 ),
-                IconButton(
-                  icon: const Icon(
-                    Icons.delete_outline,
-                    color: Colors.redAccent,
-                    size: 18,
+                if (widget.student.isDeleted)
+                  IconButton(
+                    icon: const Icon(
+                      Icons.restore_from_trash,
+                      color: Colors.green,
+                      size: 20,
+                    ),
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('재원생 복구'),
+                          content: Text(
+                            '${widget.student.name} 학생을 다시 재원생 목록으로 복구하시겠습니까?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('취소'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('복구'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true && mounted) {
+                        await context.read<StudentProvider>().restoreStudent(
+                          widget.student.id,
+                          academyId: widget.student.academyId,
+                          ownerId: widget.student.ownerId,
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              '${widget.student.name} 학생이 복구되었습니다.',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    tooltip: '재원생으로 복구',
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  constraints: const BoxConstraints(),
-                  onPressed: () => _showDeleteConfirmation(context),
-                  tooltip: '학생 삭제',
-                ),
+                if (!widget.student.isDeleted)
+                  IconButton(
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: Colors.redAccent,
+                      size: 18,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () => _showDeleteConfirmation(context),
+                    tooltip: '수강 종료 처리',
+                  ),
               ],
             ),
           ],

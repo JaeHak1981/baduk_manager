@@ -19,6 +19,7 @@ class StudentService {
   Future<List<StudentModel>> getStudentsByAcademy(
     String academyId, {
     String? ownerId,
+    bool includeDeleted = false,
   }) async {
     Query<Map<String, dynamic>> query = _firestore
         .collection(_collection)
@@ -30,10 +31,15 @@ class StudentService {
 
     final snapshot = await query.orderBy('name').get();
 
-    return snapshot.docs
+    final students = snapshot.docs
         .map((doc) => StudentModel.fromFirestore(doc))
-        .where((s) => s.isDeleted != true) // 인 메모리 필터링 (인덱스 이슈 방지)
         .toList();
+
+    if (includeDeleted) {
+      return students;
+    } else {
+      return students.where((s) => s.isDeleted != true).toList();
+    }
   }
 
   /// 특정 기관의 학생 목록 스트림 (실시간 업데이트)
@@ -74,6 +80,44 @@ class StudentService {
       'isDeleted': true,
       'deletedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  /// 학생 일괄 업데이트 및 삭제 처리 [NEW]
+  Future<void> batchProcessStudents({
+    List<StudentModel>? toUpdate,
+    List<StudentModel>? toAdd,
+    List<String>? toDelete,
+  }) async {
+    final batch = _firestore.batch();
+
+    // 1. 수정 대상 처리
+    if (toUpdate != null) {
+      for (var s in toUpdate) {
+        batch.update(
+          _firestore.collection(_collection).doc(s.id),
+          s.copyWith(updatedAt: DateTime.now()).toFirestore(),
+        );
+      }
+    }
+
+    // 2. 추가 대상 처리
+    if (toAdd != null) {
+      for (var s in toAdd) {
+        batch.set(_firestore.collection(_collection).doc(), s.toFirestore());
+      }
+    }
+
+    // 3. 삭제(수강종료) 대상 처리
+    if (toDelete != null) {
+      for (var id in toDelete) {
+        batch.update(_firestore.collection(_collection).doc(id), {
+          'isDeleted': true,
+          'deletedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    await batch.commit();
   }
 
   /// 학생 일괄 삭제 (Soft Delete)

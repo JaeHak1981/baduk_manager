@@ -19,75 +19,83 @@ class BatchAddStudentDialog extends StatefulWidget {
 
 class _BatchAddStudentDialogState extends State<BatchAddStudentDialog> {
   final TextEditingController _textController = TextEditingController();
-  List<StudentModel> _parsedStudents = [];
+  List<StudentModel> _toUpdate = [];
+  List<StudentModel> _toAdd = [];
+  List<StudentModel> _toDelete = []; // 종료된 것으로 간주될 학생(DB에만 있는 학생)
+
+  // 변경 사항 추적을 위한 맵 (ID -> 구 정보)
+  Map<String, StudentModel> _originalStudents = {};
+
   bool _isParsed = false;
   bool _isLoading = false;
+  bool _processWithdrawals = false; // 종료 처리 포함 여부
 
   void _parseData() {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
 
+    final currentStudents = context.read<StudentProvider>().students;
+    final Map<String, StudentModel> studentMap = {
+      for (var s in currentStudents) s.id: s,
+    };
+    final Map<String, StudentModel> studentNameMap = {
+      for (var s in currentStudents) s.name: s,
+    };
+
     final lines = text.split('\n');
-    final List<StudentModel> students = [];
+
+    List<StudentModel> toAddList = [];
+    List<StudentModel> toUpdateList = [];
+    Set<String> processedIds = {};
 
     for (var line in lines) {
       if (line.trim().isEmpty) continue;
 
-      // 탭(\t) 또는 쉼표(,)로 분리. 엑셀 복사는 보통 탭으로 옴.
-      // 연속된 공백도 처리하고 싶다면 정규식 사용 가능하지만,
-      // 엑셀 복붙은 탭이 확실하므로 탭 우선.
       List<String> parts = line.split('\t');
       if (parts.length < 2 && line.contains(',')) {
         parts = line.split(',');
       }
 
-      // 스마트 파싱: 열의 위치가 바뀌어도 인식하도록 시도
+      String? id;
       String? name;
       int? grade;
       String? classNumber;
       String? studentNumber;
       int? session;
       String? parentPhone;
+      String? note;
 
-      // 1. 이름 찾기 (한글 2~4글자이고 숫자가 포함되지 않은 경우 우선)
-      // 2. 교시/부 찾기 ('교시', '부' 포함)
-      // 3. 나머지는 숫자(학년, 반, 번호)로 추론
+      List<String> remainingParts = [];
 
-      final partCount = parts.length;
-      List<String> remainingParts = []; // 이름/세션 제외한 숫자 후보들
-
-      for (var part in parts) {
-        final p = part.trim();
+      for (var i = 0; i < parts.length; i++) {
+        final p = parts[i].trim();
         if (p.isEmpty) continue;
 
-        // 세션 감지 (6교시, 1부 등)
+        // 1. ID 감지 (첫 번째 열이거나 ID 형태인 경우)
+        if (i == 0 && p.length > 15 && !p.contains(' ')) {
+          id = p;
+          continue;
+        }
+
         if (p.contains('교시') || p.contains('부')) {
           final numStr = p.replaceAll(RegExp(r'[^0-9]'), '');
           if (numStr.isNotEmpty) {
             int val = int.parse(numStr);
-            // 사용자 요청 매핑: 6교시 -> 1부, 7교시 -> 2부 ...
-            // 초등학교 시간표 기준 6교시작 -> 1부로 매핑하는 로직 적용
             if (p.contains('교시')) {
-              if (val >= 6)
-                session = val - 5; // 6->1, 7->2, 8->3
-              else
-                session = val;
+              session = (val >= 6) ? val - 5 : val;
             } else {
-              session = val; // 1부 -> 1
+              session = val;
             }
           }
           continue;
         }
 
-        // 전화번호 감지 (하이픈 포함 혹은 숫자가 9자리 이상)
         if (p.contains('-') ||
             (p.length >= 9 && int.tryParse(p.replaceAll('-', '')) != null)) {
           parentPhone = p;
           continue;
         }
 
-        // 이름 감지 (한글 등 문자열, 숫자로만 구성되지 않음)
-        // 안영준 -> OK, 1 -> No, 1-1 -> No
         bool isNumeric = int.tryParse(p) != null;
         if (!isNumeric && name == null) {
           name = p;
@@ -97,64 +105,114 @@ class _BatchAddStudentDialogState extends State<BatchAddStudentDialog> {
         remainingParts.add(p);
       }
 
-      // 남은 숫자들로 학년/반/번호 매핑 (순서대로)
       if (remainingParts.isNotEmpty) grade = int.tryParse(remainingParts[0]);
-      if (remainingParts.length > 1)
-        classNumber = remainingParts[1]; // 문자열 유지 (1-1 등 가능성)
+      if (remainingParts.length > 1) classNumber = remainingParts[1];
       if (remainingParts.length > 2) studentNumber = remainingParts[2];
+      if (remainingParts.length > 3) note = remainingParts[3];
 
-      // 만약 이름이 없는데 parts[0]이 있었다면, 기존 로직대로 0번을 이름으로 간주 (Fallback)
-      if (name == null && parts.isNotEmpty && int.tryParse(parts[0]) == null) {
-        name = parts[0].trim();
+      if (name == null && id != null && studentMap.containsKey(id)) {
+        name = studentMap[id]!.name;
       }
 
       if (name != null) {
-        students.add(
-          StudentModel(
-            id: '',
-            academyId: widget.academyId,
-            ownerId: widget.ownerId,
-            name: name,
-            grade: grade,
-            classNumber: classNumber == '' ? null : classNumber,
-            studentNumber: studentNumber == '' ? null : studentNumber,
-            session: session,
-            parentPhone: parentPhone,
-            createdAt: DateTime.now(),
-          ),
-        );
+        // 매칭 시도
+        StudentModel? existing;
+        if (id != null && studentMap.containsKey(id)) {
+          existing = studentMap[id];
+        } else if (studentNameMap.containsKey(name)) {
+          existing = studentNameMap[name];
+        }
+
+        if (existing != null) {
+          processedIds.add(existing.id);
+          _originalStudents[existing.id] = existing;
+
+          toUpdateList.add(
+            existing.copyWith(
+              grade: grade ?? existing.grade,
+              classNumber: classNumber ?? existing.classNumber,
+              studentNumber: studentNumber ?? existing.studentNumber,
+              session: session ?? existing.session,
+              parentPhone: parentPhone ?? existing.parentPhone,
+              note: note ?? existing.note,
+            ),
+          );
+        } else {
+          toAddList.add(
+            StudentModel(
+              id: '',
+              academyId: widget.academyId,
+              ownerId: widget.ownerId,
+              name: name,
+              grade: grade,
+              classNumber: classNumber,
+              studentNumber: studentNumber,
+              session: session,
+              parentPhone: parentPhone,
+              note: note,
+              createdAt: DateTime.now(),
+            ),
+          );
+        }
       }
     }
 
+    // 종료 후보 추출 (DB에는 있으나 엑셀에는 없는 학생)
+    List<StudentModel> toDeleteList = currentStudents
+        .where((s) => !processedIds.contains(s.id))
+        .toList();
+
     setState(() {
-      _parsedStudents = students;
+      _toAdd = toAddList;
+      _toUpdate = toUpdateList;
+      _toDelete = toDeleteList;
       _isParsed = true;
     });
   }
 
   Future<void> _registerStudents() async {
-    if (_parsedStudents.isEmpty) return;
+    final totalCurrent = context.read<StudentProvider>().students.length;
+    if (_processWithdrawals &&
+        _toDelete.length > totalCurrent / 2 &&
+        totalCurrent > 5) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('⚠️ 대량 수강 종료 경고'),
+          content: Text(
+            '전체 인원의 절반 이상(${_toDelete.length}명)이 수강 종료 대상으로 분석되었습니다. 전체 명단이 아닌 일부 명단만 업로드하신 것은 아닌가요?\n\n무시하고 진행하시겠습니까?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('진행 (주의)'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
       final provider = context.read<StudentProvider>();
-      // StudentProvider에 batchAddStudents 같은 메서드가 있으면 좋겠지만,
-      // 일단 반복문으로 처리 or provider에 추가 구현.
-      // 성능을 위해 Provider에 bulk insert가 있으면 좋음.
-      // 기존에 deleteStudents는 만들었으므로 addStudents도 만드는 것이 좋음.
-      // 우선 여기서는 하나씩 추가하는 로직 대신, Provider에 메서드를 추가하는 방향으로 진행.
-      // (Provider 수정 필요 시 여기서는 로직만 작성하고 나중에 수정)
-      // 일단 Provider에 `addStudent`는 있으니 for문으로 호출하거나,
-      // `createStudents`를 추가하도록 하겠음.
-
-      // 임시로 for문 사용 (혹은 이 대화 턴 내에서 Provider 업데이트 예정)
-      for (var student in _parsedStudents) {
-        await provider.addStudent(student);
-      }
+      await provider.batchProcessStudents(
+        toUpdate: _toUpdate,
+        toAdd: _toAdd,
+        toDelete: _processWithdrawals
+            ? _toDelete.map((s) => s.id).toList()
+            : null,
+        academyId: widget.academyId,
+        ownerId: widget.ownerId,
+      );
 
       if (mounted) {
-        Navigator.pop(context, true); // 성공
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -236,19 +294,37 @@ class _BatchAddStudentDialogState extends State<BatchAddStudentDialog> {
             ] else ...[
               Row(
                 children: [
-                  Text(
-                    '총 ${_parsedStudents.length}명 인식됨',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '수정: ${_toUpdate.length}명, 신규: ${_toAdd.length}명',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                      if (_toDelete.isNotEmpty)
+                        Text(
+                          '누락(종력후보): ${_toDelete.length}명',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: _toDelete.length > 5
+                                ? Colors.red
+                                : Colors.orange,
+                          ),
+                        ),
+                    ],
                   ),
                   const Spacer(),
                   TextButton.icon(
                     onPressed: () {
                       setState(() {
                         _isParsed = false;
-                        _parsedStudents = [];
+                        _toUpdate = [];
+                        _toAdd = [];
+                        _toDelete = [];
+                        _originalStudents = {};
                       });
                     },
                     icon: const Icon(Icons.refresh, size: 16),
@@ -258,39 +334,133 @@ class _BatchAddStudentDialogState extends State<BatchAddStudentDialog> {
               ),
               const Divider(),
               Expanded(
-                child: _parsedStudents.isEmpty
-                    ? const Center(child: Text('인식된 데이터가 없습니다.'))
-                    : SingleChildScrollView(
-                        child: DataTable(
-                          columns: const [
-                            DataColumn(label: Text('이름')),
-                            DataColumn(label: Text('학년')),
-                            DataColumn(label: Text('반')),
-                            DataColumn(label: Text('번호')),
-                            DataColumn(label: Text('전화번호')),
-                            DataColumn(label: Text('부')),
-                          ],
-                          rows: _parsedStudents.map((s) {
-                            return DataRow(
-                              cells: [
-                                DataCell(
-                                  Text(
-                                    s.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                DataCell(Text(s.grade?.toString() ?? '-')),
-                                DataCell(Text(s.classNumber ?? '-')),
-                                DataCell(Text(s.studentNumber ?? '-')),
-                                DataCell(Text(s.parentPhone ?? '-')),
-                                DataCell(Text(s.session?.toString() ?? '-')),
-                              ],
-                            );
-                          }).toList(),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_toUpdate.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            '📝 정보 수정 대상',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
-                      ),
+                        ..._toUpdate.map((s) {
+                          final old = _originalStudents[s.id]!;
+                          List<String> changes = [];
+                          if (old.grade != s.grade)
+                            changes.add('학년: ${old.grade ?? "-"} → ${s.grade}');
+                          if (old.classNumber != s.classNumber)
+                            changes.add(
+                              '반: ${old.classNumber ?? "-"} → ${s.classNumber}',
+                            );
+                          if (old.studentNumber != s.studentNumber)
+                            changes.add(
+                              '번호: ${old.studentNumber ?? "-"} → ${s.studentNumber}',
+                            );
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              title: Text(
+                                s.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: Text(
+                                changes.isEmpty
+                                    ? '변경 사항 없음'
+                                    : changes.join(', '),
+                              ),
+                              trailing: const Icon(
+                                Icons.edit,
+                                color: Colors.blue,
+                                size: 16,
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                      if (_toAdd.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            '✨ 신규 등록 대상',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        ..._toAdd.map(
+                          (s) => Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              title: Text(s.name),
+                              subtitle: Text(
+                                '${s.grade ?? "-"}학년 ${s.classNumber ?? "-"}반',
+                              ),
+                              trailing: const Icon(
+                                Icons.add,
+                                color: Colors.green,
+                                size: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (_toDelete.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            '⚠️ 누락(퇴원 / 수강종료 후보)',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red[50],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              CheckboxListTile(
+                                value: _processWithdrawals,
+                                onChanged: (val) => setState(
+                                  () => _processWithdrawals = val ?? false,
+                                ),
+                                title: const Text('위 학생들을 퇴원 / 수강종료 처리합니다.'),
+                                subtitle: const Text(
+                                  '체크하지 않으면 정보는 유지되지만 엑셀 명단에는 없습니다.',
+                                ),
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                              ),
+                              Wrap(
+                                spacing: 8,
+                                children: _toDelete
+                                    .map(
+                                      (s) => Chip(
+                                        label: Text(
+                                          s.name,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                        backgroundColor: Colors.white,
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               SizedBox(
@@ -304,7 +474,7 @@ class _BatchAddStudentDialogState extends State<BatchAddStudentDialog> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.save),
-                  label: Text(_isLoading ? '등록 중...' : '일괄 등록하기'),
+                  label: Text(_isLoading ? '처리 중...' : '일괄 적용하기'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     foregroundColor: Colors.white,

@@ -64,6 +64,56 @@ class ExcelUtils {
     return templates;
   }
 
+  /// 학생 명단 일괄 수정을 위해 ID를 포함한 엑셀 내보내기 [NEW]
+  static void exportStudentListForUpdate({
+    required List<StudentModel> students,
+    required String academyName,
+  }) {
+    var excel = Excel.createExcel();
+    Sheet sheet = excel['Sheet1'];
+
+    // 헤더 추가 - 첫 번째 열에 수정 금지 표시와 함께 ID 배치
+    List<CellValue> header = [
+      TextCellValue('수정금지_고유번호'),
+      TextCellValue('이름(수정금지)'),
+      TextCellValue('학년'),
+      TextCellValue('반'),
+      TextCellValue('번호'),
+      TextCellValue('보호자 연락처'),
+      TextCellValue('부'),
+      TextCellValue('메모'),
+    ];
+    sheet.appendRow(header);
+
+    for (var s in students) {
+      sheet.appendRow([
+        TextCellValue(s.id),
+        TextCellValue(s.name),
+        TextCellValue(s.grade?.toString() ?? ''),
+        TextCellValue(s.classNumber ?? ''),
+        TextCellValue(s.studentNumber ?? ''),
+        TextCellValue(s.parentPhone ?? ''),
+        TextCellValue(s.session?.toString() ?? ''),
+        TextCellValue(s.note ?? ''),
+      ]);
+    }
+
+    // 파일 저장
+    final bytes = excel.save();
+    if (bytes != null) {
+      final blob = html.Blob([Uint8List.fromList(bytes)]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final fileName =
+          "${academyName}_학생명단_수정용_${DateFormat('yyyyMMdd').format(DateTime.now())}.xlsx";
+
+      html.AnchorElement(href: url)
+        ..setAttribute("download", fileName)
+        ..click();
+
+      html.Url.revokeObjectUrl(url);
+    }
+  }
+
   /// 학생별 교재 배정(주문) 상세 내역을 엑셀로 내보내기
   static void exportStudentOrderHistory({
     required List<StudentProgressModel> progressList,

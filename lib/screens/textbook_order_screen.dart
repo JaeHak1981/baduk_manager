@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../utils/excel_utils.dart';
 import '../models/academy_model.dart';
 import '../models/student_model.dart';
+import '../models/student_progress_model.dart';
 import '../models/textbook_model.dart';
 import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
@@ -1852,6 +1854,48 @@ class _OrderHistoryDialogState extends State<_OrderHistoryDialog> {
                   icon: const Icon(Icons.refresh, size: 16),
                   label: const Text('새로고침'),
                 ),
+              TextButton.icon(
+                onPressed: () {
+                  final progressProvider = context.read<ProgressProvider>();
+                  final studentProvider = context.read<StudentProvider>();
+                  final academyProvider = context.read<AcademyProvider>();
+
+                  final academy = academyProvider.academies.firstWhere(
+                    (a) => a.id == widget.academyId,
+                    orElse: () => AcademyModel(
+                      id: '',
+                      name: '알수없음',
+                      type: AcademyType.academy,
+                      ownerId: '',
+                      createdAt: DateTime.now(),
+                    ),
+                  );
+
+                  // 모든 학생의 진도 데이터를 리스트로 변환
+                  List<StudentProgressModel> allProgress = [];
+                  studentProvider.students.forEach((student) {
+                    allProgress.addAll(
+                      progressProvider.getProgressForStudent(student.id),
+                    );
+                  });
+
+                  if (allProgress.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('내보낼 상세 내역이 없습니다.')),
+                    );
+                    return;
+                  }
+
+                  ExcelUtils.exportStudentOrderHistory(
+                    progressList: allProgress,
+                    students: studentProvider.students,
+                    academyName: academy.name,
+                  );
+                },
+                icon: const Icon(Icons.download, size: 16),
+                label: const Text('학생별 상세 내역 엑셀'),
+                style: TextButton.styleFrom(foregroundColor: Colors.green),
+              ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('닫기'),

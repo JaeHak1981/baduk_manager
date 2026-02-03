@@ -3,8 +3,6 @@ import 'package:uuid/uuid.dart';
 import '../models/education_report_model.dart';
 import '../services/education_report_service.dart';
 import '../utils/report_utils.dart';
-import '../services/ai_service.dart';
-import '../services/local_storage_service.dart';
 import '../utils/report_comment_utils.dart';
 import '../utils/default_report_templates.dart';
 
@@ -14,14 +12,12 @@ class EducationReportProvider with ChangeNotifier {
   List<EducationReportModel> _reports = [];
   List<CommentTemplateModel> _templates = [];
   bool _isLoading = false;
-  bool _isGenerating = false; // 생성 로딩 상태 추가
   String? _errorMessage;
   ReportTemplateType _selectedTemplateType = ReportTemplateType.classic;
 
   List<EducationReportModel> get reports => _reports;
   List<CommentTemplateModel> get templates => _templates;
   bool get isLoading => _isLoading;
-  bool get isGenerating => _isGenerating;
   String? get errorMessage => _errorMessage;
   ReportTemplateType get selectedTemplateType => _selectedTemplateType;
 
@@ -91,7 +87,6 @@ class EducationReportProvider with ChangeNotifier {
     required int attendanceCount,
     required int totalClasses,
     String? userInstructions,
-    bool isAiMode = true, // 명시적 AI 모드 파라미터 추가
   }) async {
     // 1. 성취도 점수 자동 산출 (교재 권수 등에 따른 베이스라인 + 가변성)
     final maxVolume = volumes.isNotEmpty
@@ -131,46 +126,7 @@ class EducationReportProvider with ChangeNotifier {
           : DefaultReportTemplates.getTemplates(),
     );
 
-    // AI 모드 가동 여부 확인
-    final storage = LocalStorageService();
-    final apiKey = await storage.getAiApiKey();
-    final modelName = await storage.getAiModelName();
-
-    if (isAiMode && apiKey != null && apiKey.isNotEmpty) {
-      _isGenerating = true;
-      notifyListeners();
-
-      try {
-        final aiService = AiService();
-        final aiComment = await aiService.generateReportComment(
-          apiKey: apiKey,
-          studentName: studentName,
-          textbookName: textbookNames.isNotEmpty ? textbookNames.first : '교재',
-          scores: scores,
-          attendanceRate: attendanceRate,
-          modelName: modelName ?? 'gemini-1.5-flash',
-          userInstructions: userInstructions,
-          referenceText: referenceText, // 고도화된 템플릿 문구를 참고용으로 전달
-          isFastProgress:
-              totalClasses > 0 && (attendanceCount / totalClasses) > 0.8,
-        );
-
-        if (aiComment != null) {
-          recommendedComment = aiComment;
-          source = 'ai';
-        } else {
-          recommendedComment = referenceText;
-        }
-      } catch (e) {
-        debugPrint('AI Generation Error: $e');
-        recommendedComment = referenceText;
-      } finally {
-        _isGenerating = false;
-        notifyListeners();
-      }
-    } else {
-      recommendedComment = referenceText;
-    }
+    recommendedComment = referenceText;
 
     _lastGenerationSource = source;
 

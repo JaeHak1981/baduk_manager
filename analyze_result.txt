@@ -1,0 +1,61 @@
+Analyzing education_report_screen.dart...                       
+
+   info • The import of 'package:flutter/services.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' • lib/screens/education_report_screen.dart:2:8 • unnecessary_import
+   info • The private field _selectedStudentIds could be 'final' • lib/screens/education_report_screen.dart:39:15 • prefer_final_fields
+   info • The private field _customStudentLevels could be 'final' • lib/screens/education_report_screen.dart:43:23 • prefer_final_fields
+   info • The private field _customScores could be 'final' • lib/screens/education_report_screen.dart:46:34 • prefer_final_fields
+   info • The private field _studentChartTypes could be 'final' • lib/screens/education_report_screen.dart:47:33 • prefer_final_fields
+   info • The private field _studentDetailTypes could be 'final' • lib/screens/education_report_screen.dart:48:31 • prefer_final_fields
+   info • The private field _customComments could be 'final' • lib/screens/education_report_screen.dart:52:23 • prefer_final_fields
+   info • The private field _studentLayouts could be 'final' • lib/screens/education_report_screen.dart:54:42 • prefer_final_fields
+   info • The private field _studentLoadingStates could be 'final' • lib/screens/education_report_screen.dart:68:21 • prefer_final_fields
+warning • A value for optional parameter 'instructions' isn't ever given • lib/screens/education_report_screen.dart:549:13 • unused_element_parameter
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:690:9 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:693:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:707:9 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:718:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:727:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:729:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:737:5 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:756:9 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:780:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:797:9 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:802:11 • avoid_print
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/education_report_screen.dart:806:24 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/education_report_screen.dart:922:40 • use_build_context_synchronously
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:954:17 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:956:19 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:958:19 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:961:19 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:963:19 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:965:19 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:972:19 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:975:21 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:984:19 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:1006:19 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:1009:21 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:1018:23 • avoid_print
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/education_report_screen.dart:1031:21 • use_build_context_synchronously
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:1074:19 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:1098:23 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:1105:25 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:1127:25 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:1163:25 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:1168:23 • avoid_print
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/education_report_screen.dart:1181:34 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/education_report_screen.dart:1183:42 • use_build_context_synchronously
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:1193:19 • avoid_print
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:1194:19 • avoid_print
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/education_report_screen.dart:1314:63 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/education_report_screen.dart:1318:59 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/education_report_screen.dart:1367:54 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/education_report_screen.dart:1914:33 • deprecated_member_use
+   info • Statements in an if should be enclosed in a block • lib/screens/education_report_screen.dart:2187:7 • curly_braces_in_flow_control_structures
+   info • Unnecessary use of 'toList' in a spread • lib/screens/education_report_screen.dart:2401:14 • unnecessary_to_list_in_spreads
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/education_report_screen.dart:2433:35 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/education_report_screen.dart:2440:37 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/education_report_screen.dart:2592:25 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/education_report_screen.dart:2623:40 • deprecated_member_use
+   info • Don't invoke 'print' in production code • lib/screens/education_report_screen.dart:2760:5 • avoid_print
+
+57 issues found. (ran in 1.4s)

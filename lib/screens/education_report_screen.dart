@@ -17,12 +17,12 @@ import 'components/doughnut_chart_widget.dart';
 import 'components/bar_vertical_chart_widget.dart';
 import 'components/bar_horizontal_chart_widget.dart';
 import 'components/resizable_draggable_wrapper.dart';
-import 'components/comment_grid_picker.dart';
 import '../providers/education_report_provider.dart';
 import '../providers/attendance_provider.dart';
 import '../models/attendance_model.dart';
 import '../utils/report_comment_utils.dart';
 import '../utils/default_report_templates.dart';
+import 'components/comment_grid_picker.dart';
 import '../services/local_storage_service.dart';
 import 'dart:async';
 
@@ -65,9 +65,6 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
   String? _pendingSaveStudentId; // 저장이 예약된 학생 ID
   bool _isExiting = false; // 뒤로 가기 중복 방지 플래그
 
-  bool _hasApiKey = false; // API 키 존재 여부 (UI 제어용)
-  bool _isAiMode = false; // AI 모드 On/Off 스위치 (기본값: Off)
-  bool _isAiGenerating = false; // AI 생성 중 여부 (일괄 생성 등에 사용)
   Map<String, bool> _studentLoadingStates = {}; // 학생별 로딩 상태
 
   @override
@@ -246,11 +243,6 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
           _saveLayoutToLocal(item.id);
         },
         layoutVersion: _layoutVersion,
-        hasApiKey: _hasApiKey,
-        isAiMode: _isAiMode,
-        isAiGenerating:
-            _studentLoadingStates[item.id] ?? false, // 개별 학생 로딩 상태 전달
-        onAiRegenerate: _regenerateSingleStudentComment,
       ),
     );
   }
@@ -294,7 +286,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                 width: double.maxFinite,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // 부 필터 칩 영역
                     const Text(
@@ -427,120 +419,10 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
   // --- AI 생성 로직 ---
 
   void _handleAiGenerationRequest() {
-    if (_isAiMode) {
-      // 이제 스위치를 켤 때 키 체크를 하므로, 여기에 왔다는 것은 키가 있다는 뜻
-      _showAiInstructionsDialog();
-    } else {
-      _batchRegenerateComments(null);
-    }
+    _batchRegenerateComments(null);
   }
 
-  void _showApiKeyRequiredDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.vpn_key, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('AI 설정 필요'),
-          ],
-        ),
-        content: const Text(
-          'AI 기능을 사용하려면 Gemini API 키를 먼저 등록해야 합니다.\n설정 화면으로 이동할까요?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('나중에 하기'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('[설정 > AI 설정] 메뉴에서 키를 등록해 주세요.'),
-                  duration: Duration(seconds: 5),
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('설정하러 가기'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAiInstructionsDialog() {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.auto_awesome, color: Colors.purple),
-            SizedBox(width: 8),
-            Text('AI 맞춤 일괄 요청'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '선택된 ${_selectedStudentIds.length}명의 학생에게 공통으로 적용할 요청 사항이 있나요?',
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              '(예: 칭찬 위주로, 단점 부드럽게 등)',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(
-                hintText: '비워두면 데이터를 분석해 자동으로 작성합니다.',
-                border: OutlineInputBorder(),
-              ),
-              onSubmitted: (val) {
-                Navigator.pop(context);
-                _batchRegenerateComments(val);
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _batchRegenerateComments(null);
-            },
-            child: const Text('바로 생성'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _batchRegenerateComments(controller.text.trim());
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('반영하여 생성'),
-          ),
-        ],
-      ),
-    );
-  }
+  // AI 관련 다이얼로그 제거됨
 
   Future<void> _batchRegenerateComments(String? instructions) async {
     if (_selectedStudentIds.isEmpty) {
@@ -550,7 +432,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       return;
     }
 
-    setState(() => _isAiGenerating = true);
+    setState(() => _isAiGeneratingInState = true);
 
     final reportProvider = context.read<EducationReportProvider>();
     final progressProvider = context.read<ProgressProvider>();
@@ -617,8 +499,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
             volumes: volumes,
             attendanceCount: presentCount,
             totalClasses: totalClasses,
-            userInstructions: _isAiMode ? instructions : null,
-            isAiMode: _isAiMode,
+            userInstructions: null,
           );
 
           if (mounted) {
@@ -641,12 +522,9 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       }
 
       if (mounted) {
-        final source = reportProvider.lastGenerationSource;
         String message;
         if (failCount == 0) {
-          message = source == 'ai'
-              ? '🤖 AI가 $successCount명의 의견을 작성했습니다.'
-              : '📝 시스템 문구로 $successCount명의 의견을 추천했습니다.';
+          message = '📝 시스템 문구로 $successCount명의 의견을 추천했습니다.';
         } else {
           message = '✅ 완료: $successCount명 성공, ❌ 실패: $failCount명';
         }
@@ -654,15 +532,13 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
-            backgroundColor: source == 'ai'
-                ? Colors.indigo
-                : (failCount > 0 ? Colors.red : Colors.grey[700]),
+            backgroundColor: (failCount > 0 ? Colors.red : Colors.grey[700]),
           ),
         );
       }
     } finally {
       if (mounted) {
-        setState(() => _isAiGenerating = false);
+        setState(() => _isAiGeneratingInState = false);
       }
     }
   }
@@ -670,16 +546,9 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
   Future<void> _regenerateSingleStudentComment({
     required String studentId,
     required String studentName,
-    String? instructions,
     TextEditingController? controller,
   }) async {
-    // 1. 모드 결정: 지시사항이 있으면 AI 재생성, 없으면 일반 Reroll(템플릿)
-    final bool isRequestedAi = instructions != null;
-
-    if (isRequestedAi && !_hasApiKey) {
-      _showApiKeyRequiredDialog();
-      return;
-    }
+    // AI 모드 제거됨
 
     // 학생별 로딩 시작
     setState(() {
@@ -728,15 +597,11 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
         volumes: volumes,
         attendanceCount: presentCount,
         totalClasses: totalClasses,
-        userInstructions: instructions, // AI 모드일 때만 전달됨
-        isAiMode: isRequestedAi, // 지시사항이 있을 때만 AI 모드 가동
+        userInstructions: null,
       );
 
       if (mounted) {
         setState(() {
-          if (!isRequestedAi) {
-            _customScores[studentId] = draft.scores;
-          }
           _customComments[studentId] = draft.teacherComment;
           _studentLoadingStates[studentId] = false;
         });
@@ -745,16 +610,10 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
           controller.text = draft.teacherComment;
         }
 
-        final source = reportProvider.lastGenerationSource;
-        final message = source == 'ai'
-            ? '🤖 AI가 새로운 의견을 작성했습니다.'
-            : '📝 시스템 문구로 추천했습니다.';
+        final message = '📝 시스템 문구로 추천했습니다.';
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: source == 'ai' ? Colors.indigo : Colors.grey[700],
-          ),
+          SnackBar(content: Text(message), backgroundColor: Colors.grey[700]),
         );
       }
     } catch (e) {
@@ -833,6 +692,8 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
       print('❌ Error in _loadAllStudentLayouts: $e');
     }
   }
+
+  bool _isAiGeneratingInState = false; // 일괄 생성 상태 관리를 위한 변수 재정의 (이름 변경)
 
   void _saveLayoutToLocal(String studentId) {
     _pendingSaveStudentId = studentId;
@@ -1009,7 +870,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                       )
                       .length;
 
-                  // 4. 해당 학생의 진도 데이터 필터링 (첫날 포함 로직으로 통일)
+                  // 4. 해당 학생의 진도 데이터 필터링
                   final progressList = progressProvider.getProgressForStudent(
                     student.id,
                   );
@@ -1032,7 +893,7 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                       .map((p) => p.volumeNumber)
                       .toList();
 
-                  // 5. 초안 생성 (EducationReportFormScreen과 동일한 generateDraft 사용)
+                  // 5. 초안 생성
                   final draft = await reportProvider.generateDraft(
                     academyId: widget.academy.id,
                     ownerId: widget.academy.ownerId,
@@ -1049,8 +910,8 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
 
                   if (mounted) {
                     setState(() {
-                      _customScores[student.id] = draft.scores;
                       _customComments[student.id] = draft.teacherComment;
+                      _customScores[student.id] = draft.scores;
                     });
                     successCount++;
                   }
@@ -1572,18 +1433,16 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                             const SizedBox(height: 12),
                             _buildActionButton(
                               context,
-                              label: _isAiGenerating
+                              label: _isAiGeneratingInState
                                   ? '생성 중...'
-                                  : (_isAiMode ? 'AI 문구 생성' : '문구 일괄 추천'),
-                              icon: _isAiGenerating
+                                  : '문구 일괄 추천',
+                              icon: _isAiGeneratingInState
                                   ? Icons.hourglass_top
-                                  : (_isAiMode
-                                        ? Icons.auto_awesome
-                                        : Icons.refresh),
-                              color: _isAiGenerating
+                                  : Icons.refresh,
+                              color: _isAiGeneratingInState
                                   ? Colors.grey
-                                  : (_isAiMode ? Colors.purple : Colors.blue),
-                              onPressed: _isAiGenerating
+                                  : Colors.blue,
+                              onPressed: _isAiGeneratingInState
                                   ? null
                                   : () {
                                       if (_selectedStudentIds.isEmpty) {
@@ -1963,18 +1822,6 @@ class _EducationReportPaper extends StatelessWidget {
   final ReportTemplateType templateType;
   final bool isPrinting;
 
-  // AI 관련 추가
-  final bool hasApiKey;
-  final bool isAiGenerating;
-  final Future<void> Function({
-    required String studentId,
-    required String studentName,
-    String? instructions,
-    TextEditingController? controller,
-  })
-  onAiRegenerate;
-  final bool isAiMode; // AI 모드 활성화 여부
-
   const _EducationReportPaper({
     super.key,
     required this.student,
@@ -2010,10 +1857,6 @@ class _EducationReportPaper extends StatelessWidget {
     this.templateType = ReportTemplateType.classic,
     required this.templates,
     this.isPrinting = false,
-    required this.hasApiKey,
-    required this.isAiGenerating,
-    required this.onAiRegenerate,
-    required this.isAiMode,
   });
 
   @override
@@ -2681,83 +2524,15 @@ class _EducationReportPaper extends StatelessWidget {
                   if (!isPrinting)
                     Row(
                       children: [
-                        if (hasApiKey && isAiMode)
-                          isAiGenerating
-                              ? const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 8),
-                                  child: SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.purple,
-                                    ),
-                                  ),
-                                )
-                              : IconButton(
-                                  icon: const Icon(
-                                    Icons.auto_awesome,
-                                    size: 16,
-                                    color: Colors.purple,
-                                  ),
-                                  onPressed: () {
-                                    final instructionsController =
-                                        TextEditingController();
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: const Text('AI 맞춤 요청'),
-                                        content: TextField(
-                                          controller: instructionsController,
-                                          autofocus: true,
-                                          decoration: const InputDecoration(
-                                            hintText: '특별한 요청 사항이 있나요?',
-                                            border: OutlineInputBorder(),
-                                          ),
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context),
-                                            child: const Text('취소'),
-                                          ),
-                                          ElevatedButton(
-                                            onPressed: () async {
-                                              Navigator.pop(context);
-                                              await onAiRegenerate(
-                                                studentId: student.id,
-                                                studentName: student.name,
-                                                instructions:
-                                                    instructionsController.text
-                                                        .trim()
-                                                        .isEmpty
-                                                    ? null
-                                                    : instructionsController
-                                                          .text
-                                                          .trim(),
-                                              );
-                                            },
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Colors.purple,
-                                              foregroundColor: Colors.white,
-                                            ),
-                                            child: const Text('AI 다시 작성'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                  tooltip: 'AI 다시 작성',
-                                ),
                         IconButton(
                           icon: const Icon(Icons.refresh, size: 16),
                           onPressed: onRerollComment,
                           tooltip: '새로 생성',
                         ),
                         IconButton(
-                          icon: const Icon(Icons.grid_view, size: 16),
+                          icon: const Icon(Icons.list_alt, size: 16),
                           onPressed: onOpenCommentPicker,
-                          tooltip: '문구 선택',
+                          tooltip: '직접 선택',
                         ),
                       ],
                     ),
@@ -2989,81 +2764,7 @@ class _EducationReportPaper extends StatelessWidget {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('$title 수정'),
-              if (studentId != null && hasApiKey)
-                TextButton.icon(
-                  onPressed: isAiGenerating
-                      ? null
-                      : () {
-                          // 맞춤 요청 다이얼로그 띄우기 (별도 다이얼로그)
-                          final instructionsController =
-                              TextEditingController();
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('AI 맞춤 요청'),
-                              content: TextField(
-                                controller: instructionsController,
-                                autofocus: true,
-                                decoration: const InputDecoration(
-                                  hintText: '특별한 요청 사항이 있나요?',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('취소'),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () async {
-                                    Navigator.pop(context);
-                                    // 대화방 다이얼로그의 로딩 상태를 반영하기 위해 setDialogState 호출
-                                    setDialogState(() {});
-                                    await onAiRegenerate(
-                                      studentId: studentId,
-                                      studentName: studentName ?? '',
-                                      instructions:
-                                          instructionsController.text
-                                              .trim()
-                                              .isEmpty
-                                          ? null
-                                          : instructionsController.text.trim(),
-                                      controller: controller,
-                                    );
-                                    setDialogState(() {});
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.purple,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                  child: const Text('AI 다시 작성'),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                  icon: isAiGenerating
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.purple,
-                          ),
-                        )
-                      : const Icon(Icons.auto_awesome, size: 16),
-                  label: Text(
-                    isAiGenerating ? '작성 중...' : 'AI 다시 작성',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  style: TextButton.styleFrom(foregroundColor: Colors.purple),
-                ),
-            ],
-          ),
+          title: Text('$title 수정'),
           content: SizedBox(
             width: 500,
             child: Column(

@@ -361,11 +361,8 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
               ),
             );
 
-            // 성공 시에만 화면 상태 초기화 (0권 상태로)
-            setState(() {
-              _orderEntries.clear();
-              _isManualEdit = false;
-            });
+            // 성공 시에만 화면 상태 초기화 (목록은 유지하되 0권 상태로)
+            await _initializeEntries();
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

@@ -8,6 +8,22 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  AuthService() {
+    _initializePersistence();
+  }
+
+  /// 웹에서 세션 영속성 설정 (탭을 닫으면 로그아웃)
+  Future<void> _initializePersistence() async {
+    if (kIsWeb) {
+      try {
+        await _auth.setPersistence(Persistence.SESSION);
+        debugPrint('Firebase Auth Persistence set to SESSION');
+      } catch (e) {
+        debugPrint('Error setting persistence: $e');
+      }
+    }
+  }
+
   /// 현재 로그인된 사용자
   User? get currentUser => _auth.currentUser;
 
@@ -84,6 +100,11 @@ class AuthService {
     required String password,
   }) async {
     try {
+      // [보안 강화] 로그인 전에 영속성 설정 재확인 (웹 전용)
+      if (kIsWeb) {
+        await _auth.setPersistence(Persistence.SESSION);
+      }
+
       // Firebase Authentication 로그인
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: email,

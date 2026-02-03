@@ -119,6 +119,41 @@ class PrintingService {
     }
   }
 
+  /// 저장할 디렉토리 선택
+  static Future<String?> selectDirectory() async {
+    try {
+      if (kIsWeb) return null; // 웹에서는 폴더 선택이 의미 없음
+
+      String? directoryPath = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: '통지표를 저장할 폴더를 선택하세요',
+      );
+
+      return directoryPath;
+    } catch (e) {
+      debugPrint('Error selecting directory: $e');
+      return null;
+    }
+  }
+
+  /// 특정 디렉토리에 이미지 저장
+  static Future<bool> saveImageToDirectory({
+    required Uint8List bytes,
+    required String directoryPath,
+    required String fileName,
+  }) async {
+    try {
+      if (kIsWeb) return false;
+
+      final filePath = '$directoryPath${Platform.pathSeparator}$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(bytes);
+      return true;
+    } catch (e) {
+      debugPrint('Error saving image to directory: $e');
+      return false;
+    }
+  }
+
   /// (기존 HTML 방식 보존) 단일 교육 통지표 인쇄/저장
   static Future<void> printReport({
     required EducationReportModel report,

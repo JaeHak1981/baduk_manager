@@ -1148,6 +1148,16 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                     return;
                   }
 
+                  // 2.5. 저장 폴더 선택 (모바일/데스크톱 전용)
+                  String? selectedDirectory;
+                  if (!kIsWeb) {
+                    selectedDirectory = await PrintingService.selectDirectory();
+                    if (selectedDirectory == null) {
+                      print('⏹️ Directory selection cancelled');
+                      return;
+                    }
+                  }
+
                   // 3. 진행률 다이얼로그 표시
                   if (!mounted) return;
 
@@ -1234,11 +1244,22 @@ class _EducationReportScreenState extends State<EducationReportScreen> {
                         continue;
                       }
 
-                      final success = await PrintingService.saveImageToFile(
-                        bytes: bytes,
-                        fileName:
-                            '교육통지표_${student.name}_${DateFormat('yyyyMM').format(DateTime.now())}.png',
-                      );
+                      final fileName =
+                          '교육통지표_${student.name}_${DateFormat('yyyyMM').format(DateTime.now())}.png';
+
+                      final bool success;
+                      if (kIsWeb || selectedDirectory == null) {
+                        success = await PrintingService.saveImageToFile(
+                          bytes: bytes,
+                          fileName: fileName,
+                        );
+                      } else {
+                        success = await PrintingService.saveImageToDirectory(
+                          bytes: bytes,
+                          directoryPath: selectedDirectory,
+                          fileName: fileName,
+                        );
+                      }
 
                       if (success) {
                         print('💾 Save success for ${student.name}');

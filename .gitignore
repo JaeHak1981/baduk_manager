@@ -55,3 +55,4 @@ firebase_options.dart
 .env
 .env.local
 .env.*.local
+releases/

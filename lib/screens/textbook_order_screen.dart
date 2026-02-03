@@ -284,7 +284,19 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
               widget.academy.id,
             );
 
-            // [NEW] 가독성 높은 결과 팝업 노출
+            // [NEW] 성공 팝업을 띄우기 전에 화면 상태를 즉시 0권으로 초기화 (즉각적인 피드백)
+            setState(() {
+              _isManualEdit = false;
+              for (var key in _orderEntries.keys) {
+                _orderEntries[key] = _OrderEntry(
+                  type: OrderType.none,
+                  textbook: null,
+                  volume: 1,
+                );
+              }
+            });
+
+            // [NEW] 가독성 높은 결과 팝업 노출 (이제 백그라운드는 이미 초기화된 상태)
             showDialog(
               context: context,
               builder: (context) => AlertDialog(

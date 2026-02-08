@@ -97,11 +97,19 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
   }
 
   List<StudentModel> getFilteredStudents(List<StudentModel> allStudents) {
-    if (_selectedSession == null) return allStudents;
-    return allStudents.where((s) {
-      if (_selectedSession == 0) return s.session == null || s.session == 0;
-      return s.session == _selectedSession;
+    // 1. 퇴원생(isDeleted)은 무조건 제외
+    final activeStudents = allStudents.where((s) => !s.isDeleted).toList();
+
+    // 2. 미배정 학생(session == null 또는 0) 제외
+    final assignedStudents = activeStudents.where((s) {
+      return s.session != null && s.session != 0;
     }).toList();
+
+    // 3. 특정 부 선택 필터링
+    if (_selectedSession == null) return assignedStudents;
+    return assignedStudents
+        .where((s) => s.session == _selectedSession)
+        .toList();
   }
 
   Future<void> moveSelectedStudents(
@@ -273,8 +281,14 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                       totalSessions: widget.academy.totalSessions,
                       selectedSession: _selectedSession,
                       students: studentProvider.students,
-                      onSessionSelected: (session) =>
-                          setState(() => _selectedSession = session),
+                      onSessionSelected: (session) => setState(() {
+                        // 필터 초기화: 이미 선택된 부를 다시 누르면 전체보기(null)로 전환
+                        if (_selectedSession == session) {
+                          _selectedSession = null;
+                        } else {
+                          _selectedSession = session;
+                        }
+                      }),
                       hasPendingChanges: attendanceProvider.hasPendingChanges,
                       onSave: () async {
                         final success = await attendanceProvider

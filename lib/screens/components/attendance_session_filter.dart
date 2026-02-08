@@ -33,27 +33,37 @@ class AttendanceSessionFilter extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  ChoiceChip(
-                    label: const Text('전체'),
-                    selected: selectedSession == null,
-                    onSelected: (_) => onSessionSelected(null),
-                  ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('미배정'),
-                    selected: selectedSession == 0,
-                    onSelected: (_) => onSessionSelected(0),
-                  ),
-                  ...List.generate(totalSessions, (i) => i + 1).map((s) {
-                    return Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: ChoiceChip(
-                        label: Text('$s부'),
-                        selected: selectedSession == s,
-                        onSelected: (_) => onSessionSelected(s),
-                      ),
+                  (() {
+                    // 활성 및 배정된 학생들만 카운트 대상으로 정의
+                    final validStudents = students.where((s) {
+                      return !s.isDeleted &&
+                          s.session != null &&
+                          s.session != 0;
+                    }).toList();
+
+                    return Row(
+                      children: [
+                        ChoiceChip(
+                          label: Text('전체(${validStudents.length})'),
+                          selected: selectedSession == null,
+                          onSelected: (_) => onSessionSelected(null),
+                        ),
+                        ...List.generate(totalSessions, (i) => i + 1).map((s) {
+                          final count = validStudents
+                              .where((st) => st.session == s)
+                              .length;
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: ChoiceChip(
+                              label: Text('$s부($count)'),
+                              selected: selectedSession == s,
+                              onSelected: (_) => onSessionSelected(s),
+                            ),
+                          );
+                        }),
+                      ],
                     );
-                  }),
+                  })(),
                 ],
               ),
             ),

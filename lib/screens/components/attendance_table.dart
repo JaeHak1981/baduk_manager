@@ -36,67 +36,66 @@ class AttendanceTable extends StatelessWidget {
       );
     }
 
-    // 학생 명단을 35명씩 청크로 나눔 (데이터 테이블 렌더링 최적화)
-    final chunks = _chunkList(students, 35);
+    final isWide = students.length > 10;
 
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 20),
-      itemCount: chunks.length,
-      itemBuilder: (context, index) {
-        return _buildDataTable(context, chunks[index]);
-      },
-    );
-  }
+    if (isWide) {
+      final halfLength = (students.length / 2).ceil();
+      final leftColumn = students.take(halfLength).toList();
+      final rightColumn = students.skip(halfLength).toList();
 
-  List<List<T>> _chunkList<T>(List<T> list, int chunkSize) {
-    List<List<T>> chunks = [];
-    for (var i = 0; i < list.length; i += chunkSize) {
-      chunks.add(
-        list.sublist(
-          i,
-          i + chunkSize > list.length ? list.length : i + chunkSize,
-        ),
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: _buildDataTable(context, leftColumn, 0)),
+          const VerticalDivider(width: 1),
+          Expanded(child: _buildDataTable(context, rightColumn, halfLength)),
+        ],
       );
     }
-    return chunks;
+
+    return SingleChildScrollView(child: _buildDataTable(context, students, 0));
   }
 
-  Widget _buildDataTable(BuildContext context, List<StudentModel> chunk) {
+  Widget _buildDataTable(
+    BuildContext context,
+    List<StudentModel> chunk,
+    int startOffset,
+  ) {
     return DataTable(
-      columnSpacing: 10,
-      horizontalMargin: 12,
-      dataRowMinHeight: 48,
-      dataRowMaxHeight: 48,
-      headingRowHeight: 40,
-      headingTextStyle: AppTheme.heading2.copyWith(fontSize: 13),
+      columnSpacing: 8,
+      horizontalMargin: 8,
+      dataRowMinHeight: 44,
+      dataRowMaxHeight: 44,
+      headingRowHeight: 36,
+      headingTextStyle: AppTheme.heading2.copyWith(fontSize: 12),
       columns: const [
-        DataColumn(label: SizedBox(width: 80, child: Text('이름'))),
-        DataColumn(label: SizedBox(width: 60, child: Text('학년/반'))),
-        DataColumn(label: SizedBox(width: 50, child: Text('부'))),
+        DataColumn(label: SizedBox(width: 25, child: Text('No.'))),
+        DataColumn(label: SizedBox(width: 60, child: Text('이름'))),
         DataColumn(label: Center(child: Text('출결'))),
         DataColumn(label: Expanded(child: Text('비고'))),
       ],
-      rows: chunk.map((student) {
-        final isSelected = selectedStudentIds.contains(student.id);
+      rows: List.generate(chunk.length, (index) {
+        final student = chunk[index];
         final record = attendanceMap[student.id];
+        final globalIndex = startOffset + index + 1;
 
         return DataRow(
-          selected: isSelected,
-          onSelectChanged: isSelectionMode
-              ? (value) => onStudentSelected(student.id)
-              : null,
           cells: [
             DataCell(
               Text(
-                student.name,
-                style: const TextStyle(fontWeight: FontWeight.w500),
+                '$globalIndex',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
               ),
             ),
             DataCell(
-              Text('${student.grade ?? ""} / ${student.classNumber ?? ""}'),
-            ),
-            DataCell(
-              Text(student.session == 0 ? "미배정" : "${student.session}부"),
+              Text(
+                student.name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
             ),
             DataCell(
               Center(
@@ -122,7 +121,7 @@ class AttendanceTable extends StatelessWidget {
             ),
           ],
         );
-      }).toList(),
+      }),
     );
   }
 }

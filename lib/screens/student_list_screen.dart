@@ -317,12 +317,12 @@ class _StudentListScreenState extends State<StudentListScreen> {
           return Column(
             children: [
               if (widget.academy.totalSessions > 1) _buildSessionFilter(),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final isWide = constraints.maxWidth > 800;
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isWide = constraints.maxWidth > 800;
 
-                  return Expanded(
-                    child: Column(
+                    return Column(
                       children: [
                         // 1. 고정 헤더 (Sticky Header)
                         _buildStickyHeader(isWide),
@@ -360,9 +360,9 @@ class _StudentListScreenState extends State<StudentListScreen> {
                                 ),
                         ),
                       ],
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ],
           );

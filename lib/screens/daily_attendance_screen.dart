@@ -37,6 +37,7 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
   DateTime _selectedDate = DateTime.now();
   DateTime _focusedDay = DateTime.now();
   int? _selectedSession;
+  bool _isExtraLessonMode = false; // 보강 수업 모드 (수업 없는 날 강제 활성화)
 
   final Set<String> selectedStudentIds = {};
   bool isSelectionMode = false;
@@ -257,6 +258,7 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                 final oldMonth = _selectedDate.month;
                 _selectedDate = selectedDay;
                 _focusedDay = focusedDay;
+                _isExtraLessonMode = false; // 날짜 변경 시 보강 모드 초기화
                 if (oldMonth != _selectedDate.month) {
                   _loadData();
                 }
@@ -332,9 +334,20 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                       final isAcademyHoliday = context
                           .watch<ScheduleProvider>()
                           .isDateHoliday(_selectedDate);
+                      final isLessonDay = widget.academy.lessonDays.contains(
+                        _selectedDate.weekday,
+                      );
 
-                      if (holidayName != null || isAcademyHoliday) {
-                        return _buildHolidayView(holidayName);
+                      // 수업이 없는 날이거나 휴일인 경우 (보강 모드가 아닐 때만 차단)
+                      if ((!isLessonDay ||
+                              holidayName != null ||
+                              isAcademyHoliday) &&
+                          !_isExtraLessonMode) {
+                        return _buildNoLessonView(
+                          holidayName: holidayName,
+                          isAcademyHoliday: isAcademyHoliday,
+                          isLessonDay: isLessonDay,
+                        );
                       }
 
                       return AttendanceTable(
@@ -346,6 +359,8 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                         isSelectionMode: isSelectionMode,
                         selectedStudentIds: selectedStudentIds,
                         onStudentSelected: toggleSelection,
+                        academyId: widget.academy.id,
+                        lessonDays: widget.academy.lessonDays,
                       );
                     },
                   ),
@@ -358,21 +373,70 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
     );
   }
 
-  Widget _buildHolidayView(String? holidayName) {
+  Widget _buildNoLessonView({
+    String? holidayName,
+    bool isAcademyHoliday = false,
+    bool isLessonDay = true,
+  }) {
+    String mainMessage = '';
+    String subMessage = '출석 처리가 필요하지 않은 날입니다.';
+
+    // 정기 수업 요일 이름 매핑
+    final weekdayNames = ['월', '화', '수', '목', '금', '토', '일'];
+    final lessonDayNames = widget.academy.lessonDays.isEmpty
+        ? '미지정'
+        : widget.academy.lessonDays.map((d) => weekdayNames[d - 1]).join(', ');
+
+    if (holidayName != null) {
+      mainMessage =
+          '${_selectedDate.month}월 ${_selectedDate.day}일은 $holidayName입니다.';
+    } else if (isAcademyHoliday) {
+      mainMessage = '${_selectedDate.month}월 ${_selectedDate.day}일은 학원 휴강일입니다.';
+    } else if (!isLessonDay) {
+      mainMessage = '오늘은 정기 수업이 없는 날입니다.';
+      subMessage = '${widget.academy.name}은(는) $lessonDayNames요일 수업일입니다.';
+    }
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.event_busy, size: 64, color: AppTheme.errorColor),
+          Icon(
+            !isLessonDay ? Icons.calendar_today_outlined : Icons.event_busy,
+            size: 64,
+            color: Colors.grey.shade400,
+          ),
           const SizedBox(height: 16),
           Text(
-            holidayName != null
-                ? '${_selectedDate.month}월 ${_selectedDate.day}일은 $holidayName입니다.'
-                : '${_selectedDate.month}월 ${_selectedDate.day}일은 학원 휴강일입니다.',
-            style: AppTheme.heading1,
+            mainMessage,
+            style: AppTheme.heading1.copyWith(color: Colors.black87),
           ),
           const SizedBox(height: 8),
-          const Text('출석 처리가 필요하지 않습니다.', style: AppTheme.bodyText),
+          Text(
+            subMessage,
+            style: AppTheme.bodyText.copyWith(color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 32),
+          // 보강 수업 입력 버튼
+          OutlinedButton.icon(
+            onPressed: () {
+              setState(() {
+                _isExtraLessonMode = true;
+              });
+            },
+            icon: const Icon(Icons.add_task),
+            label: const Text('보강 수업 기록하기'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              side: BorderSide(color: Colors.blue.shade300),
+              foregroundColor: Colors.blue.shade700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '특별한 수업이 있는 경우 버튼을 눌러 출결을 입력할 수 있습니다.',
+            style: AppTheme.caption.copyWith(fontSize: 11),
+          ),
         ],
       ),
     );

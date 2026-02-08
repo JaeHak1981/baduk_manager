@@ -90,6 +90,53 @@ class ScheduleProvider with ChangeNotifier {
     }
   }
 
+  /// 기간별 휴강 설정/해제
+  Future<void> setHolidayRange({
+    required String academyId,
+    required DateTime startDate,
+    required DateTime endDate,
+    required String? reason, // null이면 휴강 해제
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      // 1. 기간 내 모든 날짜 추출
+      List<DateTime> dates = [];
+      DateTime current = startDate;
+      while (!current.isAfter(endDate)) {
+        dates.add(current);
+        current = current.add(const Duration(days: 1));
+      }
+
+      // 2. 일괄 처리 수행
+      await _service.setHolidayBatch(
+        academyId: academyId,
+        dates: dates,
+        reason: reason,
+      );
+
+      // 3. 영향받은 모든 월 재로딩 (월별로 유니크한 연/월 추출)
+      final Map<String, List<int>> affectedMonths = {};
+      for (var d in dates) {
+        affectedMonths["${d.year}_${d.month}"] = [d.year, d.month];
+      }
+
+      for (var monthData in affectedMonths.values) {
+        await loadSchedule(
+          academyId: academyId,
+          year: monthData[0],
+          month: monthData[1],
+        );
+      }
+    } catch (e) {
+      debugPrint('Error setting holiday range: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// 특정 날짜가 휴강인지 확인
   bool isHoliday(int day) {
     return _currentMonthSchedule?.holidays.containsKey(day) ?? false;

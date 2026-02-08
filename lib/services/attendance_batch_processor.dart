@@ -3,7 +3,7 @@ import '../utils/date_extensions.dart';
 
 /// 출결 관련 복잡한 일괄 처리 로직을 담당하는 도메인 서비스
 class AttendanceBatchProcessor {
-  /// 기간별 출결 레코드 생성 (주말 제외 옵션 포함)
+  /// 기간별 출결 레코드 생성 (수업 요일 필터 포함)
   static List<AttendanceRecord> createRecordsForPeriod({
     required String studentId,
     required String academyId,
@@ -11,7 +11,8 @@ class AttendanceBatchProcessor {
     required DateTime startDate,
     required DateTime endDate,
     required AttendanceType type,
-    bool skipWeekends = true,
+    List<int>? lessonDays,
+    bool applyOnlyLessonDays = true,
     String? note = '[일괄 처리]',
   }) {
     final List<AttendanceRecord> records = [];
@@ -19,12 +20,12 @@ class AttendanceBatchProcessor {
     final last = endDate.startOfDay;
 
     while (!current.isAfter(last)) {
-      // 주말 제외 로직
-      if (skipWeekends &&
-          (current.weekday == DateTime.saturday ||
-              current.weekday == DateTime.sunday)) {
-        current = current.add(const Duration(days: 1));
-        continue;
+      // 수업 요일 필터링 (가이드라인에 따라 academy.lessonDays 참조)
+      if (applyOnlyLessonDays && lessonDays != null) {
+        if (!lessonDays.contains(current.weekday)) {
+          current = current.add(const Duration(days: 1));
+          continue;
+        }
       }
 
       records.add(

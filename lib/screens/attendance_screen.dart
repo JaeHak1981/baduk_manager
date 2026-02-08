@@ -15,6 +15,7 @@ import '../constants/ui_constants.dart';
 import 'components/statistics_dialog.dart';
 import 'components/attendance_calendar.dart';
 import 'components/attendance_session_filter.dart';
+import 'components/batch_attendance_dialog.dart';
 
 class AttendanceScreen extends StatefulWidget {
   final AcademyModel academy;
@@ -353,7 +354,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
                     ),
                     const DataColumn(
                       label: SizedBox(
-                        width: 50,
+                        width: 60,
                         child: Text(
                           '이름',
                           style: TextStyle(
@@ -405,6 +406,16 @@ class AttendanceScreenState extends State<AttendanceScreen>
                         width: 50,
                         child: Text(
                           '출석율',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                    const DataColumn(
+                      label: SizedBox(
+                        width: 65,
+                        child: Text(
+                          '일괄',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 12),
                         ),
@@ -474,7 +485,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
                                 ? () => toggleSelection(student.id)
                                 : null,
                             child: Container(
-                              width: 50,
+                              width: 60,
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 student.name,
@@ -544,6 +555,46 @@ class AttendanceScreenState extends State<AttendanceScreen>
                           ),
                         ),
                         DataCell(
+                          Container(
+                            width: 65,
+                            alignment: Alignment.center,
+                            child: TextButton(
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(60, 30),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              onPressed: () async {
+                                final result = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => BatchAttendanceDialog(
+                                    student: student,
+                                    academyId: widget.academy.id,
+                                    ownerId: ownerId,
+                                    initialDate: DateTime(
+                                      _currentYear,
+                                      _currentMonth,
+                                      1,
+                                    ),
+                                    lessonDays: widget.academy.lessonDays,
+                                  ),
+                                );
+                                if (result == true && context.mounted) {
+                                  // 추가 작업이 필요하다면 여기에 작성
+                                }
+                              },
+                              child: const Text(
+                                '일괄',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
                           _buildRemarkCell(
                             context,
                             attendanceProvider,
@@ -582,13 +633,56 @@ class AttendanceScreenState extends State<AttendanceScreen>
         )
         .toList();
     monthRecords.sort((a, b) => a.timestamp.day.compareTo(b.timestamp.day));
-    final combinedNotes = monthRecords
-        .map((r) => "${r.timestamp.day}일: ${r.note}")
-        .join(" / ");
+
+    if (monthRecords.isEmpty) {
+      return const SizedBox(
+        width: 150,
+        child: Text("-", style: TextStyle(fontSize: 11, color: Colors.grey)),
+      );
+    }
+
+    // 연속된 날짜와 동일한 내용 그룹화 로직
+    List<String> groupedNotes = [];
+    if (monthRecords.isNotEmpty) {
+      int startDay = monthRecords[0].timestamp.day;
+      int lastDay = startDay;
+      String currentNote = monthRecords[0].note!;
+
+      for (int i = 1; i < monthRecords.length; i++) {
+        final r = monthRecords[i];
+        final day = r.timestamp.day;
+        final note = r.note!;
+
+        // 날짜가 연속되고 내용이 같으면 그룹 유지
+        if (day == lastDay + 1 && note == currentNote) {
+          lastDay = day;
+        } else {
+          // 그룹 종료 및 추가
+          if (startDay == lastDay) {
+            groupedNotes.add("$startDay일: $currentNote");
+          } else {
+            groupedNotes.add("$startDay~$lastDay일: $currentNote");
+          }
+          // 새 그룹 시작
+          startDay = day;
+          lastDay = day;
+          currentNote = note;
+        }
+      }
+      // 마지막 그룹 추가
+      if (startDay == lastDay) {
+        groupedNotes.add("$startDay일: $currentNote");
+      } else {
+        groupedNotes.add("$startDay~$lastDay일: $currentNote");
+      }
+    }
+
+    final combinedNotes = groupedNotes.join(" / ");
+
     return SizedBox(
       width: 150,
       child: Text(
-        combinedNotes.isEmpty ? "-" : combinedNotes,
+        combinedNotes,
         style: const TextStyle(fontSize: 11, color: Colors.black87),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,

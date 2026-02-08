@@ -294,7 +294,9 @@ class AttendanceProvider extends BaseProvider {
     required DateTime startDate,
     required DateTime endDate,
     required AttendanceType type,
-    bool skipWeekends = true,
+    String? note,
+    List<int>? lessonDays,
+    bool applyOnlyLessonDays = true,
   }) async {
     return await runAsync(() async {
           try {
@@ -305,7 +307,9 @@ class AttendanceProvider extends BaseProvider {
               startDate: startDate,
               endDate: endDate,
               type: type,
-              skipWeekends: skipWeekends,
+              note: note,
+              lessonDays: lessonDays,
+              applyOnlyLessonDays: applyOnlyLessonDays,
             );
 
             if (records.isNotEmpty) {
@@ -343,7 +347,9 @@ class AttendanceProvider extends BaseProvider {
                 startDate: startDate,
                 endDate: endDate,
                 type: type,
-                skipWeekends: skipWeekends,
+                note: note,
+                lessonDays: lessonDays,
+                applyOnlyLessonDays: applyOnlyLessonDays,
               ),
             );
             return false;

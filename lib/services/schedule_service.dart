@@ -91,4 +91,60 @@ class ScheduleService {
 
     await saveSchedule(newSchedule);
   }
+
+  /// 여러 날짜를 한 번에 휴강 설정/해제
+  Future<void> setHolidayBatch({
+    required String academyId,
+    required List<DateTime> dates,
+    required String? reason, // null이면 휴강 해제
+  }) async {
+    // 1. 월별로 날짜 그룹화
+    final Map<String, List<int>> monthlyGroups = {}; // Key: "year_month"
+    for (var date in dates) {
+      final key = "${date.year}_${date.month}";
+      monthlyGroups.putIfAbsent(key, () => []).add(date.day);
+    }
+
+    // 2. 각 월별로 처리
+    for (var entry in monthlyGroups.entries) {
+      final parts = entry.key.split('_');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final days = entry.value;
+
+      final currentSchedule = await getMonthlySchedule(
+        academyId: academyId,
+        year: year,
+        month: month,
+      );
+
+      final holidays = currentSchedule != null
+          ? Map<int, String>.from(currentSchedule.holidays)
+          : <int, String>{};
+
+      for (var day in days) {
+        if (reason == null) {
+          holidays.remove(day);
+        } else {
+          holidays[day] = reason;
+        }
+      }
+
+      final newSchedule =
+          currentSchedule?.copyWith(
+            holidays: holidays,
+            updatedAt: DateTime.now(),
+          ) ??
+          AcademyScheduleModel(
+            id: '',
+            academyId: academyId,
+            year: year,
+            month: month,
+            holidays: holidays,
+            updatedAt: DateTime.now(),
+          );
+
+      await saveSchedule(newSchedule);
+    }
+  }
 }

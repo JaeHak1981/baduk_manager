@@ -7,7 +7,9 @@ import '../models/student_model.dart';
 import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
 import '../providers/attendance_provider.dart';
+import '../providers/schedule_provider.dart';
 import '../models/attendance_model.dart';
+import '../utils/holiday_helper.dart';
 import 'add_student_screen.dart';
 import 'textbook_center_screen.dart';
 import 'attendance_tab_screen.dart';
@@ -86,6 +88,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
   }
 
   void _loadData() {
+    final now = DateTime.now();
     context.read<StudentProvider>().loadStudents(
       widget.academy.id,
       ownerId: widget.academy.ownerId,
@@ -94,6 +97,20 @@ class _StudentListScreenState extends State<StudentListScreen> {
     context.read<ProgressProvider>().loadAcademyProgress(
       widget.academy.id,
       ownerId: widget.academy.ownerId,
+    );
+    // 월간 출석 데이터 로드
+    context.read<AttendanceProvider>().loadMonthlyAttendance(
+      academyId: widget.academy.id,
+      ownerId: widget.academy.ownerId,
+      year: now.year,
+      month: now.month,
+      showLoading: false,
+    );
+    // 일정 데이터 로드
+    context.read<ScheduleProvider>().loadSchedule(
+      academyId: widget.academy.id,
+      year: now.year,
+      month: now.month,
     );
   }
 
@@ -1006,8 +1023,6 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
         .getProgressForStudent(widget.student.id)
         .where((p) => !p.isCompleted)
         .toList();
-    // 오늘의 출석 정보
-    final todayRecord = attendanceProvider.getTodayRecord(widget.student.id);
 
     return Container(
       height: 52, // 고정 높이로 밀도 최적화
@@ -1144,45 +1159,73 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                 ),
               ),
 
-              // 5. [출석상태] 영역 (65)
+              // 5. [출석율] 영역 (65)
               SizedBox(
                 width: 65,
-                child: todayRecord == null
-                    ? const SizedBox()
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            todayRecord.type == AttendanceType.present
-                                ? Icons.check_circle
-                                : (todayRecord.type == AttendanceType.absent
-                                      ? Icons.cancel
-                                      : Icons.access_time),
-                            size: 14,
-                            color: todayRecord.type == AttendanceType.present
-                                ? Colors.green
-                                : (todayRecord.type == AttendanceType.absent
-                                      ? Colors.red
-                                      : Colors.orange),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            todayRecord.type == AttendanceType.present
-                                ? '출석'
-                                : (todayRecord.type == AttendanceType.absent
-                                      ? '결석'
-                                      : '지각'),
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: todayRecord.type == AttendanceType.present
-                                  ? Colors.green
-                                  : (todayRecord.type == AttendanceType.absent
-                                        ? Colors.red
-                                        : Colors.orange),
-                            ),
-                          ),
-                        ],
+                child: () {
+                  final now = DateTime.now();
+                  final scheduleProvider = context.watch<ScheduleProvider>();
+                  final monthlyRecords = attendanceProvider.monthlyRecords
+                      .where((r) => r.studentId == widget.student.id)
+                      .toList();
+
+                  // 이번 달 실제 수업 일수 계산 (오늘까지 기준 또는 전체 달 기준?)
+                  // 선생님이 현재까지의 성실도를 보기 원하므로 오늘까지의 수업일수 기준으로 계산
+                  int totalLessonDaysCount = 0;
+                  // 오늘까지만 계산할지, 한 달 전체를 볼지 결정. 보통 '출석율'은 현재까지 진행된 수업 대비를 보여줌.
+                  final targetDay = now.day;
+
+                  for (int day = 1; day <= targetDay; day++) {
+                    final date = DateTime(now.year, now.month, day);
+                    // 정기 수업일이고, 공휴일이 아니며, 학원 휴강일이 아닌 경우
+                    if (widget.academy.lessonDays.contains(date.weekday) &&
+                        !HolidayHelper.isHoliday(date) &&
+                        !scheduleProvider.isDateHoliday(date)) {
+                      totalLessonDaysCount++;
+                    }
+                  }
+
+                  if (totalLessonDaysCount == 0) {
+                    return const Center(
+                      child: Text(
+                        '-%',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
                       ),
+                    );
+                  }
+
+                  final presentCount = monthlyRecords.where((r) {
+                    return r.timestamp.year == now.year &&
+                        r.timestamp.month == now.month &&
+                        (r.type == AttendanceType.present ||
+                            r.type == AttendanceType.late);
+                  }).length;
+
+                  final rate = (presentCount / totalLessonDaysCount * 100)
+                      .toInt();
+
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        '출석율',
+                        style: TextStyle(fontSize: 8, color: Colors.grey),
+                      ),
+                      Text(
+                        '$rate%',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: rate >= 90
+                              ? Colors.blue.shade700
+                              : (rate >= 70
+                                    ? Colors.orange.shade700
+                                    : Colors.red.shade700),
+                        ),
+                      ),
+                    ],
+                  );
+                }(),
               ),
 
               // 6. [관리버튼] 영역 (160)

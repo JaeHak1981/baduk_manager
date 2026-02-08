@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../../models/attendance_model.dart';
 import '../../models/student_model.dart';
 import '../../providers/attendance_provider.dart';
 import '../../config/app_theme.dart';
-import '../../utils/date_extensions.dart';
 
 class BatchAttendanceDialog extends StatefulWidget {
   final StudentModel student;
   final String academyId;
   final String ownerId;
   final DateTime initialDate;
+  final List<int> lessonDays;
 
   const BatchAttendanceDialog({
     super.key,
@@ -18,6 +19,7 @@ class BatchAttendanceDialog extends StatefulWidget {
     required this.academyId,
     required this.ownerId,
     required this.initialDate,
+    required this.lessonDays,
   });
 
   @override
@@ -25,91 +27,153 @@ class BatchAttendanceDialog extends StatefulWidget {
 }
 
 class _BatchAttendanceDialogState extends State<BatchAttendanceDialog> {
-  late DateTime _startDate;
-  late DateTime _endDate;
+  DateTime? _rangeStart;
+  DateTime? _rangeEnd;
+  DateTime _focusedDay = DateTime.now();
   AttendanceType _selectedType = AttendanceType.absent;
-  bool _skipWeekends = true;
+  bool _applyOnlyLessonDays = true;
+  final TextEditingController _noteController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _startDate = widget.initialDate;
-    _endDate = widget.initialDate.add(const Duration(days: 4)); // 기본 5일(한 주)
+    _focusedDay = widget.initialDate;
+    _rangeStart = widget.initialDate;
+    _rangeEnd = widget.initialDate.add(const Duration(days: 4));
   }
 
-  Future<void> _selectDateRange() async {
-    final DateTimeRange? picked = await showDateRangePicker(
-      context: context,
-      initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-      helpText: '일괄 처리 기간 선택',
-      saveText: '선택됨',
-    );
-
-    if (picked != null) {
-      setState(() {
-        _startDate = picked.start;
-        _endDate = picked.end;
-      });
-    }
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final firstDayOfMonth = DateTime(
+      widget.initialDate.year,
+      widget.initialDate.month,
+      1,
+    );
+    final lastDayOfMonth = DateTime(
+      widget.initialDate.year,
+      widget.initialDate.month + 1,
+      0,
+    );
+
     return AlertDialog(
       title: Text('[${widget.student.name}] 기간별 일괄 출결'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('기간 선택', style: AppTheme.heading2),
-            const SizedBox(height: 8),
-            InkWell(
-              onTap: _selectDateRange,
-              child: Container(
-                padding: const EdgeInsets.all(12),
+      content: SizedBox(
+        width: 350, // 달력이 잘리지 않도록 너비 확보
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('1. 기간 선택', style: AppTheme.heading2),
+              const SizedBox(height: 8),
+              // 다이얼로그 내 직접 달력 노출
+              Container(
                 decoration: BoxDecoration(
                   border: Border.all(color: AppTheme.borderColor),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.date_range, size: 20),
-                    const SizedBox(width: 12),
-                    Text(
-                      '${_startDate.toDisplayString()} ~ ${_endDate.toDisplayString()}',
+                child: TableCalendar(
+                  locale: 'ko_KR',
+                  firstDay: firstDayOfMonth,
+                  lastDay: lastDayOfMonth,
+                  focusedDay: _focusedDay,
+                  selectedDayPredicate: (day) => isSameDay(_rangeStart, day),
+                  rangeStartDay: _rangeStart,
+                  rangeEndDay: _rangeEnd,
+                  rangeSelectionMode: RangeSelectionMode.enforced,
+                  calendarFormat: CalendarFormat.month,
+                  headerStyle: const HeaderStyle(
+                    formatButtonVisible: false,
+                    titleCentered: true,
+                    titleTextStyle: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
                     ),
-                  ],
+                    leftChevronIcon: Icon(Icons.chevron_left, size: 20),
+                    rightChevronIcon: Icon(Icons.chevron_right, size: 20),
+                  ),
+                  daysOfWeekHeight: 20,
+                  rowHeight: 35,
+                  calendarStyle: CalendarStyle(
+                    todayDecoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                    ),
+                    rangeStartDecoration: const BoxDecoration(
+                      color: AppTheme.primaryColor,
+                      shape: BoxShape.circle,
+                    ),
+                    rangeEndDecoration: const BoxDecoration(
+                      color: AppTheme.primaryColor,
+                      shape: BoxShape.circle,
+                    ),
+                    rangeHighlightColor: AppTheme.primaryColor.withOpacity(0.1),
+                    withinRangeTextStyle: const TextStyle(color: Colors.black),
+                    outsideDaysVisible: false,
+                    defaultTextStyle: const TextStyle(fontSize: 12),
+                    weekendTextStyle: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.red,
+                    ),
+                  ),
+                  onRangeSelected: (start, end, focusedDay) {
+                    setState(() {
+                      _rangeStart = start;
+                      _rangeEnd = end;
+                      _focusedDay = focusedDay;
+                    });
+                  },
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            const Text('출결 상태', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatusChip(AttendanceType.absent, '결석', Colors.red),
-                _buildStatusChip(
-                  AttendanceType.manual,
-                  '공결/기타',
-                  Colors.blueGrey,
+              const SizedBox(height: 20),
+              const Text('2. 출결 상태', style: AppTheme.heading2),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStatusChip(AttendanceType.absent, '결석', Colors.red),
+                  _buildStatusChip(AttendanceType.present, '출석', Colors.green),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Text('3. 비고 (사유)', style: AppTheme.heading2),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _noteController,
+                decoration: InputDecoration(
+                  hintText: '예: 가족 여행, 병가 등',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                 ),
-                _buildStatusChip(AttendanceType.late, '지각', Colors.orange),
-              ],
-            ),
-            const SizedBox(height: 20),
-            CheckboxListTile(
-              title: const Text('주말(토/일) 제외'),
-              value: _skipWeekends,
-              onChanged: (val) => setState(() => _skipWeekends = val ?? true),
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              dense: true,
-            ),
-          ],
+                style: const TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              CheckboxListTile(
+                title: const Text('수업 일수만 적용 (권장)'),
+                subtitle: const Text(
+                  '정해진 수업 요일에만 출결을 기록합니다.',
+                  style: TextStyle(fontSize: 11),
+                ),
+                value: _applyOnlyLessonDays,
+                onChanged: (val) =>
+                    setState(() => _applyOnlyLessonDays = val ?? true),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                dense: true,
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -119,15 +183,25 @@ class _BatchAttendanceDialogState extends State<BatchAttendanceDialog> {
         ),
         ElevatedButton(
           onPressed: () async {
+            if (_rangeStart == null || _rangeEnd == null) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('기간을 선택해주세요.')));
+              return;
+            }
             final provider = context.read<AttendanceProvider>();
             final success = await provider.updateAttendanceForPeriod(
               studentId: widget.student.id,
               academyId: widget.academyId,
               ownerId: widget.ownerId,
-              startDate: _startDate,
-              endDate: _endDate,
+              startDate: _rangeStart!,
+              endDate: _rangeEnd!,
               type: _selectedType,
-              skipWeekends: _skipWeekends,
+              note: _noteController.text.trim().isEmpty
+                  ? null
+                  : _noteController.text.trim(),
+              lessonDays: widget.lessonDays,
+              applyOnlyLessonDays: _applyOnlyLessonDays,
             );
 
             if (success && mounted) {

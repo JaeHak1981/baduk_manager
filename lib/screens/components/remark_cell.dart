@@ -9,6 +9,7 @@ class RemarkCell extends StatefulWidget {
   final String ownerId;
   final DateTime date;
   final String initialNote;
+  final double? width;
 
   const RemarkCell({
     super.key,
@@ -18,6 +19,7 @@ class RemarkCell extends StatefulWidget {
     required this.ownerId,
     required this.date,
     required this.initialNote,
+    this.width,
   });
 
   @override
@@ -78,7 +80,7 @@ class _RemarkCellState extends State<RemarkCell> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 150,
+      width: widget.width ?? 150,
       child: TextField(
         controller: _controller,
         focusNode: _focusNode,

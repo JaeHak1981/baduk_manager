@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="baduk_textbook_manager"
+        android:label="원생 관리 시스템"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity

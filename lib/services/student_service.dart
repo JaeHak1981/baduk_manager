@@ -30,16 +30,7 @@ class StudentService {
     }
 
     final snapshot = await query.orderBy('name').get();
-
-    final students = snapshot.docs
-        .map((doc) => StudentModel.fromFirestore(doc))
-        .toList();
-
-    if (includeDeleted) {
-      return students;
-    } else {
-      return students.where((s) => s.isDeleted != true).toList();
-    }
+    return snapshot.docs.map((doc) => StudentModel.fromFirestore(doc)).toList();
   }
 
   /// 특정 기관의 학생 목록 스트림 (실시간 업데이트)

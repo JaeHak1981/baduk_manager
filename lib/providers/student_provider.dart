@@ -11,9 +11,12 @@ class StudentProvider with ChangeNotifier {
   bool _showDeleted = false; // [ADDED] 종료생 보기 여부
   String? _errorMessage;
 
-  List<StudentModel> get students => _students;
+  List<StudentModel> get students => _showDeleted
+      ? _students.where((s) => s.isDeleted).toList()
+      : _students.where((s) => !s.isDeleted).toList();
+  List<StudentModel> get allStudents => _students;
   bool get isLoading => _isLoading;
-  bool get showDeleted => _showDeleted; // [ADDED]
+  bool get showDeleted => _showDeleted;
   String? get errorMessage => _errorMessage;
 
   /// 종료생 보기 토글 [NEW]
@@ -26,7 +29,7 @@ class StudentProvider with ChangeNotifier {
   Future<void> loadStudents(
     String academyId, {
     String? ownerId,
-    bool? includeDeleted,
+    bool? includeDeleted, // Deprecated, always includes all
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -36,7 +39,6 @@ class StudentProvider with ChangeNotifier {
       _students = await _studentService.getStudentsByAcademy(
         academyId,
         ownerId: ownerId,
-        includeDeleted: includeDeleted ?? _showDeleted,
       );
     } catch (e) {
       _errorMessage = '학생 목록을 불러오지 못했습니다: $e';

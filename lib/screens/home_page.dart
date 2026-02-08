@@ -108,7 +108,7 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('바둑 학원 관리 시스템'),
+        title: const Text('원생 관리 시스템'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(

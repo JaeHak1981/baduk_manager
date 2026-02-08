@@ -42,6 +42,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
     context.read<StudentProvider>().loadStudents(
       widget.academy.id,
       ownerId: widget.academy.ownerId,
+      includeDeleted: true, // 항상 전체(퇴원생 포함) 로드하여 카운트 정확히 표시
     );
     // [Bulk Load] 전체 진도 한 번에 로드
     context.read<ProgressProvider>().loadAcademyProgress(
@@ -58,13 +59,27 @@ class _StudentListScreenState extends State<StudentListScreen> {
   }
 
   List<StudentModel> _getFilteredStudents(List<StudentModel> allStudents) {
-    if (_selectedFilterSession == null) return allStudents;
+    final showDeletedOnly = context.read<StudentProvider>().showDeleted;
+
+    // 1. 상태 필터링 (재원생 vs 퇴원생)
+    if (showDeletedOnly) {
+      // 퇴원생 모드일 때는 세션 필터를 무시하고 모든 퇴원생 노출
+      return allStudents.where((s) => s.isDeleted == true).toList();
+    }
+
+    // 재원생 모드 (isDeleted == false)
+    final activeStudents = allStudents
+        .where((s) => s.isDeleted == false)
+        .toList();
+
+    // 2. 부(세션) 필터링
+    if (_selectedFilterSession == null) return activeStudents;
     if (_selectedFilterSession == 0) {
-      return allStudents
+      return activeStudents
           .where((s) => s.session == null || s.session == 0)
           .toList();
     }
-    return allStudents
+    return activeStudents
         .where((s) => s.session == _selectedFilterSession)
         .toList();
   }
@@ -303,7 +318,11 @@ class _StudentListScreenState extends State<StudentListScreen> {
   }
 
   Widget _buildSessionFilter() {
-    final allStudents = context.watch<StudentProvider>().students;
+    final studentProvider = context.watch<StudentProvider>();
+    final showDeletedOnly = studentProvider.showDeleted;
+    final allStudents = studentProvider.allStudents;
+    final activeStudents = allStudents.where((s) => !s.isDeleted).toList();
+    final deletedStudents = allStudents.where((s) => s.isDeleted).toList();
 
     return Container(
       height: 60,
@@ -315,55 +334,82 @@ class _StudentListScreenState extends State<StudentListScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               children: [
-                ChoiceChip(
-                  label: Text('전체 (${allStudents.length}명)'),
-                  selected: _selectedFilterSession == null,
-                  onSelected: (selected) {
-                    if (selected) setState(() => _selectedFilterSession = null);
-                  },
-                ),
-                const SizedBox(width: 8),
-                // [ADDED] 종료생 보기 토글
+                // 1. 퇴원 / 수강종료 전환 버튼 (가장 앞에 배치하여 상태 명확화)
                 InputChip(
-                  label: const Text('퇴원 / 수강종료 포함'),
-                  selected: context.watch<StudentProvider>().showDeleted,
-                  onSelected: (selected) {
-                    context.read<StudentProvider>().toggleShowDeleted();
-                    _loadData(); // 다시 로드
-                  },
-                  selectedColor: Colors.grey[300],
-                  checkmarkColor: Colors.grey[700],
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
                   label: Text(
-                    '미등록 (${allStudents.where((s) => s.session == null || s.session == 0).length}명)',
+                    showDeletedOnly
+                        ? '재원생 명단 보기'
+                        : '퇴원 / 수강종료 (${deletedStudents.length}명)',
                   ),
-                  selected: _selectedFilterSession == 0,
+                  selected: showDeletedOnly,
                   onSelected: (selected) {
-                    if (selected) setState(() => _selectedFilterSession = 0);
+                    studentProvider.toggleShowDeleted();
+                    _loadData();
                   },
+                  selectedColor: Colors.red.shade100,
+                  checkmarkColor: Colors.red,
+                  labelStyle: TextStyle(
+                    color: showDeletedOnly ? Colors.red.shade900 : null,
+                    fontWeight: showDeletedOnly ? FontWeight.bold : null,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                ...List.generate(
-                  widget.academy.totalSessions,
-                  (i) => i + 1,
-                ).map((s) {
-                  final count = allStudents
-                      .where((st) => st.session == s)
-                      .length;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text('$s부 ($count명)'),
-                      selected: _selectedFilterSession == s,
-                      onSelected: (selected) {
-                        if (selected)
-                          setState(() => _selectedFilterSession = s);
-                      },
+                const SizedBox(width: 12),
+                const VerticalDivider(width: 1, indent: 8, endIndent: 8),
+                const SizedBox(width: 12),
+
+                // 2. 재원생 모드일 때만 세부 필터 노출
+                if (!showDeletedOnly) ...[
+                  ChoiceChip(
+                    label: Text('전체 (${activeStudents.length}명)'),
+                    selected: _selectedFilterSession == null,
+                    onSelected: (selected) {
+                      if (selected)
+                        setState(() => _selectedFilterSession = null);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: Text(
+                      '미등록 (${activeStudents.where((s) => s.session == null || s.session == 0).length}명)',
                     ),
-                  );
-                }),
+                    selected: _selectedFilterSession == 0,
+                    onSelected: (selected) {
+                      if (selected) setState(() => _selectedFilterSession = 0);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  ...List.generate(
+                    widget.academy.totalSessions,
+                    (i) => i + 1,
+                  ).map((s) {
+                    final count = activeStudents
+                        .where((st) => st.session == s)
+                        .length;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text('$s부 ($count명)'),
+                        selected: _selectedFilterSession == s,
+                        onSelected: (selected) {
+                          if (selected)
+                            setState(() => _selectedFilterSession = s);
+                        },
+                      ),
+                    );
+                  }),
+                ] else ...[
+                  // 퇴원생 모드일 때는 안내 텍스트 또는 단순 현황 표시
+                  Center(
+                    child: Text(
+                      '퇴원 / 수강종료 학생 목록 (${deletedStudents.length}명)',
+                      style: TextStyle(
+                        color: Colors.red.shade700,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -934,7 +980,7 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: const Text(
-                                    '수강종료',
+                                    '퇴원',
                                     style: TextStyle(
                                       color: Colors.red,
                                       fontSize: 10,

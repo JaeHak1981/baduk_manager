@@ -1,6 +1,6 @@
 {
-    "name": "baduk_textbook_manager",
-    "short_name": "baduk_textbook_manager",
+    "name": "원생 관리 시스템",
+    "short_name": "원생 관리 시스템",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

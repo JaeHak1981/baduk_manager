@@ -55,7 +55,7 @@ class MyApp extends StatelessWidget {
       ],
 
       child: MaterialApp(
-        title: '바둑 학원 관리',
+        title: '원생 관리',
         debugShowCheckedModeBanner: false,
         scrollBehavior: const MaterialScrollBehavior().copyWith(
           dragDevices: {

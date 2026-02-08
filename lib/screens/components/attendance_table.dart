@@ -43,17 +43,26 @@ class AttendanceTable extends StatelessWidget {
       final leftColumn = students.take(halfLength).toList();
       final rightColumn = students.skip(halfLength).toList();
 
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _buildDataTable(context, leftColumn, 0)),
-          const VerticalDivider(width: 1),
-          Expanded(child: _buildDataTable(context, rightColumn, halfLength)),
-        ],
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _buildDataTable(context, leftColumn, 0)),
+            const VerticalDivider(width: 1),
+            Expanded(child: _buildDataTable(context, rightColumn, halfLength)),
+          ],
+        ),
       );
     }
 
-    return SingleChildScrollView(child: _buildDataTable(context, students, 0));
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: _buildDataTable(context, students, 0),
+      ),
+    );
   }
 
   Widget _buildDataTable(

@@ -17,6 +17,8 @@ import 'providers/education_report_provider.dart';
 import 'providers/update_provider.dart';
 import 'utils/seed_data.dart';
 
+import 'utils/error_handler.dart';
+
 import 'screens/login_screen.dart';
 import 'screens/home_page.dart';
 
@@ -57,6 +59,7 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: '원생 관리',
         debugShowCheckedModeBanner: false,
+        scaffoldMessengerKey: AppErrorHandler.scaffoldMessengerKey,
         scrollBehavior: const MaterialScrollBehavior().copyWith(
           dragDevices: {
             PointerDeviceKind.mouse,

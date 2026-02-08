@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/attendance_model.dart';
 import '../../models/student_model.dart';
 import '../../providers/attendance_provider.dart';
-import 'package:provider/provider.dart';
+import '../../config/app_theme.dart';
+import '../../utils/date_extensions.dart';
 
 class BatchAttendanceDialog extends StatefulWidget {
   final StudentModel student;
@@ -62,14 +64,14 @@ class _BatchAttendanceDialogState extends State<BatchAttendanceDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('기간 선택', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('기간 선택', style: AppTheme.heading2),
             const SizedBox(height: 8),
             InkWell(
               onTap: _selectDateRange,
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
+                  border: Border.all(color: AppTheme.borderColor),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -77,7 +79,7 @@ class _BatchAttendanceDialogState extends State<BatchAttendanceDialog> {
                     const Icon(Icons.date_range, size: 20),
                     const SizedBox(width: 12),
                     Text(
-                      '${_startDate.year}.${_startDate.month}.${_startDate.day} ~ ${_endDate.year}.${_endDate.month}.${_endDate.day}',
+                      '${_startDate.toDisplayString()} ~ ${_endDate.toDisplayString()}',
                     ),
                   ],
                 ),

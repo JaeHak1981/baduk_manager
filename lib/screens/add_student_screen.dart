@@ -68,6 +68,8 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     final provider = context.read<StudentProvider>();
 
     try {
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
       if (widget.student != null) {
         // 수정 모드
         final updatedStudent = widget.student!.copyWith(
@@ -124,32 +126,30 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         await provider.addStudent(newStudent);
       }
 
-      if (mounted) {
-        final error = provider.errorMessage;
-        setState(() => _isLoading = false);
+      if (!context.mounted) return;
+      final error = provider.errorMessage;
+      setState(() => _isLoading = false);
 
-        if (error == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                widget.student != null ? '정보가 수정되었습니다' : '학생이 등록되었습니다',
-              ),
+      if (error == null) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.student != null ? '정보가 수정되었습니다' : '학생이 등록되었습니다',
             ),
-          );
-          Navigator.pop(context);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(error), backgroundColor: Colors.red),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('오류 발생: $e'), backgroundColor: Colors.red),
+          ),
+        );
+        navigator.pop();
+      } else {
+        messenger.showSnackBar(
+          SnackBar(content: Text(error), backgroundColor: Colors.red),
         );
       }
+    } catch (e) {
+      if (!context.mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('오류 발생: $e'), backgroundColor: Colors.red),
+      );
     }
   }
 
@@ -176,28 +176,28 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     );
 
     if (confirmed == true && mounted) {
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
       setState(() => _isLoading = true);
-      final success = await context.read<StudentProvider>().deleteStudent(
+      final provider = context.read<StudentProvider>();
+      final success = await provider.deleteStudent(
         widget.student!.id,
         academyId: widget.academy.id,
         ownerId: widget.academy.ownerId,
       );
-      if (mounted) {
-        setState(() => _isLoading = false);
-        if (success) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('학생이 삭제되었습니다')));
-          Navigator.pop(context);
-        } else {
-          final error = context.read<StudentProvider>().errorMessage;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error ?? '삭제 실패'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      if (!context.mounted) return;
+      setState(() => _isLoading = false);
+      if (success) {
+        messenger.showSnackBar(const SnackBar(content: Text('학생이 삭제되었습니다')));
+        navigator.pop();
+      } else {
+        final error = provider.errorMessage;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(error ?? '삭제 실패'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -392,7 +392,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
           color: Theme.of(context).scaffoldBackgroundColor,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, -5),
             ),

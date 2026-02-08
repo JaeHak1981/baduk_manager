@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../providers/attendance_provider.dart';
+import '../../config/app_theme.dart';
 
 class RemarkCell extends StatefulWidget {
   final AttendanceProvider provider;
@@ -87,7 +88,7 @@ class _RemarkCellState extends State<RemarkCell> {
           contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           border: InputBorder.none,
           hintText: '비고 입력...',
-          hintStyle: TextStyle(fontSize: 10, color: Colors.grey),
+          hintStyle: AppTheme.caption,
         ),
         onSubmitted: (_) => _saveNote(),
       ),

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/date_extensions.dart';
 
 /// 출결 상태 구분
 enum AttendanceType {
@@ -57,8 +58,11 @@ class AttendanceRecord {
   }
 
   /// 특정 날짜의 시작 시간으로 변환된 날짜 문자열 (YYYY-MM-DD)
-  String get dateString =>
-      "${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')}";
+  String get dateString => timestamp.toDisplayString();
+
+  /// Firestore document ID 생성을 위한 정적 헬퍼
+  static String generateId(String studentId, DateTime date) =>
+      "${studentId}_${date.toId()}";
 
   AttendanceRecord copyWith({
     String? id,

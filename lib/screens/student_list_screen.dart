@@ -3,10 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/academy_model.dart';
 import '../models/student_model.dart';
-import '../models/student_progress_model.dart';
 
 import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
+import '../providers/attendance_provider.dart';
+import '../models/attendance_model.dart';
 import 'add_student_screen.dart';
 import 'textbook_center_screen.dart';
 import 'attendance_tab_screen.dart';
@@ -49,6 +50,16 @@ class _StudentListScreenState extends State<StudentListScreen> {
       widget.academy.id,
       ownerId: widget.academy.ownerId,
     );
+  }
+
+  void _toggleStudentSelection(String studentId) {
+    setState(() {
+      if (_selectedStudentIds.contains(studentId)) {
+        _selectedStudentIds.remove(studentId);
+      } else {
+        _selectedStudentIds.add(studentId);
+      }
+    });
   }
 
   void _toggleSelectionMode() {
@@ -267,43 +278,118 @@ class _StudentListScreenState extends State<StudentListScreen> {
                           style: const TextStyle(color: Colors.grey),
                         ),
                       )
-                    : RefreshIndicator(
-                        onRefresh: () async {
-                          _loadData();
-                        },
-                        child: ListView.builder(
-                          padding: EdgeInsets.fromLTRB(
-                            16,
-                            16,
-                            16,
-                            AppDimensions.getBottomInset(context),
-                          ),
-                          itemCount: filteredStudents.length,
-                          itemBuilder: (context, index) {
-                            final student = filteredStudents[index];
-                            // 해당 학생의 진도 정보 가져오기 시도 (FutureBuilder 대신 일단 Map에서 가져오는 방식 혹은 각 아이템에서 로드)
-                            return _StudentProgressCard(
-                              index: index + 1, // 순번 (1부터 시작)
-                              student: student,
-                              academy: widget.academy,
-                              isSelectionMode: _isSelectionMode,
-                              isSelected: _selectedStudentIds.contains(
-                                student.id,
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          // 화면 너비가 800px 이상이면 2컬럼 레이아웃 사용
+                          final isWide = constraints.maxWidth > 800;
+
+                          if (isWide) {
+                            // Column-major 정렬을 위해 리스트 반으로 나누기
+                            final halfLength = (filteredStudents.length / 2)
+                                .ceil();
+                            final leftColumnStudents = filteredStudents
+                                .take(halfLength)
+                                .toList();
+                            final rightColumnStudents = filteredStudents
+                                .skip(halfLength)
+                                .toList();
+
+                            return RefreshIndicator(
+                              onRefresh: () async => _loadData(),
+                              child: SingleChildScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                padding: EdgeInsets.fromLTRB(
+                                  16,
+                                  8,
+                                  16,
+                                  AppDimensions.getBottomInset(context),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // 왼쪽 컬럼
+                                    Expanded(
+                                      child: Column(
+                                        children: List.generate(
+                                          leftColumnStudents.length,
+                                          (index) {
+                                            final student =
+                                                leftColumnStudents[index];
+                                            return _StudentProgressCard(
+                                              index: index + 1,
+                                              student: student,
+                                              academy: widget.academy,
+                                              isSelectionMode: _isSelectionMode,
+                                              isSelected: _selectedStudentIds
+                                                  .contains(student.id),
+                                              onToggleSelection: () =>
+                                                  _toggleStudentSelection(
+                                                    student.id,
+                                                  ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    // 오른쪽 컬럼
+                                    Expanded(
+                                      child: Column(
+                                        children: List.generate(
+                                          rightColumnStudents.length,
+                                          (index) {
+                                            final student =
+                                                rightColumnStudents[index];
+                                            return _StudentProgressCard(
+                                              index: halfLength + index + 1,
+                                              student: student,
+                                              academy: widget.academy,
+                                              isSelectionMode: _isSelectionMode,
+                                              isSelected: _selectedStudentIds
+                                                  .contains(student.id),
+                                              onToggleSelection: () =>
+                                                  _toggleStudentSelection(
+                                                    student.id,
+                                                  ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              onToggleSelection: () {
-                                setState(() {
-                                  if (_selectedStudentIds.contains(
-                                    student.id,
-                                  )) {
-                                    _selectedStudentIds.remove(student.id);
-                                  } else {
-                                    _selectedStudentIds.add(student.id);
-                                  }
-                                });
-                              },
                             );
-                          },
-                        ),
+                          }
+
+                          // 일반 1컬럼 레이아웃
+                          return RefreshIndicator(
+                            onRefresh: () async => _loadData(),
+                            child: ListView.builder(
+                              padding: EdgeInsets.fromLTRB(
+                                16,
+                                8,
+                                16,
+                                AppDimensions.getBottomInset(context),
+                              ),
+                              itemCount: filteredStudents.length,
+                              itemBuilder: (context, index) {
+                                final student = filteredStudents[index];
+                                return _StudentProgressCard(
+                                  index: index + 1,
+                                  student: student,
+                                  academy: widget.academy,
+                                  isSelectionMode: _isSelectionMode,
+                                  isSelected: _selectedStudentIds.contains(
+                                    student.id,
+                                  ),
+                                  onToggleSelection: () =>
+                                      _toggleStudentSelection(student.id),
+                                );
+                              },
+                            ),
+                          );
+                        },
                       ),
               ),
             ],
@@ -811,383 +897,270 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
     );
   }
 
-  String _buildStudentSubtitle() {
-    final s = widget.student;
-    List<String> parts = [];
-
-    if (s.grade != null && s.classNumber != null) {
-      parts.add('${s.grade}-${s.classNumber}');
-    } else if (s.grade != null) {
-      parts.add('${s.grade}학년');
-    }
-
-    if (s.studentNumber != null && s.studentNumber!.isNotEmpty) {
-      parts.add('${s.studentNumber}번');
-    }
-    if (s.parentPhone != null && s.parentPhone!.isNotEmpty) {
-      parts.add(s.parentPhone!);
-    }
-    return parts.join(' | ');
-  }
-
   @override
   Widget build(BuildContext context) {
     final progressProvider = context.watch<ProgressProvider>();
+    final attendanceProvider = context.watch<AttendanceProvider>();
+
     // 메인 화면에서는 완료되지 않은(진행 중인) 교재만 표시
     final progressList = progressProvider
         .getProgressForStudent(widget.student.id)
         .where((p) => !p.isCompleted)
         .toList();
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: widget.isSelected ? Colors.blue.shade50 : null,
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Row(
-          children: [
-            // 1. 아바타 및 이름 영역 (클릭 시 학생 정보 수정으로 이동)
-            Expanded(
-              flex: 3,
-              child: InkWell(
-                onTap: () {
-                  if (widget.isSelectionMode) {
-                    widget.onToggleSelection();
-                  } else {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => AddStudentScreen(
-                          academy: widget.academy,
-                          student: widget.student,
+    // 오늘의 출석 정보
+    final todayRecord = attendanceProvider.getTodayRecord(widget.student.id);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: widget.isSelected ? Colors.blue.shade50 : Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+        ),
+      ),
+      child: InkWell(
+        onTap: () {
+          if (widget.isSelectionMode) {
+            widget.onToggleSelection();
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => AddStudentScreen(
+                  academy: widget.academy,
+                  student: widget.student,
+                ),
+              ),
+            );
+          }
+        },
+        onLongPress: () {
+          if (!widget.isSelectionMode) {
+            widget.onToggleSelection();
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              // 0. 선택/번호 영역
+              if (widget.isSelectionMode)
+                SizedBox(
+                  width: 32,
+                  child: Checkbox(
+                    value: widget.isSelected,
+                    onChanged: (_) => widget.onToggleSelection(),
+                  ),
+                )
+              else
+                SizedBox(
+                  width: 24,
+                  child: Text(
+                    '${widget.index}',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                  ),
+                ),
+
+              // 1. [부] 영역
+              SizedBox(
+                width: 50,
+                child:
+                    widget.student.session != null &&
+                        widget.student.session != 0
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
                         ),
-                      ),
-                    );
-                  }
-                },
-                onLongPress: () {
-                  if (!widget.isSelectionMode) {
-                    widget.onToggleSelection();
-                  }
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Row(
-                  children: [
-                    if (!widget.isSelectionMode) ...[
-                      Container(
-                        width: 28,
-                        height: 28,
-                        alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          shape: BoxShape.circle,
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.orange.shade200),
                         ),
                         child: Text(
-                          '${widget.index}',
+                          '${widget.student.session}부',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade900,
+                          ),
+                        ),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Text(
+                          '미등록',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 10,
                             fontWeight: FontWeight.bold,
                             color: Colors.grey.shade700,
-                            fontSize: 12,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                    ],
-                    if (widget.isSelectionMode)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: Checkbox(
-                          side: BorderSide(
-                            color: Colors.grey.shade600,
-                            width: 1.5,
-                          ),
-                          value: widget.isSelected,
-                          onChanged: (_) => widget.onToggleSelection(),
+              ),
+              const SizedBox(width: 8),
+
+              // 2. [이름] 영역
+              SizedBox(
+                width: 60,
+                child: Text(
+                  widget.student.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+
+              // 3. [학년] 영역
+              SizedBox(
+                width: 50,
+                child: Text(
+                  widget.student.grade != null
+                      ? '${widget.student.grade}학년'
+                      : '-',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                ),
+              ),
+
+              // 4. [진도현황] 영역
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: progressList.isNotEmpty
+                      ? Text(
+                          '${progressList.first.textbookName} ${progressList.first.volumeNumber}권 (${progressList.first.progressPercentage.toInt()}%)',
+                          style: const TextStyle(fontSize: 11),
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : const Text(
+                          '-',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
                         ),
-                      ),
-                    CircleAvatar(child: Text(widget.student.name[0])),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+              ),
+
+              // 5. [출석상태] 영역
+              SizedBox(
+                width: 60,
+                child: todayRecord == null
+                    ? const SizedBox()
+                    : Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Row(
-                            children: [
-                              if (widget.student.session != null &&
-                                  widget.student.session != 0)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  margin: const EdgeInsets.only(right: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.shade50,
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(
-                                      color: Colors.orange.shade200,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    '${widget.student.session}부',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.orange.shade900,
-                                    ),
-                                  ),
-                                )
-                              else
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  margin: const EdgeInsets.only(right: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(
-                                      color: Colors.grey.shade300,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    '미등록',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey.shade700,
-                                    ),
-                                  ),
-                                ),
-                              Text(
-                                widget.student.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              if (widget.student.isDeleted) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.shade100,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: const Text(
-                                    '퇴원',
-                                    style: TextStyle(
-                                      color: Colors.red,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
+                          Icon(
+                            todayRecord.type == AttendanceType.present
+                                ? Icons.check_circle
+                                : (todayRecord.type == AttendanceType.absent
+                                      ? Icons.cancel
+                                      : Icons.access_time),
+                            size: 14,
+                            color: todayRecord.type == AttendanceType.present
+                                ? Colors.green
+                                : (todayRecord.type == AttendanceType.absent
+                                      ? Colors.red
+                                      : Colors.orange),
                           ),
+                          const SizedBox(width: 4),
                           Text(
-                            _buildStudentSubtitle(),
+                            todayRecord.type == AttendanceType.present
+                                ? '출석'
+                                : (todayRecord.type == AttendanceType.absent
+                                      ? '결석'
+                                      : '지각'),
                             style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 11,
+                              fontSize: 10,
+                              color: todayRecord.type == AttendanceType.present
+                                  ? Colors.green
+                                  : (todayRecord.type == AttendanceType.absent
+                                        ? Colors.red
+                                        : Colors.orange),
                             ),
                           ),
                         ],
                       ),
+              ),
+
+              // 6. [관리버튼] 영역
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: () =>
+                        _navigateToStudentHistory(context, widget.student),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('학습정보', style: TextStyle(fontSize: 12)),
+                  ),
+                  const SizedBox(width: 4),
+                  TextButton(
+                    onPressed: () => _navigateToAssignTextbook(context),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('교재할당', style: TextStyle(fontSize: 12)),
+                  ),
+                  if (widget.student.isDeleted) ...[
+                    const SizedBox(width: 4),
+                    TextButton(
+                      onPressed: () async {
+                        // 기존 복구 로직 활용
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('재원생 복구'),
+                            content: Text(
+                              '${widget.student.name} 학생을 다시 재원생 목록으로 복구하시겠습니까?',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('취소'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('복구'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true && mounted) {
+                          await context.read<StudentProvider>().restoreStudent(
+                            widget.student.id,
+                            academyId: widget.student.academyId,
+                            ownerId: widget.student.ownerId,
+                          );
+                        }
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        foregroundColor: Colors.green,
+                      ),
+                      child: const Text('복구', style: TextStyle(fontSize: 12)),
                     ),
                   ],
-                ),
+                ],
               ),
-            ),
-            // 2. 진도 목록 영역 (클릭 시 이동 안 함)
-            if (progressList.isNotEmpty)
-              Expanded(
-                flex: 2,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: progressList.map((progress) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 4.0),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: Colors.blue.withOpacity(0.1),
-                              width: 0.5,
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 6,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        '${progress.textbookName} (${progress.volumeNumber}권)',
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.black87,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${progress.progressPercentage.toInt()}%',
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.blue,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    // 삭제/완료 버튼 터치 영역 확보
-                                    Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        onTap: () => _showProgressActionDialog(
-                                          context,
-                                          progress,
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: const Padding(
-                                          padding: EdgeInsets.all(4.0),
-                                          child: Icon(
-                                            Icons
-                                                .more_vert, // 아이콘 변경: 삭제 대신 옵션 메뉴
-                                            size: 14,
-                                            color: Colors.blueGrey,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(2),
-                                  child: LinearProgressIndicator(
-                                    value: progress.progressPercentage / 100,
-                                    minHeight: 4,
-                                    backgroundColor: Colors.grey[200],
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      progress.isCompleted
-                                          ? Colors.green
-                                          : Colors.blue,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-            // 3. 작업 버튼 영역
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  onPressed: () =>
-                      _navigateToStudentHistory(context, widget.student),
-                  icon: const Icon(Icons.assignment_ind, size: 16),
-                  label: const Text('정보', style: TextStyle(fontSize: 11)),
-                ),
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  onPressed: () => _navigateToAssignTextbook(context),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('교재 할당', style: TextStyle(fontSize: 11)),
-                ),
-                if (widget.student.isDeleted)
-                  IconButton(
-                    icon: const Icon(
-                      Icons.restore_from_trash,
-                      color: Colors.green,
-                      size: 20,
-                    ),
-                    onPressed: () async {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('재원생 복구'),
-                          content: Text(
-                            '${widget.student.name} 학생을 다시 재원생 목록으로 복구하시겠습니까?',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: const Text('취소'),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              child: const Text('복구'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirm == true && mounted) {
-                        await context.read<StudentProvider>().restoreStudent(
-                          widget.student.id,
-                          academyId: widget.student.academyId,
-                          ownerId: widget.student.ownerId,
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              '${widget.student.name} 학생이 복구되었습니다.',
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    tooltip: '재원생으로 복구',
-                  ),
-                if (!widget.student.isDeleted)
-                  IconButton(
-                    icon: const Icon(
-                      Icons.delete_outline,
-                      color: Colors.redAccent,
-                      size: 18,
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    constraints: const BoxConstraints(),
-                    onPressed: () => _showDeleteConfirmation(context),
-                    tooltip: '수강 종료 처리',
-                  ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1208,175 +1181,5 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
       // 필요한 경우에만 전체 리프레시를 고려할 수 있습니다.
       // 현재는 Provider가 전역이므로 자동으로 반영됩니다.
     });
-  }
-
-  // Method removed: _navigateToEditProgress
-
-  Future<void> _showDeleteConfirmation(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('학생 삭제'),
-        content: Text(
-          '[${widget.student.name}] 학생의 모든 정보를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('삭제'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      final success = await context.read<StudentProvider>().deleteStudent(
-        widget.student.id,
-        academyId: widget.academy.id,
-        ownerId: widget.academy.ownerId,
-      );
-      if (mounted && success) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('학생이 삭제되었습니다')));
-      }
-    }
-  }
-
-  Future<void> _showProgressActionDialog(
-    BuildContext context,
-    StudentProgressModel progress,
-  ) async {
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${progress.textbookName} 관리'),
-        content: const Text('수행할 작업을 선택하세요.'),
-        actions: [
-          TextButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              _confirmCompleteProgress(this.context, progress);
-            },
-            icon: const Icon(Icons.check_circle_outline, color: Colors.green),
-            label: const Text('학습 완료 (로그로 이전)'),
-          ),
-          TextButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              _confirmDeleteProgress(this.context, progress);
-            },
-            icon: const Icon(Icons.delete_outline, color: Colors.red),
-            label: const Text('삭제 (휴지통으로 보관)'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _confirmCompleteProgress(
-    BuildContext context,
-    StudentProgressModel progress,
-  ) async {
-    final success = await context.read<ProgressProvider>().updateVolumeStatus(
-      progress.id,
-      widget.student.id,
-      true, // 완료 처리
-      ownerId: widget.academy.ownerId,
-    );
-    if (mounted && success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('[${progress.textbookName}] 학습이 완료되어 로그로 이전되었습니다.'),
-        ),
-      );
-    }
-  }
-
-  Future<void> _confirmDeleteProgress(
-    BuildContext context,
-    StudentProgressModel progress,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('교재 할당 삭제'),
-        content: Text(
-          '[${progress.textbookName} ${progress.volumeNumber}권] 할당을 삭제하시겠습니까?\n이 데이터는 30일간 보관 후 자동 삭제됩니다.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('삭제'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      debugPrint(
-        '🚀🚀🚀 [_confirmDeleteProgress] User confirmed. Initializing delete...',
-      );
-      debugPrint('🚀🚀🚀 [target_progress_id]: ${progress.id}');
-      debugPrint('🚀🚀🚀 [student_id]: ${widget.student.id}');
-
-      try {
-        final provider = context.read<ProgressProvider>();
-        debugPrint(
-          '🚀🚀🚀 [provider_instance]: ${provider.runtimeType} (Hash: ${provider.hashCode})',
-        );
-
-        final success = await provider.removeProgress(
-          progress.id,
-          widget.student.id,
-          ownerId: widget.academy.ownerId,
-        );
-
-        debugPrint('🚀🚀🚀 [result_success]: $success');
-
-        if (mounted) {
-          if (success) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('교재 할당이 삭제되었습니다.')));
-          } else {
-            final error = provider.errorMessage;
-            debugPrint('❌❌❌ [delete_failed_message]: $error');
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('삭제 실패: $error'),
-                backgroundColor: Colors.red,
-              ),
-            );
-            provider.clearErrorMessage();
-          }
-        }
-      } catch (e, stack) {
-        debugPrint('❌❌❌ [EXCEPTION_DURING_DELETE]: $e');
-        debugPrint('❌❌❌ [STACK]: $stack');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('시스템 오류: $e'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    }
   }
 }

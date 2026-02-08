@@ -402,7 +402,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
     );
 
     return Container(
-      height: 36,
+      height: 40, // [MODIFIED] 36 -> 40
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
         border: Border(
@@ -1006,12 +1006,11 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
         .getProgressForStudent(widget.student.id)
         .where((p) => !p.isCompleted)
         .toList();
-
     // 오늘의 출석 정보
     final todayRecord = attendanceProvider.getTodayRecord(widget.student.id);
 
     return Container(
-      height: 44, // 고정 높이로 밀도 최적화
+      height: 52, // 고정 높이로 밀도 최적화
       decoration: BoxDecoration(
         color: widget.isSelected ? Colors.blue.shade50 : Colors.white,
         border: Border(
@@ -1196,21 +1195,37 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                       onPressed: () =>
                           _navigateToStudentHistory(context, widget.student),
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                        ), // [MODIFIED] 4 -> 8
+                        minimumSize: const Size(
+                          0,
+                          40,
+                        ), // [MODIFIED] Added vertical touch area
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      child: const Text('학습정보', style: TextStyle(fontSize: 11)),
+                      child: const Text(
+                        '학습정보',
+                        style: TextStyle(fontSize: 12),
+                      ), // [MODIFIED] 11 -> 12
                     ),
-                    const SizedBox(width: 2),
+                    const SizedBox(width: 4), // [MODIFIED] 2 -> 4
                     TextButton(
                       onPressed: () => _navigateToAssignTextbook(context),
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                        ), // [MODIFIED] 4 -> 8
+                        minimumSize: const Size(
+                          0,
+                          40,
+                        ), // [MODIFIED] Added vertical touch area
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      child: const Text('교재할당', style: TextStyle(fontSize: 11)),
+                      child: const Text(
+                        '교재할당',
+                        style: TextStyle(fontSize: 12),
+                      ), // [MODIFIED] 11 -> 12
                     ),
                     if (widget.student.isDeleted) ...[
                       const SizedBox(width: 2),

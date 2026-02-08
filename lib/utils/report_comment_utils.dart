@@ -48,9 +48,7 @@ class ReportCommentUtils {
     List<CommentTemplateModel> templates = const [],
   }) {
     final random = Random();
-    List<String> introFragments = [];
-    List<String> bodyFragments = [];
-    List<String> conclusionFragments = [];
+    List<String> finalFragments = [];
 
     // 수준 판별 (가장 높은 교재 기준)
     int studentLevel = 1;
@@ -58,10 +56,10 @@ class ReportCommentUtils {
       studentLevel = _determineLevel(textbookNames.first, volumes.first);
     }
 
-    // 0. 인트로 (Intro)
+    // [1단계] 도입 (Intro) - 학생의 전반적인 상태
     final introTemplates = templates.where((t) => t.category == '인트로').toList();
     if (introTemplates.isNotEmpty) {
-      introFragments.add(
+      finalFragments.add(
         processTemplate(
           introTemplates[random.nextInt(introTemplates.length)].content,
           studentName,
@@ -70,49 +68,84 @@ class ReportCommentUtils {
       );
     }
 
-    // 1. 학습 성취 (수준 및 카테고리 기반)
-    final achievementTemplates = templates
+    // [2단계] 기초 실력 (Basic) - 규칙, 사활, 단수 등 기본기
+    final basicTemplates = templates
         .where(
-          (t) =>
-              (t.category == '학습 성취' || t.category == '실력') &&
-              (t.level == null || t.level == studentLevel),
+          (t) => (t.category == '학습 성취' || t.category == '실력') && t.level == 1,
         )
         .toList();
-
-    if (achievementTemplates.isNotEmpty) {
-      bodyFragments.add(
+    if (basicTemplates.isNotEmpty) {
+      finalFragments.add(
         processTemplate(
-          achievementTemplates[random.nextInt(achievementTemplates.length)]
-              .content,
+          basicTemplates[random.nextInt(basicTemplates.length)].content,
           studentName,
           textbookNames,
         ),
       );
-    } else {
-      // 기본 문구
-      if (textbookNames.isNotEmpty) {
-        if (studentLevel == 1) {
-          bodyFragments.add(
-            "${textbookNames.first} 과정을 통해 바둑의 기초 규칙과 착수 금지, 따먹기 등 기본 원리를 차근차근 익히고 있습니다.",
-          );
-        } else if (studentLevel == 2) {
-          bodyFragments.add(
-            "${textbookNames.first} 학습을 통해 초급 전술과 수읽기의 기초를 다지며 실전 능력을 키워가고 있습니다.",
-          );
-        } else {
-          bodyFragments.add(
-            "${textbookNames.first} 과정을 통해 고급 행마와 사활, 복합적인 수읽기 전략을 깊이 있게 연구하고 있습니다.",
-          );
-        }
+    } else if (studentLevel == 1 && textbookNames.isNotEmpty) {
+      finalFragments.add(
+        "${textbookNames.first} 과정을 통해 바둑의 기초 규칙과 착수 금지, 따먹기 등 기본 원리를 차근차근 익히고 있습니다.",
+      );
+    }
+
+    // [3단계] 고급 실력 (Advanced) - 전략, 형세 판단, 거시적 안목, 성장 변화
+    final advancedTemplates = templates
+        .where(
+          (t) =>
+              (t.category == '학습 성취' || t.category == '실력') &&
+              (t.level == 2 || t.level == 3),
+        )
+        .toList();
+    final growthTemplates = templates
+        .where((t) => t.category == '성장 변화')
+        .toList();
+
+    // 고급 실력 관련 문구 1개 선택
+    if (advancedTemplates.isNotEmpty) {
+      finalFragments.add(
+        processTemplate(
+          advancedTemplates[random.nextInt(advancedTemplates.length)].content,
+          studentName,
+          textbookNames,
+        ),
+      );
+    } else if (studentLevel >= 2 && textbookNames.isNotEmpty) {
+      if (studentLevel == 2) {
+        finalFragments.add(
+          "${textbookNames.first} 학습을 통해 초급 전술과 수읽기의 기초를 다지며 실전 능력을 키워가고 있습니다.",
+        );
+      } else {
+        finalFragments.add(
+          "${textbookNames.first} 과정을 통해 고급 행마와 사활, 복합적인 수읽기 전략을 깊이 있게 연구하고 있습니다.",
+        );
       }
     }
 
-    // 2. 학습 태도 (점수 기반)
+    // 성장 변화 관련 문구 1개 선택 (선택 사항)
+    if (growthTemplates.isNotEmpty) {
+      finalFragments.add(
+        processTemplate(
+          growthTemplates[random.nextInt(growthTemplates.length)].content,
+          studentName,
+          textbookNames,
+        ),
+      );
+    }
+
+    // [4단계] 태도 및 인성 (Attitude) - 예절, 집중력, 몰입도
     final attitudeTemplates = templates
         .where((t) => t.category == '학습 태도' || t.category == '태도')
         .toList();
+    final etiquetteTemplates = templates
+        .where(
+          (t) =>
+              t.category == '대국 매너' || t.category == '매너' || t.category == '인성',
+        )
+        .toList();
+
+    // 태도 관련 문구 1개 선택
     if (attitudeTemplates.isNotEmpty) {
-      bodyFragments.add(
+      finalFragments.add(
         processTemplate(
           attitudeTemplates[random.nextInt(attitudeTemplates.length)].content,
           studentName,
@@ -121,20 +154,17 @@ class ReportCommentUtils {
       );
     } else {
       if (scores.focus >= 85) {
-        bodyFragments.add(
+        finalFragments.add(
           "수업 시간 내내 높은 집중력을 유지하며 어려운 문제도 끝까지 스스로 해결하려는 자세가 돋보입니다.",
         );
       } else {
-        bodyFragments.add("매 수업 시간 성실한 태도로 임하며 차근차근 실력을 쌓아가고 있습니다.");
+        finalFragments.add("매 수업 시간 성실한 태도로 임하며 차근차근 실력을 쌓아가고 있습니다.");
       }
     }
 
-    // 3. 인성/예절
-    final etiquetteTemplates = templates
-        .where((t) => t.category == '대국 매너' || t.category == '인성')
-        .toList();
+    // 매너 관련 문구 1개 선택
     if (etiquetteTemplates.isNotEmpty) {
-      bodyFragments.add(
+      finalFragments.add(
         processTemplate(
           etiquetteTemplates[random.nextInt(etiquetteTemplates.length)].content,
           studentName,
@@ -142,34 +172,15 @@ class ReportCommentUtils {
         ),
       );
     } else {
-      bodyFragments.add("상대방을 존중하는 바른 대국 예절을 갖추고 있어 주변 친구들에게 좋은 본보기가 됩니다.");
+      finalFragments.add("상대방을 존중하는 바른 대국 예절을 갖추고 있어 주변 친구들에게 좋은 본보기가 됩니다.");
     }
 
-    // 4. 격려/비전/성장
-    final visionTemplates = templates
-        .where(
-          (t) =>
-              t.category == '격려' || t.category == '비전' || t.category == '성장 변화',
-        )
-        .toList();
-    if (visionTemplates.isNotEmpty) {
-      bodyFragments.add(
-        processTemplate(
-          visionTemplates[random.nextInt(visionTemplates.length)].content,
-          studentName,
-          textbookNames,
-        ),
-      );
-    } else {
-      bodyFragments.add("지금과 같이 즐겁게 정진한다면 앞으로 더욱 큰 성장이 기대됩니다.");
-    }
-
-    // 5. 마무리 (Conclusion)
+    // [5단계] 마무리 (Outro) - 격려 및 미래 응원
     final conclusionTemplates = templates
         .where((t) => t.category == '마무리')
         .toList();
     if (conclusionTemplates.isNotEmpty) {
-      conclusionFragments.add(
+      finalFragments.add(
         processTemplate(
           conclusionTemplates[random.nextInt(conclusionTemplates.length)]
               .content,
@@ -177,18 +188,11 @@ class ReportCommentUtils {
           textbookNames,
         ),
       );
+    } else {
+      finalFragments.add("지금과 같이 즐겁게 정진한다면 앞으로 더욱 큰 성장이 기대됩니다.");
     }
 
-    // 바디 섹션 무작위 셔플링 (순서 변화를 통한 다양성 확보)
-    bodyFragments.shuffle(random);
-
-    // 최종 결합: 인트로 + (셔플된) 바디 + 마무리
-    List<String> finalFragments = [
-      ...introFragments,
-      ...bodyFragments,
-      ...conclusionFragments,
-    ];
-
+    // 셔플 로직 삭제: 논리적 구성을 위해 순서 유지
     return combineFragments(finalFragments);
   }
 

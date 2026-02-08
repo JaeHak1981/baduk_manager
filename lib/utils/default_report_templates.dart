@@ -44,6 +44,106 @@ class DefaultReportTemplates {
         category: '인트로',
         content: '{{name}} 학생은 매 수업 시간 반짝이는 눈빛으로 새로운 정석을 익히며 돋보이는 발전을 보여줍니다.',
       ),
+      CommentTemplateModel(
+        id: 'i9',
+        category: '인트로',
+        content: '최근 부쩍 바둑에 흥미를 느끼고 있는 {{name}} 학생의 즐거운 변화가 눈에 띕니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i10',
+        category: '인트로',
+        content: '이번 달, 집중력이 눈에 띄게 좋아진 {{name}} 학생의 수업 태도를 칭찬하고 싶습니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i11',
+        category: '인트로',
+        content: '매 수업 시간마다 초롱초롱한 눈빛으로 수업에 참여하는 {{name}} 학생입니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i12',
+        category: '인트로',
+        content: '바둑을 시작한 이후로 하루가 다르게 의젓해지고 있는 {{name}} 학생의 소식입니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i13',
+        category: '인트로',
+        content: '차분하고 진중한 태도로 대국에 임하는 {{name}} 학생의 모습이 참 대견합니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i14',
+        category: '인트로',
+        content: '승부욕이 강하고 지는 것을 싫어하여 누구보다 열심히 노력하는 {{name}} 학생입니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i15',
+        category: '인트로',
+        content: '호기심 가득한 질문으로 수업 분위기를 밝게 만들어주는 {{name}} 학생의 성장이 반갑습니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i16',
+        category: '인트로',
+        content: '고사리 같은 손으로 신중하게 돌을 놓는 {{name}} 학생의 모습에서 미래의 고수가 보입니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i17',
+        category: '인트로',
+        content: '{{name}} 학생의 바둑 실력이 하루가 다르게 일취월장하고 있어 지도하는 보람을 느밉니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i18',
+        category: '인트로',
+        content: '{{name}} 학생의 가장 큰 장점은 패배를 두려워하지 않고 끝까지 도전하는 끈기입니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i19',
+        category: '인트로',
+        content: '{{name}} 학생이 보여준 놀라운 집중력과 과제 수행 능력은 다른 친구들에게도 모범이 되고 있습니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i20',
+        category: '인트로',
+        content: '{{name}} 학생의 성실함이 빛을 발하여, 바둑의 기본기가 아주 탄탄하게 잡혔습니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i21',
+        category: '인트로',
+        content: '최근 부쩍 바둑의 재미에 푹 빠져, 스스로 수를 연구하는 {{name}} 학생의 열정이 대단합니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i22',
+        category: '인트로',
+        content: '차분한 성격이 장점인 {{name}} 학생은 바둑판 앞에서 그 진가를 발휘하고 있습니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i23',
+        category: '인트로',
+        content: '{{name}} 학생의 바둑을 대하는 진지한 눈빛과 태도가 실력 향상으로 이어지고 있습니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i24',
+        category: '인트로',
+        content: '매 수업 시간, 선생님의 설명 하나하나를 놓치지 않으려는 {{name}} 학생의 집중력이 돋보입니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i25',
+        category: '인트로',
+        content: '승패를 떠나 바둑 그 자체를 즐길 줄 아는 {{name}} 학생의 여유 있는 모습이 인상적입니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i26',
+        category: '인트로',
+        content: '{{name}} 학생이 보여주는 창의적인 수읽기는 지도하는 저조차도 깜짝 놀라게 할 때가 있습니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i27',
+        category: '인트로',
+        content: '어려운 문제 앞에서도 포기하지 않고 끝까지 답을 찾아내는 {{name}} 학생의 끈기를 칭찬합니다.',
+      ),
+      CommentTemplateModel(
+        id: 'i28',
+        category: '인트로',
+        content: '친구들과 사이좋게 바둑을 두며, 배려심 깊은 모습을 보여주는 {{name}} 학생입니다.',
+      ),
 
       // 2. 학습 성취 (Achievement)
       // [Level 1: 입문/기초]

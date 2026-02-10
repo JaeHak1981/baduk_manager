@@ -47,7 +47,8 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     _noteController = TextEditingController(text: s?.note ?? '');
 
     _selectedLevel = s?.level ?? 30;
-    _selectedSession = s?.session;
+    // [FIX] session이 0인 경우(기존 데이터) null로 처리하여 드롭다운 에러 방지
+    _selectedSession = (s?.session == 0) ? null : s?.session;
   }
 
   @override
@@ -112,7 +113,9 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       } else {
         // 등록 모드
         final createdAt = now;
-        final initialSession = _selectedSession ?? 0;
+        // [FIX] 선택안함(null)일 때 0으로 저장하지 않고 null 유지 (혹은 0으로 통일 시 드롭다운에서도 처리 필요)
+        // 여기서는 DB 정합성을 위해 0으로 저장하되, 로드할 때 null로 변환하는 방식을 유지하거나 null로 저장
+        final initialSession = _selectedSession;
 
         final newStudent = StudentModel(
           id: '',
@@ -143,7 +146,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
           sessionHistory: [
             SessionHistory(
               effectiveDate: _startDate,
-              sessionId: initialSession,
+              sessionId: initialSession ?? 0,
             ),
           ],
         );

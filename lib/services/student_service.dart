@@ -123,6 +123,54 @@ class StudentService {
     await batch.commit();
   }
 
+  /// 학생 일괄 이력 업데이트 (재등록 또는 퇴원 예약)
+  Future<void> bulkUpdateEnrollmentHistory(
+    List<String> studentIds, {
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final batch = _firestore.batch();
+
+    for (var id in studentIds) {
+      final docRef = _firestore.collection(_collection).doc(id);
+      final snapshot = await docRef.get();
+      if (!snapshot.exists) continue;
+
+      final data = snapshot.data()!;
+      final historyData = data['enrollmentHistory'] as List? ?? [];
+      final List<EnrollmentPeriod> history = historyData
+          .map((e) => EnrollmentPeriod.fromMap(e as Map<String, dynamic>))
+          .toList();
+
+      if (startDate != null) {
+        // 일괄 재등록: 새로운 기간 추가
+        history.add(EnrollmentPeriod(startDate: startDate));
+      } else if (endDate != null) {
+        // 일괄 퇴원 예약: 가장 최근 기간의 종료일 수정
+        if (history.isEmpty) {
+          // 이력이 없으면 생성 시점부터의 기간으로 생성 (마이그레이션 대응)
+          final createdAt = (data['createdAt'] as Timestamp).toDate();
+          history.add(EnrollmentPeriod(startDate: createdAt, endDate: endDate));
+        } else {
+          final last = history.last;
+          history[history.length - 1] = EnrollmentPeriod(
+            startDate: last.startDate,
+            endDate: endDate,
+          );
+        }
+      }
+
+      batch.update(docRef, {
+        'isDeleted': false,
+        'deletedAt': null,
+        'enrollmentHistory': history.map((e) => e.toFirestore()).toList(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
+  }
+
   /// 학생 복구 (Simple Restore)
   Future<void> restoreStudent(String studentId) async {
     await _firestore.collection(_collection).doc(studentId).update({

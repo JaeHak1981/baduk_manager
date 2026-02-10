@@ -206,14 +206,37 @@ class StudentProvider extends BaseProvider {
     required String ownerId,
     required DateTime startDate,
   }) async {
+    return await bulkUpdateEnrollmentHistory(
+      [studentId],
+      academyId: academyId,
+      ownerId: ownerId,
+      startDate: startDate,
+    );
+  }
+
+  /// 학생 일괄 이력 업데이트 (재등록 또는 퇴원 예약)
+  Future<bool> bulkUpdateEnrollmentHistory(
+    List<String> studentIds, {
+    required String academyId,
+    required String ownerId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
     return await runAsync(() async {
           try {
-            await _studentService.reEnrollStudent(studentId, startDate);
+            await _studentService.bulkUpdateEnrollmentHistory(
+              studentIds,
+              startDate: startDate,
+              endDate: endDate,
+            );
             await loadStudents(academyId, ownerId: ownerId);
-            AppErrorHandler.showSnackBar('학생이 재등록되었습니다.', isError: false);
+            AppErrorHandler.showSnackBar(
+              '${studentIds.length}명의 이력이 업데이트되었습니다.',
+              isError: false,
+            );
             return true;
           } catch (e) {
-            AppErrorHandler.handle(e, customMessage: '학생 재등록에 실패했습니다.');
+            AppErrorHandler.handle(e, customMessage: '일괄 업데이트에 실패했습니다.');
             return false;
           }
         }) ??

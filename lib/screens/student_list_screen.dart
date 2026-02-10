@@ -205,6 +205,145 @@ class _StudentListScreenState extends State<StudentListScreen> {
     }
   }
 
+  /// 일괄 재등록 핸들러
+  Future<void> _handleBulkReEnroll() async {
+    if (_selectedStudentIds.isEmpty) return;
+
+    DateTime startDate = DateTime.now();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('일괄 재등록 예약'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('선택한 ${_selectedStudentIds.length}명의 학생을 재등록하시겠습니까?'),
+              const SizedBox(height: 16),
+              ListTile(
+                title: const Text('재등록 시작일'),
+                subtitle: Text(
+                  '${startDate.year}-${startDate.month}-${startDate.day}',
+                ),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: startDate,
+                    firstDate: DateTime.now().subtract(
+                      const Duration(days: 30),
+                    ),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) {
+                    setDialogState(() => startDate = picked);
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('일괄 재등록'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final success = await context
+          .read<StudentProvider>()
+          .bulkUpdateEnrollmentHistory(
+            _selectedStudentIds.toList(),
+            academyId: widget.academy.id,
+            ownerId: widget.academy.ownerId,
+            startDate: startDate,
+          );
+      if (mounted && success) {
+        setState(() {
+          _isSelectionMode = false;
+          _selectedStudentIds.clear();
+        });
+      }
+    }
+  }
+
+  /// 일괄 퇴원 예약 핸들러
+  Future<void> _handleBulkRetire() async {
+    if (_selectedStudentIds.isEmpty) return;
+
+    DateTime endDate = DateTime.now();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('일괄 퇴원 예약'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('선택한 ${_selectedStudentIds.length}명의 퇴원 날짜를 지정하시겠습니까?'),
+              const SizedBox(height: 16),
+              ListTile(
+                title: const Text('퇴원 예정일'),
+                subtitle: Text(
+                  '${endDate.year}-${endDate.month}-${endDate.day}',
+                ),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: endDate,
+                    firstDate: DateTime.now().subtract(
+                      const Duration(days: 30),
+                    ),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) {
+                    setDialogState(() => endDate = picked);
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('일괄 퇴원 예약'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final success = await context
+          .read<StudentProvider>()
+          .bulkUpdateEnrollmentHistory(
+            _selectedStudentIds.toList(),
+            academyId: widget.academy.id,
+            ownerId: widget.academy.ownerId,
+            endDate: endDate,
+          );
+      if (mounted && success) {
+        setState(() {
+          _isSelectionMode = false;
+          _selectedStudentIds.clear();
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -270,6 +409,18 @@ class _StudentListScreenState extends State<StudentListScreen> {
                       icon: const Icon(Icons.drive_file_move_outline),
                       tooltip: '선택한 학생 이동',
                       onPressed: _handleBulkMove,
+                    ),
+                    // 재등록 버튼
+                    IconButton(
+                      icon: const Icon(Icons.person_add_alt_1_outlined),
+                      tooltip: '일괄 재등록 예약',
+                      onPressed: _handleBulkReEnroll,
+                    ),
+                    // 퇴원 예약 버튼
+                    IconButton(
+                      icon: const Icon(Icons.person_remove_outlined),
+                      tooltip: '일괄 퇴원 예약',
+                      onPressed: _handleBulkRetire,
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_outline, color: Colors.red),
@@ -1152,13 +1303,28 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
               // 2. [이름] 영역 (90)
               SizedBox(
                 width: 90,
-                child: Text(
-                  widget.student.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      widget.student.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (widget.student.nextEventLabel != null)
+                      Text(
+                        widget.student.nextEventLabel!,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                  ],
                 ),
               ),
 

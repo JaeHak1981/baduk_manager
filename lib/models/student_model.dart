@@ -280,6 +280,31 @@ class StudentModel {
     return null;
   }
 
+  /// 명단에 표시할 미래 예약 이벤트 라벨 (예: [3/2 재등록], [2/28 퇴원예정])
+  String? get nextEventLabel {
+    final now = DateTime.now().startOfDay;
+
+    // 1. 퇴원 예약 체크 (현재 이후의 종료일이 있는 경우)
+    for (var period in enrollmentHistory) {
+      if (period.endDate != null) {
+        final end = period.endDate!.startOfDay;
+        if (!end.isBefore(now)) {
+          return '[${end.month}/${end.day} 퇴원]';
+        }
+      }
+    }
+
+    // 2. 재등록 예약 체크 (현재 이후의 시작일이 있는 경우)
+    for (var period in enrollmentHistory) {
+      final start = period.startDate.startOfDay;
+      if (start.isAfter(now)) {
+        return '[${start.month}/${start.day} 재등록]';
+      }
+    }
+
+    return null;
+  }
+
   /// 급수 표시 문자열 (예: 30급, 1단)
   String get levelDisplayName {
     if (level > 0) {

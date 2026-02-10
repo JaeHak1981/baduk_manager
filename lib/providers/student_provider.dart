@@ -205,12 +205,14 @@ class StudentProvider extends BaseProvider {
     required String academyId,
     required String ownerId,
     required DateTime startDate,
+    int? sessionId,
   }) async {
     return await bulkUpdateEnrollmentHistory(
       [studentId],
       academyId: academyId,
       ownerId: ownerId,
       startDate: startDate,
+      sessionId: sessionId,
     );
   }
 

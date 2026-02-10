@@ -309,7 +309,7 @@ class StudentModel {
   String get reservationDetail {
     final now = DateTime.now().startOfDay;
 
-    // 1. 퇴원 예약 체크
+    // 1. 퇴원 예약 체크 (현재 이후의 종료일이 있는 경우)
     for (var period in enrollmentHistory) {
       if (period.endDate != null) {
         final end = period.endDate!.startOfDay;
@@ -319,14 +319,14 @@ class StudentModel {
       }
     }
 
-    // 2. 재등록 및 부 이동 예약 체크
+    // 2. 미래 재등록 및 부 이동 예약 체크 (현재 이후의 시작일이 있는 경우)
     for (var period in enrollmentHistory) {
       final start = period.startDate.startOfDay;
       if (start.isAfter(now)) {
         // 해당 시작일에 예정된 부(Session) 검색
         int? targetSession;
         for (var sess in sessionHistory) {
-          if (sess.effectiveDate.isAtSameMomentAs(period.startDate)) {
+          if (sess.effectiveDate.isSameDay(period.startDate)) {
             targetSession = sess.sessionId;
             break;
           }
@@ -336,6 +336,17 @@ class StudentModel {
             ? (targetSession == 0 ? '(미배정)' : '(${targetSession}부)')
             : '';
         return '${start.month}/${start.day}$sessionLabel 재등록';
+      }
+    }
+
+    // 3. 현재 상태 체크 (오늘 수강 중인지)
+    if (!isDeleted) {
+      for (var period in enrollmentHistory) {
+        final start = period.startDate.startOfDay;
+        final end = period.endDate?.startOfDay;
+        if (!start.isAfter(now) && (end == null || !end.isBefore(now))) {
+          return '수강 중';
+        }
       }
     }
 

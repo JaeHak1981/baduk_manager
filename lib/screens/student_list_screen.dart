@@ -1532,6 +1532,8 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                       TextButton(
                         onPressed: () async {
                           DateTime startDate = DateTime.now();
+                          int? selectedSession; // 추가
+
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (context) => StatefulBuilder(
@@ -1570,6 +1572,51 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                                         }
                                       },
                                     ),
+                                    const Divider(),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
+                                      child: Text(
+                                        '배정할 부 선택',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      children: [
+                                        ChoiceChip(
+                                          label: const Text('미배정'),
+                                          selected: selectedSession == 0,
+                                          onSelected: (selected) {
+                                            if (selected) {
+                                              setDialogState(
+                                                () => selectedSession = 0,
+                                              );
+                                            }
+                                          },
+                                        ),
+                                        ...List.generate(
+                                          widget.academy.totalSessions,
+                                          (i) => i + 1,
+                                        ).map((s) {
+                                          return ChoiceChip(
+                                            label: Text('$s부'),
+                                            selected: selectedSession == s,
+                                            onSelected: (selected) {
+                                              if (selected) {
+                                                setDialogState(
+                                                  () => selectedSession = s,
+                                                );
+                                              }
+                                            },
+                                          );
+                                        }),
+                                      ],
+                                    ),
                                   ],
                                 ),
                                 actions: [
@@ -1594,6 +1641,7 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                               academyId: widget.student.academyId,
                               ownerId: widget.student.ownerId,
                               startDate: startDate,
+                              sessionId: selectedSession, // 전달
                             );
                           }
                         },

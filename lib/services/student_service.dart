@@ -128,6 +128,7 @@ class StudentService {
     List<String> studentIds, {
     DateTime? startDate,
     DateTime? endDate,
+    int? sessionId,
   }) async {
     final batch = _firestore.batch();
 
@@ -137,18 +138,17 @@ class StudentService {
       if (!snapshot.exists) continue;
 
       final data = snapshot.data()!;
+
+      // 1. 수강 이력(enrollmentHistory) 업데이트
       final historyData = data['enrollmentHistory'] as List? ?? [];
       final List<EnrollmentPeriod> history = historyData
           .map((e) => EnrollmentPeriod.fromMap(e as Map<String, dynamic>))
           .toList();
 
       if (startDate != null) {
-        // 일괄 재등록: 새로운 기간 추가
         history.add(EnrollmentPeriod(startDate: startDate));
       } else if (endDate != null) {
-        // 일괄 퇴원 예약: 가장 최근 기간의 종료일 수정
         if (history.isEmpty) {
-          // 이력이 없으면 생성 시점부터의 기간으로 생성 (마이그레이션 대응)
           final createdAt = (data['createdAt'] as Timestamp).toDate();
           history.add(EnrollmentPeriod(startDate: createdAt, endDate: endDate));
         } else {
@@ -160,12 +160,30 @@ class StudentService {
         }
       }
 
-      batch.update(docRef, {
+      // 2. 부 이동 이력(sessionHistory) 업데이트 (시작일이 있고 세션이 선택된 경우)
+      final sessionHistoryData = data['sessionHistory'] as List? ?? [];
+      final List<SessionHistory> sessionHistory = sessionHistoryData
+          .map((e) => SessionHistory.fromMap(e as Map<String, dynamic>))
+          .toList();
+
+      Map<String, dynamic> updates = {
         'isDeleted': false,
         'deletedAt': null,
         'enrollmentHistory': history.map((e) => e.toFirestore()).toList(),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+
+      if (startDate != null && sessionId != null) {
+        sessionHistory.add(
+          SessionHistory(effectiveDate: startDate, sessionId: sessionId),
+        );
+        updates['sessionHistory'] = sessionHistory
+            .map((e) => e.toFirestore())
+            .toList();
+        updates['session'] = sessionId; // Legacy 필드 보정
+      }
+
+      batch.update(docRef, updates);
     }
 
     await batch.commit();

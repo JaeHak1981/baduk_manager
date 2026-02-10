@@ -221,6 +221,7 @@ class StudentProvider extends BaseProvider {
     required String ownerId,
     DateTime? startDate,
     DateTime? endDate,
+    int? sessionId,
   }) async {
     return await runAsync(() async {
           try {
@@ -228,6 +229,7 @@ class StudentProvider extends BaseProvider {
               studentIds,
               startDate: startDate,
               endDate: endDate,
+              sessionId: sessionId,
             );
             await loadStudents(academyId, ownerId: ownerId);
             AppErrorHandler.showSnackBar(

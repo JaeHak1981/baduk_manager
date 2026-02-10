@@ -210,6 +210,8 @@ class _StudentListScreenState extends State<StudentListScreen> {
     if (_selectedStudentIds.isEmpty) return;
 
     DateTime startDate = DateTime.now();
+    int? selectedSession;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -218,7 +220,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('선택한 ${_selectedStudentIds.length}명의 학생을 재등록하시겠습니까?'),
+              const Text('선택한 학생들을 재등록하시겠습니까?'),
               const SizedBox(height: 16),
               ListTile(
                 title: const Text('재등록 시작일'),
@@ -239,6 +241,39 @@ class _StudentListScreenState extends State<StudentListScreen> {
                     setDialogState(() => startDate = picked);
                   }
                 },
+              ),
+              const Divider(),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  '배정할 부 선택',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  ChoiceChip(
+                    label: const Text('미배정'),
+                    selected: selectedSession == 0,
+                    onSelected: (selected) {
+                      if (selected) setDialogState(() => selectedSession = 0);
+                    },
+                  ),
+                  ...List.generate(
+                    widget.academy.totalSessions,
+                    (i) => i + 1,
+                  ).map((s) {
+                    return ChoiceChip(
+                      label: Text('$s부'),
+                      selected: selectedSession == s,
+                      onSelected: (selected) {
+                        if (selected) setDialogState(() => selectedSession = s);
+                      },
+                    );
+                  }),
+                ],
               ),
             ],
           ),
@@ -264,6 +299,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
             academyId: widget.academy.id,
             ownerId: widget.academy.ownerId,
             startDate: startDate,
+            sessionId: selectedSession,
           );
       if (mounted && success) {
         setState(() {
@@ -579,6 +615,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
           ),
           const SizedBox(width: 90, child: Text('성명', style: textStyle)),
           const SizedBox(width: 50, child: Text('학년', style: textStyle)),
+          const SizedBox(width: 80, child: Text('예약 현황', style: textStyle)),
           const Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
@@ -587,7 +624,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
           ),
           const SizedBox(width: 65, child: Text('출석', style: textStyle)),
           const SizedBox(
-            width: 160,
+            width: 140, // [MODIFIED] 160 -> 140 (공간 확보)
             child: Text('관리', style: textStyle, textAlign: TextAlign.center),
           ),
         ],
@@ -1303,28 +1340,13 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
               // 2. [이름] 영역 (90)
               SizedBox(
                 width: 90,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      widget.student.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (widget.student.nextEventLabel != null)
-                      Text(
-                        widget.student.nextEventLabel!,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Colors.blue,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                  ],
+                child: Text(
+                  widget.student.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
 
@@ -1337,6 +1359,37 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                       : '-',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                 ),
+              ),
+
+              // 3.5. [예약 현황] 영역 (80)
+              SizedBox(
+                width: 80,
+                child: widget.student.nextEventLabel != null
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.blue.shade100),
+                        ),
+                        child: Text(
+                          widget.student.nextEventLabel!,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.blue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : const Text(
+                        '-',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                        textAlign: TextAlign.center,
+                      ),
               ),
 
               // 4. [진도현황] 영역 (Expanded)

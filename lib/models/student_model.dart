@@ -378,12 +378,16 @@ class StudentModel {
         final start = period.startDate.startOfDay;
         final end = period.endDate?.startOfDay;
         if (!start.isAfter(now) && (end == null || !end.isBefore(now))) {
+          // 부(Session)가 배정되지 않은 경우 '미배정'으로 표시 (사용자 요청)
+          if (session == null || session == 0) {
+            return '미배정';
+          }
           return '수강 중';
         }
       }
     }
 
-    return '예약 없음';
+    return '미배정';
   }
 
   /// 급수 표시 문자열 (예: 30급, 1단)

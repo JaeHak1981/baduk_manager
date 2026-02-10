@@ -1291,10 +1291,29 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
         .where((p) => !p.isCompleted)
         .toList();
 
+    // 예약 정보 분석
+    final reservationDetail = widget.student.reservationDetail;
+    final hasReservation =
+        reservationDetail != '수강 중' && reservationDetail != '미배정';
+    final isRetirement = hasReservation && reservationDetail.contains('퇴원');
+
+    // 배경색 결정
+    Color backgroundColor;
+    if (widget.isSelected) {
+      backgroundColor = Colors.blue.shade50;
+    } else if (hasReservation) {
+      // 퇴원 예약: 연한 빨강, 부 이동 등: 연한 노랑
+      backgroundColor = isRetirement
+          ? Colors.red.shade50
+          : Colors.amber.shade50;
+    } else {
+      backgroundColor = Colors.white;
+    }
+
     return Container(
-      height: 52, // 고정 높이로 밀도 최적화
+      height: 52,
       decoration: BoxDecoration(
-        color: widget.isSelected ? Colors.blue.shade50 : Colors.white,
+        color: backgroundColor,
         border: Border(
           bottom: BorderSide(color: Colors.grey.shade100, width: 1),
         ),
@@ -1388,14 +1407,39 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
               // 2. [이름] 영역 (90)
               SizedBox(
                 width: 90,
-                child: Text(
-                  widget.student.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: widget.hideReservation && hasReservation
+                    ? RichText(
+                        text: TextSpan(
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          children: [
+                            TextSpan(text: widget.student.name),
+                            TextSpan(
+                              text: ' [$reservationDetail]',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.normal,
+                                color: isRetirement
+                                    ? Colors.red.shade700
+                                    : Colors.amber.shade900,
+                              ),
+                            ),
+                          ],
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      )
+                    : Text(
+                        widget.student.name,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
               ),
 
               // 3. [학년] 영역 (50)

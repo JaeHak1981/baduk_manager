@@ -29,6 +29,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
 
   late int _selectedLevel;
   int? _selectedSession;
+  DateTime _startDate = DateTime.now();
   bool _isLoading = false;
 
   @override
@@ -137,10 +138,13 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
               ? null
               : _studentNumberController.text.trim(),
           createdAt: createdAt,
-          // 신규 학생은 초기 이력을 즉시 생성
-          enrollmentHistory: [EnrollmentPeriod(startDate: createdAt)],
+          // [MODIFIED] 시작일을 사용자가 선택한 날짜로 설정
+          enrollmentHistory: [EnrollmentPeriod(startDate: _startDate)],
           sessionHistory: [
-            SessionHistory(effectiveDate: createdAt, sessionId: initialSession),
+            SessionHistory(
+              effectiveDate: _startDate,
+              sessionId: initialSession,
+            ),
           ],
         );
 
@@ -415,6 +419,48 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
                 validator: (value) =>
                     (value == null || value.isEmpty) ? '이름을 입력해주세요' : null,
               ),
+              if (widget.student == null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.calendar_today,
+                      color: Colors.blue,
+                    ),
+                    title: const Text('수강 시작일 (등록일)'),
+                    subtitle: Text(
+                      '${_startDate.year}-${_startDate.month}-${_startDate.day}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.edit, size: 20),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _startDate,
+                        firstDate: DateTime.now().subtract(
+                          const Duration(days: 365),
+                        ),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (picked != null) {
+                        setState(() => _startDate = picked);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '* 오늘 이후 날짜를 선택하면 미래의 출석부에 자동 등재됩니다.',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
               const SizedBox(height: 16),
               const Text(
                 '학교 정보 (선택사항)',

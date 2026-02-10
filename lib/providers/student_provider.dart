@@ -179,7 +179,7 @@ class StudentProvider extends BaseProvider {
         false;
   }
 
-  /// 학생 복구
+  /// 학생 복구 (Simple Restore)
   Future<bool> restoreStudent(
     String studentId, {
     required String academyId,
@@ -193,6 +193,27 @@ class StudentProvider extends BaseProvider {
             return true;
           } catch (e) {
             AppErrorHandler.handle(e, customMessage: '학생 복구에 실패했습니다.');
+            return false;
+          }
+        }) ??
+        false;
+  }
+
+  /// 학생 재등록 (이력 기반 복구)
+  Future<bool> reEnrollStudent(
+    String studentId, {
+    required String academyId,
+    required String ownerId,
+    required DateTime startDate,
+  }) async {
+    return await runAsync(() async {
+          try {
+            await _studentService.reEnrollStudent(studentId, startDate);
+            await loadStudents(academyId, ownerId: ownerId);
+            AppErrorHandler.showSnackBar('학생이 재등록되었습니다.', isError: false);
+            return true;
+          } catch (e) {
+            AppErrorHandler.handle(e, customMessage: '학생 재등록에 실패했습니다.');
             return false;
           }
         }) ??

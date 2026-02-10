@@ -123,11 +123,34 @@ class StudentService {
     await batch.commit();
   }
 
-  /// 학생 복구 (Restore)
+  /// 학생 복구 (Simple Restore)
   Future<void> restoreStudent(String studentId) async {
     await _firestore.collection(_collection).doc(studentId).update({
       'isDeleted': false,
       'deletedAt': null,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// 학생 재등록 (이력 동반 복구)
+  Future<void> reEnrollStudent(String studentId, DateTime startDate) async {
+    final docRef = _firestore.collection(_collection).doc(studentId);
+    final snapshot = await docRef.get();
+
+    if (!snapshot.exists) return;
+
+    final data = snapshot.data()!;
+    final historyData = data['enrollmentHistory'] as List? ?? [];
+
+    // 신규 수강 기간 생성
+    final newPeriod = EnrollmentPeriod(startDate: startDate).toFirestore();
+    final updatedHistory = List.from(historyData)..add(newPeriod);
+
+    await docRef.update({
+      'isDeleted': false,
+      'deletedAt': null,
+      'enrollmentHistory': updatedHistory,
+      'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 

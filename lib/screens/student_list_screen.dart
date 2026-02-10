@@ -1288,32 +1288,69 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                       const SizedBox(width: 2),
                       TextButton(
                         onPressed: () async {
+                          DateTime startDate = DateTime.now();
                           final confirm = await showDialog<bool>(
                             context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('재원생 복구'),
-                              content: Text(
-                                '${widget.student.name} 학생을 다시 재원생 목록으로 복구하시겠습니까?',
+                            builder: (context) => StatefulBuilder(
+                              builder: (context, setDialogState) => AlertDialog(
+                                title: const Text('재원생 재등록'),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '[${widget.student.name}] 학생을 재원생 목록으로 다시 등록하시겠습니까?',
+                                    ),
+                                    const SizedBox(height: 16),
+                                    ListTile(
+                                      title: const Text('재등록 시작일'),
+                                      subtitle: Text(
+                                        '${startDate.year}-${startDate.month}-${startDate.day}',
+                                      ),
+                                      trailing: const Icon(
+                                        Icons.calendar_today,
+                                      ),
+                                      onTap: () async {
+                                        final picked = await showDatePicker(
+                                          context: context,
+                                          initialDate: startDate,
+                                          firstDate: DateTime.now().subtract(
+                                            const Duration(days: 30),
+                                          ),
+                                          lastDate: DateTime.now().add(
+                                            const Duration(days: 365),
+                                          ),
+                                        );
+                                        if (picked != null) {
+                                          setDialogState(
+                                            () => startDate = picked,
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('취소'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    child: const Text('재등록'),
+                                  ),
+                                ],
                               ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context, false),
-                                  child: const Text('취소'),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text('복구'),
-                                ),
-                              ],
                             ),
                           );
                           if (confirm == true && mounted) {
                             final provider = context.read<StudentProvider>();
-                            await provider.restoreStudent(
+                            await provider.reEnrollStudent(
                               widget.student.id,
                               academyId: widget.student.academyId,
                               ownerId: widget.student.ownerId,
+                              startDate: startDate,
                             );
                           }
                         },

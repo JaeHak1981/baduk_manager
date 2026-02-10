@@ -615,7 +615,11 @@ class _StudentListScreenState extends State<StudentListScreen> {
           ),
           const SizedBox(width: 90, child: Text('성명', style: textStyle)),
           const SizedBox(width: 50, child: Text('학년', style: textStyle)),
-          const SizedBox(width: 80, child: Text('예약 현황', style: textStyle)),
+          const SizedBox(width: 50, child: Text('급수', style: textStyle)), // 추가
+          const SizedBox(
+            width: 110, // [MODIFIED] 80 -> 110 (상세 정보 확보)
+            child: Text('예약 현황', style: textStyle),
+          ),
           const Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
@@ -624,7 +628,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
           ),
           const SizedBox(width: 65, child: Text('출석', style: textStyle)),
           const SizedBox(
-            width: 140, // [MODIFIED] 160 -> 140 (공간 확보)
+            width: 150, // [MODIFIED] 140 -> 150 (버튼 텍스트 가독성 확보)
             child: Text('관리', style: textStyle, textAlign: TextAlign.center),
           ),
         ],
@@ -1361,10 +1365,27 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                 ),
               ),
 
-              // 3.5. [예약 현황] 영역 (80)
+              // 3.1. [급수] 영역 (50) - 추가
               SizedBox(
-                width: 80,
-                child: widget.student.nextEventLabel != null
+                width: 50,
+                child: Text(
+                  widget.student.levelDisplayName,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: widget.student.level == 0
+                        ? Colors.grey
+                        : Colors.blue.shade800,
+                    fontWeight: widget.student.level == 0
+                        ? FontWeight.normal
+                        : FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              // 3.5. [예약 현황] 영역 (110)
+              SizedBox(
+                width: 110,
+                child: widget.student.reservationDetail != '예약 없음'
                     ? Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 4,
@@ -1376,7 +1397,7 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                           border: Border.all(color: Colors.blue.shade100),
                         ),
                         child: Text(
-                          widget.student.nextEventLabel!,
+                          widget.student.reservationDetail,
                           style: const TextStyle(
                             fontSize: 10,
                             color: Colors.blue,
@@ -1385,9 +1406,12 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                           textAlign: TextAlign.center,
                         ),
                       )
-                    : const Text(
-                        '-',
-                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                    : Text(
+                        widget.student.reservationDetail, // '예약 없음' 표시
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
                         textAlign: TextAlign.center,
                       ),
               ),
@@ -1461,9 +1485,9 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                 ),
               ),
 
-              // 6. [관리버튼] 영역 (160)
+              // 6. [관리버튼] 영역 (150)
               SizedBox(
-                width: 160,
+                width: 150,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [

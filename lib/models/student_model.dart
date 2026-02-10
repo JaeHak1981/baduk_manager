@@ -305,8 +305,48 @@ class StudentModel {
     return null;
   }
 
+  /// 상세 예약 정보 (날짜 + 몇 부 이동인지 포함)
+  String get reservationDetail {
+    final now = DateTime.now().startOfDay;
+
+    // 1. 퇴원 예약 체크
+    for (var period in enrollmentHistory) {
+      if (period.endDate != null) {
+        final end = period.endDate!.startOfDay;
+        if (!end.isBefore(now)) {
+          return '${end.month}/${end.day} 퇴원';
+        }
+      }
+    }
+
+    // 2. 재등록 및 부 이동 예약 체크
+    for (var period in enrollmentHistory) {
+      final start = period.startDate.startOfDay;
+      if (start.isAfter(now)) {
+        // 해당 시작일에 예정된 부(Session) 검색
+        int? targetSession;
+        for (var sess in sessionHistory) {
+          if (sess.effectiveDate.isAtSameMomentAs(period.startDate)) {
+            targetSession = sess.sessionId;
+            break;
+          }
+        }
+
+        final sessionLabel = targetSession != null
+            ? (targetSession == 0 ? '(미배정)' : '(${targetSession}부)')
+            : '';
+        return '${start.month}/${start.day}$sessionLabel 재등록';
+      }
+    }
+
+    return '예약 없음';
+  }
+
   /// 급수 표시 문자열 (예: 30급, 1단)
   String get levelDisplayName {
+    // level이 0이거나 데이터가 없는 기존 데이터에 대해 30급을 기본값으로 처리
+    if (level == 0) return '30급';
+
     if (level > 0) {
       return '$level급';
     } else {

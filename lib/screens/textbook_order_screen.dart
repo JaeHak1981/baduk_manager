@@ -89,7 +89,10 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     // 로딩 중이면 초기화를 미룸
     if (studentProvider.isLoading || progressProvider.isLoading) return;
 
-    final students = studentProvider.students;
+    final allStudents = studentProvider.allStudents;
+    final students = allStudents
+        .where((s) => s.isEnrolledAt(_targetMonth))
+        .toList();
     if (students.isEmpty) return;
 
     // 1. 임시 저장 데이터 로드 시도
@@ -99,21 +102,24 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     if (tempOrder != null) {
       debugPrint('ℹ️ [TextbookOrderScreen] 임시 저장 데이터 발견. 복원 중...');
       for (var item in tempOrder.items) {
-        _orderEntries[item.studentId] = _OrderEntry(
-          type: OrderType.values.firstWhere(
-            (e) => e.name == item.type,
-            orElse: () => OrderType.none,
-          ),
-          textbook: item.textbookId != null
-              ? progressProvider.allOwnerTextbooks
-                    .cast<TextbookModel?>()
-                    .firstWhere(
-                      (t) => t?.id == item.textbookId,
-                      orElse: () => null,
-                    )
-              : null,
-          volume: item.volume,
-        );
+        // 해당 월에 유효한 학생들만 복원
+        if (students.any((s) => s.id == item.studentId)) {
+          _orderEntries[item.studentId] = _OrderEntry(
+            type: OrderType.values.firstWhere(
+              (e) => e.name == item.type,
+              orElse: () => OrderType.none,
+            ),
+            textbook: item.textbookId != null
+                ? progressProvider.allOwnerTextbooks
+                      .cast<TextbookModel?>()
+                      .firstWhere(
+                        (t) => t?.id == item.textbookId,
+                        orElse: () => null,
+                      )
+                : null,
+            volume: item.volume,
+          );
+        }
       }
 
       // 혹시 임시 저장 데이터에 없는 학생이 있다면 기본값 설정
@@ -150,22 +156,39 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     });
   }
 
+  DateTime _targetMonth = DateTime.now().month == 12
+      ? DateTime(DateTime.now().year + 1, 1, 1)
+      : DateTime(DateTime.now().year, DateTime.now().month + 1, 1);
+
   List<StudentModel> _getFilteredStudents(
     List<StudentModel> allStudents,
     AcademyModel latestAcademy,
   ) {
-    List<StudentModel> filtered = allStudents;
+    // 1. 대상 월 기준 수강생 필터링 (이력 기반)
+    List<StudentModel> filtered = allStudents
+        .where((s) => s.isEnrolledAt(_targetMonth))
+        .toList();
+
+    // 2. 부(Session) 필터링
     if (_selectedFilterSession != null) {
       if (_selectedFilterSession == 0) {
         filtered = filtered
-            .where((s) => s.session == null || s.session == 0)
+            .where(
+              (s) =>
+                  s.getSessionAt(_targetMonth) == null ||
+                  s.getSessionAt(_targetMonth) == 0,
+            )
             .toList();
       } else {
         filtered = filtered
-            .where((s) => s.session == _selectedFilterSession)
+            .where(
+              (s) => s.getSessionAt(_targetMonth) == _selectedFilterSession,
+            )
             .toList();
       }
     }
+
+    // 3. 검색 필터링
     if (_searchQuery.isNotEmpty) {
       filtered = filtered.where((s) => s.name.contains(_searchQuery)).toList();
     }
@@ -829,32 +852,96 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
   }
 
   Widget _buildFilterArea(AcademyModel latestAcademy) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Row(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.white,
+      child: Column(
         children: [
-          Expanded(
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText: '이름 검색',
-                prefixIcon: Icon(Icons.search, size: 16),
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
+          // 1. 주문 대상 월 선택
+          Row(
+            children: [
+              const Icon(Icons.calendar_month, size: 18, color: Colors.blue),
+              const SizedBox(width: 8),
+              const Text(
+                '주문 대상 월:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(width: 12),
+              DropdownButton<DateTime>(
+                value: DateTime(_targetMonth.year, _targetMonth.month),
+                onChanged: (DateTime? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _targetMonth = newValue;
+                      _isInitialized = false; // 다시 초기화 유도
+                    });
+                  }
+                },
+                items:
+                    [
+                      for (int i = 0; i < 3; i++)
+                        DateTime(
+                          DateTime.now().year,
+                          DateTime.now().month + i,
+                          1,
+                        ),
+                    ].map((date) {
+                      return DropdownMenuItem<DateTime>(
+                        value: date,
+                        child: Text('${date.year}년 ${date.month}월'),
+                      );
+                    }).toList(),
+              ),
+              const Spacer(),
+              if (_targetMonth.isAfter(DateTime.now()))
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.orange,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    '미래 명단',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-                isDense: true,
-              ),
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-              ),
-              onChanged: (val) => setState(() => _searchQuery = val),
-            ),
+            ],
           ),
-          const SizedBox(width: 8),
-          _buildSessionFilterDropdown(latestAcademy),
+          const Divider(height: 8),
+          // 2. 검색 및 부 필터
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: const InputDecoration(
+                    hintText: '이름 검색',
+                    prefixIcon: Icon(Icons.search, size: 16),
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    isDense: true,
+                  ),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _buildSessionFilterDropdown(latestAcademy),
+            ],
+          ),
         ],
       ),
     );
@@ -1239,17 +1326,32 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  student.name,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      student.name,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                 ),
+                if (student.getStatusLabelAt(_targetMonth) != null)
+                  Text(
+                    student.getStatusLabelAt(_targetMonth)!,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 Text(
-                  student.session != null && student.session != 0
-                      ? '${student.session}부'
+                  student.getSessionAt(_targetMonth) != null &&
+                          student.getSessionAt(_targetMonth) != 0
+                      ? '${student.getSessionAt(_targetMonth)}부'
                       : '미정',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 11, color: Colors.grey),

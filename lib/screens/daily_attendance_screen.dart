@@ -42,6 +42,10 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
   final Set<String> selectedStudentIds = {};
   bool isSelectionMode = false;
 
+  // 중복 로딩 및 무한 루프 방지를 위한 플래그
+  bool _isInitialLoading = false;
+  DateTime? _lastLoadedDate;
+
   @override
   void initState() {
     super.initState();
@@ -49,23 +53,54 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
   }
 
   void _loadData() {
+    // 이미 로딩 중이거나 동일 날짜 데이터를 로딩한 경우 중복 호출 차단
+    if (_isInitialLoading && _lastLoadedDate == _selectedDate) return;
+
+    _isInitialLoading = true;
+    _lastLoadedDate = _selectedDate;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ownerId = context.read<AuthProvider>().currentUser?.uid ?? '';
-      context.read<AttendanceProvider>().loadMonthlyAttendance(
-        academyId: widget.academy.id,
-        ownerId: ownerId,
-        year: _selectedDate.year,
-        month: _selectedDate.month,
-      );
-      context.read<ScheduleProvider>().loadSchedule(
-        academyId: widget.academy.id,
-        year: _selectedDate.year,
-        month: _selectedDate.month,
-      );
-      context.read<StudentProvider>().loadStudents(
-        widget.academy.id,
-        ownerId: ownerId,
-      );
+      if (!mounted) return;
+
+      // 화면 전환 애니메이션 보호를 위해 300ms 지연 후 로딩 시작
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (!mounted) return;
+
+        final ownerId = context.read<AuthProvider>().currentUser?.uid ?? '';
+
+        // [FIX] ownerId가 없는 경우(로그아웃 등) 쿼리 실행 시 Permission Denied 발생 방지
+        if (ownerId.isEmpty) {
+          debugPrint(
+            'Warning: DailyAttendanceScreen _loadData aborted: ownerId is empty',
+          );
+          if (mounted) setState(() => _isInitialLoading = false);
+          return;
+        }
+
+        Future.wait([
+              context.read<AttendanceProvider>().loadMonthlyAttendance(
+                academyId: widget.academy.id,
+                ownerId: ownerId,
+                year: _selectedDate.year,
+                month: _selectedDate.month,
+              ),
+              context.read<ScheduleProvider>().loadSchedule(
+                academyId: widget.academy.id,
+                year: _selectedDate.year,
+                month: _selectedDate.month,
+              ),
+              context.read<StudentProvider>().loadStudents(
+                widget.academy.id,
+                ownerId: ownerId,
+              ),
+            ])
+            .then((_) {
+              if (mounted) setState(() => _isInitialLoading = false);
+            })
+            .catchError((_) {
+              if (mounted) setState(() => _isInitialLoading = false);
+            });
+      });
     });
   }
 
@@ -98,18 +133,21 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
   }
 
   List<StudentModel> getFilteredStudents(List<StudentModel> allStudents) {
-    // 1. 퇴원생(isDeleted)은 무조건 제외
-    final activeStudents = allStudents.where((s) => !s.isDeleted).toList();
+    // 1. 선택된 날짜에 수강 중인 학생만 필터링 (이력 기반)
+    final enrolledStudents = allStudents
+        .where((s) => s.isEnrolledAt(_selectedDate))
+        .toList();
 
-    // 2. 미배정 학생(session == null 또는 0) 제외
-    final assignedStudents = activeStudents.where((s) {
-      return s.session != null && s.session != 0;
+    // 2. 미배정 학생(선택된 날짜 기준 부가 null 또는 0) 제외
+    final assignedStudents = enrolledStudents.where((s) {
+      final sessionAt = s.getSessionAt(_selectedDate);
+      return sessionAt != null && sessionAt != 0;
     }).toList();
 
     // 3. 특정 부 선택 필터링
     if (_selectedSession == null) return assignedStudents;
     return assignedStudents
-        .where((s) => s.session == _selectedSession)
+        .where((s) => s.getSessionAt(_selectedDate) == _selectedSession)
         .toList();
   }
 
@@ -315,7 +353,7 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                       }
 
                       final filteredStudents = getFilteredStudents(
-                        studentProvider.students,
+                        studentProvider.allStudents,
                       );
 
                       // 오늘 날짜의 출결 데이터만 필터링

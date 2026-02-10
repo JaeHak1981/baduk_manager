@@ -10,6 +10,7 @@ class AttendanceProvider extends BaseProvider {
   final AttendanceService _attendanceService = AttendanceService();
 
   List<AttendanceRecord> _monthlyRecords = [];
+  Map<String, List<AttendanceRecord>> _monthlyRecordsMap = {}; // Key: studentId
   Map<String, List<AttendanceRecord>> _historyMap = {}; // Key: studentId
   int _stateCounter = 0; // UI 강제 갱신을 위한 카운터
 
@@ -25,13 +26,20 @@ class AttendanceProvider extends BaseProvider {
   List<AttendanceRecord> get monthlyRecords => _monthlyRecords;
   int get stateCounter => _stateCounter;
 
+  /// 특정 학생의 월별 출결 기록을 반환 (O(1) 검색용)
+  List<AttendanceRecord> getRecordsForStudent(String studentId) {
+    return _monthlyRecordsMap[studentId] ?? [];
+  }
+
   /// 특정 학생의 오늘 날짜 출결 기록을 반환합니다.
   AttendanceRecord? getTodayRecord(String studentId) {
+    final records = getRecordsForStudent(studentId);
+    if (records.isEmpty) return null;
+
+    final now = DateTime.now();
     try {
-      final now = DateTime.now();
-      return _monthlyRecords.firstWhere(
+      return records.firstWhere(
         (r) =>
-            r.studentId == studentId &&
             r.timestamp.year == now.year &&
             r.timestamp.month == now.month &&
             r.timestamp.day == now.day,
@@ -50,12 +58,23 @@ class AttendanceProvider extends BaseProvider {
     bool showLoading = true,
   }) async {
     await runAsync(() async {
-      _monthlyRecords = await _attendanceService.getMonthlyAttendance(
+      final records = await _attendanceService.getMonthlyAttendance(
         academyId: academyId,
         ownerId: ownerId,
         year: year,
         month: month,
       );
+      _monthlyRecords = records;
+
+      // 학생별 맵 구축 (O(N))
+      final Map<String, List<AttendanceRecord>> newMap = {};
+      for (var r in records) {
+        if (!newMap.containsKey(r.studentId)) {
+          newMap[r.studentId] = [];
+        }
+        newMap[r.studentId]!.add(r);
+      }
+      _monthlyRecordsMap = newMap;
     }, showLoading: showLoading);
   }
 
@@ -113,14 +132,19 @@ class AttendanceProvider extends BaseProvider {
       _monthlyRecords = _monthlyRecords
           .where((r) => !(r.id == docKey))
           .toList();
+
+      // Map 동기화
+      if (_monthlyRecordsMap.containsKey(studentId)) {
+        _monthlyRecordsMap[studentId] = _monthlyRecordsMap[studentId]!
+            .where((r) => r.id != docKey)
+            .toList();
+      }
     } else {
       // 추가/수정 처리
       _pendingDeletions.remove(docKey);
 
       final existing = _monthlyRecords.where((r) => r.id == docKey).firstOrNull;
 
-      // 비고 머지 로직: 새로운 record의 note가 null이면 기존 것을 쓰고,
-      // null이 아니면(빈 문자열 포함) 새로운 것을 씁니다.
       final mergedRecord = existing != null
           ? record.copyWith(note: record.note ?? existing.note)
           : record;
@@ -140,6 +164,18 @@ class AttendanceProvider extends BaseProvider {
         newList.add(mergedRecord);
       }
       _monthlyRecords = newList;
+
+      // Map 동기화
+      if (!_monthlyRecordsMap.containsKey(studentId)) {
+        _monthlyRecordsMap[studentId] = [];
+      }
+      final studentList = _monthlyRecordsMap[studentId]!;
+      int mapIdx = studentList.indexWhere((r) => r.id == docKey);
+      if (mapIdx != -1) {
+        studentList[mapIdx] = mergedRecord;
+      } else {
+        studentList.add(mergedRecord);
+      }
     }
     _stateCounter++;
     notifyListeners();

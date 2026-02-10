@@ -17,7 +17,6 @@ import 'batch_add_student_dialog.dart';
 import 'student_history_screen.dart'; // 학생 히스토리 화면 import
 import '../constants/ui_constants.dart';
 import '../utils/excel_utils.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // [ADDED]
 
 /// 학생 목록 화면
 class StudentListScreen extends StatefulWidget {
@@ -34,84 +33,71 @@ class _StudentListScreenState extends State<StudentListScreen> {
   bool _isSelectionMode = false;
   final Set<String> _selectedStudentIds = {};
 
+  // 중복 로딩 및 무한 루프 방지를 위한 플래그
+  bool _isInitialLoading = false;
+  String? _lastLoadedAcademyId;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadData();
-      _checkOnboarding(); // [ADDED]
+      // 화면 전환 애니메이션이 완료될 때까지 잠시 대기 후 로드 (멈춤 현상 방지)
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _loadData();
+        }
+      });
     });
   }
 
-  Future<void> _checkOnboarding() async {
-    final prefs = await SharedPreferences.getInstance();
-    final hasShown = prefs.getBool('show_layout_guide_2024') ?? false;
-
-    if (!hasShown && mounted) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.auto_awesome, color: Colors.orange),
-              SizedBox(width: 8),
-              Text('화면 개선 안내'),
-            ],
-          ),
-          content: const Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '더 많은 정보를 한눈에 관리할 수 있도록 학생 목록 화면이 개선되었습니다!',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 12),
-              Text('• PC/태블릿: 넓은 화면을 활용한 2단 리스트'),
-              Text('• 모바일: 더 슬림해진 1단 리스트'),
-              Text('• 시선 최적화: 왼쪽에서 아래로 번호순 정렬'),
-              Text('• 고정 헤더: 스크롤을 내려도 항목 이름 유지'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                prefs.setBool('show_layout_guide_2024', true);
-                Navigator.pop(context);
-              },
-              child: const Text('확인 완료'),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
   void _loadData() {
+    // 이미 로딩 중이거나 동일 기관 데이터를 로딩한 경우 중복 호출 차단
+    if (_isInitialLoading && _lastLoadedAcademyId == widget.academy.id) return;
+
+    _isInitialLoading = true;
+    _lastLoadedAcademyId = widget.academy.id;
+
     final now = DateTime.now();
-    context.read<StudentProvider>().loadStudents(
-      widget.academy.id,
-      ownerId: widget.academy.ownerId,
-    );
-    // [Bulk Load] 전체 진도 한 번에 로드
-    context.read<ProgressProvider>().loadAcademyProgress(
-      widget.academy.id,
-      ownerId: widget.academy.ownerId,
-    );
-    // 월간 출석 데이터 로드
-    context.read<AttendanceProvider>().loadMonthlyAttendance(
-      academyId: widget.academy.id,
-      ownerId: widget.academy.ownerId,
-      year: now.year,
-      month: now.month,
-      showLoading: false,
-    );
-    // 일정 데이터 로드
-    context.read<ScheduleProvider>().loadSchedule(
-      academyId: widget.academy.id,
-      year: now.year,
-      month: now.month,
-    );
+    final ownerId = widget.academy.ownerId;
+
+    // [FIX] ownerId가 없는 경우 Permission Denied 발생 방지
+    if (ownerId.isEmpty) {
+      debugPrint(
+        'Warning: StudentListScreen _loadData aborted: ownerId is empty',
+      );
+      if (mounted) setState(() => _isInitialLoading = false);
+      return;
+    }
+
+    // 비동기 작업 통합 처리 및 로딩 상태 관리
+    Future.wait([
+          context.read<StudentProvider>().loadStudents(
+            widget.academy.id,
+            ownerId: widget.academy.ownerId,
+          ),
+          context.read<ProgressProvider>().loadAcademyProgress(
+            widget.academy.id,
+            ownerId: widget.academy.ownerId,
+          ),
+          context.read<AttendanceProvider>().loadMonthlyAttendance(
+            academyId: widget.academy.id,
+            ownerId: widget.academy.ownerId,
+            year: now.year,
+            month: now.month,
+            showLoading: false,
+          ),
+          context.read<ScheduleProvider>().loadSchedule(
+            academyId: widget.academy.id,
+            year: now.year,
+            month: now.month,
+          ),
+        ])
+        .then((_) {
+          if (mounted) setState(() => _isInitialLoading = false);
+        })
+        .catchError((_) {
+          if (mounted) setState(() => _isInitialLoading = false);
+        });
   }
 
   void _toggleStudentSelection(String studentId) {
@@ -337,46 +323,49 @@ class _StudentListScreenState extends State<StudentListScreen> {
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
+                    // 웹 버전에서 무한 높이 에러(Unbounded height) 방지를 위한 절대 높이 계산
+                    final double screenHeight = MediaQuery.sizeOf(
+                      context,
+                    ).height;
+                    final double effectiveHeight =
+                        constraints.maxHeight.isInfinite
+                        ? (screenHeight - 150).clamp(300.0, 5000.0)
+                        : constraints.maxHeight;
+
                     final isWide = constraints.maxWidth > 800;
 
-                    return Column(
-                      children: [
-                        // 1. 고정 헤더 (Sticky Header)
-                        _buildStickyHeader(isWide),
-                        // 2. 스크롤 영역
-                        Expanded(
-                          child: filteredStudents.isEmpty
-                              ? Center(
-                                  child: Text(
-                                    _selectedFilterSession == 0
-                                        ? '부 배정 안 된 학생이 없습니다'
-                                        : '$_selectedFilterSession부에 등록된 학생이 없습니다',
-                                    style: const TextStyle(color: Colors.grey),
-                                  ),
-                                )
-                              : RefreshIndicator(
-                                  onRefresh: () async => _loadData(),
-                                  child: SingleChildScrollView(
-                                    physics:
-                                        const AlwaysScrollableScrollPhysics(),
-                                    padding: EdgeInsets.fromLTRB(
-                                      16,
-                                      0, // 헤더가 고정이므로 상단 여백 제거
-                                      16,
-                                      AppDimensions.getBottomInset(context) +
-                                          40,
+                    return SizedBox(
+                      height: effectiveHeight,
+                      child: Column(
+                        children: [
+                          // 1. 고정 헤더 (Sticky Header)
+                          _buildStickyHeader(isWide),
+                          // 2. 스크롤 영역
+                          Expanded(
+                            child: filteredStudents.isEmpty
+                                ? Center(
+                                    child: Text(
+                                      _selectedFilterSession == 0
+                                          ? '부 배정 안 된 학생이 없습니다'
+                                          : '$_selectedFilterSession부에 등록된 학생이 없습니다',
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                      ),
                                     ),
+                                  )
+                                : RefreshIndicator(
+                                    onRefresh: () async => _loadData(),
                                     child: isWide
-                                        ? _buildTwoColumnLayout(
+                                        ? _buildTwoColumnListView(
                                             filteredStudents,
                                           )
-                                        : _buildSingleColumnLayout(
+                                        : _buildSingleColumnListView(
                                             filteredStudents,
                                           ),
                                   ),
-                                ),
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     );
                   },
                 ),
@@ -455,53 +444,74 @@ class _StudentListScreenState extends State<StudentListScreen> {
     );
   }
 
-  Widget _buildTwoColumnLayout(List<StudentModel> filteredStudents) {
-    // Column-major 정렬: 1~15번 왼쪽, 16~30번 오른쪽
+  Widget _buildTwoColumnListView(List<StudentModel> filteredStudents) {
     final halfLength = (filteredStudents.length / 2).ceil();
-    final leftColumnStudents = filteredStudents.take(halfLength).toList();
-    final rightColumnStudents = filteredStudents.skip(halfLength).toList();
+    final totalLessonDays = _calculateTotalLessonDays();
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            children: List.generate(leftColumnStudents.length, (index) {
-              final student = leftColumnStudents[index];
-              return _StudentProgressCard(
-                index: index + 1,
-                student: student,
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        AppDimensions.getBottomInset(context) + 40,
+      ),
+      itemCount: halfLength,
+      itemBuilder: (context, index) {
+        final leftIndex = index;
+        final rightIndex = index + halfLength;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _StudentProgressCard(
+                index: leftIndex + 1,
+                student: filteredStudents[leftIndex],
                 academy: widget.academy,
                 isSelectionMode: _isSelectionMode,
-                isSelected: _selectedStudentIds.contains(student.id),
-                onToggleSelection: () => _toggleStudentSelection(student.id),
-              );
-            }),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            children: List.generate(rightColumnStudents.length, (index) {
-              final student = rightColumnStudents[index];
-              return _StudentProgressCard(
-                index: halfLength + index + 1,
-                student: student,
-                academy: widget.academy,
-                isSelectionMode: _isSelectionMode,
-                isSelected: _selectedStudentIds.contains(student.id),
-                onToggleSelection: () => _toggleStudentSelection(student.id),
-              );
-            }),
-          ),
-        ),
-      ],
+                isSelected: _selectedStudentIds.contains(
+                  filteredStudents[leftIndex].id,
+                ),
+                onToggleSelection: () =>
+                    _toggleStudentSelection(filteredStudents[leftIndex].id),
+                totalLessonDays: totalLessonDays,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: rightIndex < filteredStudents.length
+                  ? _StudentProgressCard(
+                      index: rightIndex + 1,
+                      student: filteredStudents[rightIndex],
+                      academy: widget.academy,
+                      isSelectionMode: _isSelectionMode,
+                      isSelected: _selectedStudentIds.contains(
+                        filteredStudents[rightIndex].id,
+                      ),
+                      onToggleSelection: () => _toggleStudentSelection(
+                        filteredStudents[rightIndex].id,
+                      ),
+                      totalLessonDays: totalLessonDays,
+                    )
+                  : const SizedBox(),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildSingleColumnLayout(List<StudentModel> filteredStudents) {
-    return Column(
-      children: List.generate(filteredStudents.length, (index) {
+  Widget _buildSingleColumnListView(List<StudentModel> filteredStudents) {
+    final totalLessonDays = _calculateTotalLessonDays();
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        AppDimensions.getBottomInset(context) + 40,
+      ),
+      itemCount: filteredStudents.length,
+      itemBuilder: (context, index) {
         final student = filteredStudents[index];
         return _StudentProgressCard(
           index: index + 1,
@@ -510,8 +520,9 @@ class _StudentListScreenState extends State<StudentListScreen> {
           isSelectionMode: _isSelectionMode,
           isSelected: _selectedStudentIds.contains(student.id),
           onToggleSelection: () => _toggleStudentSelection(student.id),
+          totalLessonDays: totalLessonDays,
         );
-      }),
+      },
     );
   }
 
@@ -975,6 +986,23 @@ class _StudentListScreenState extends State<StudentListScreen> {
       ),
     ).then((_) => _loadData());
   }
+
+  int _calculateTotalLessonDays() {
+    final now = DateTime.now();
+    final scheduleProvider = context.read<ScheduleProvider>();
+    int totalLessonDaysCount = 0;
+    final targetDay = now.day;
+
+    for (int day = 1; day <= targetDay; day++) {
+      final date = DateTime(now.year, now.month, day);
+      if (widget.academy.lessonDays.contains(date.weekday) &&
+          !HolidayHelper.isHoliday(date) &&
+          !scheduleProvider.isDateHoliday(date)) {
+        totalLessonDaysCount++;
+      }
+    }
+    return totalLessonDaysCount;
+  }
 }
 
 /// 개별 학생 카드 (진도 정보 포함)
@@ -986,6 +1014,8 @@ class _StudentProgressCard extends StatefulWidget {
   final bool isSelected;
   final VoidCallback onToggleSelection;
 
+  final int totalLessonDays;
+
   const _StudentProgressCard({
     required this.index,
     required this.student,
@@ -993,6 +1023,7 @@ class _StudentProgressCard extends StatefulWidget {
     this.isSelectionMode = false,
     this.isSelected = false,
     required this.onToggleSelection,
+    required this.totalLessonDays,
   });
 
   @override
@@ -1162,70 +1193,53 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
               // 5. [출석율] 영역 (65)
               SizedBox(
                 width: 65,
-                child: () {
-                  final now = DateTime.now();
-                  final scheduleProvider = context.watch<ScheduleProvider>();
-                  final monthlyRecords = attendanceProvider.monthlyRecords
-                      .where((r) => r.studentId == widget.student.id)
-                      .toList();
-
-                  // 이번 달 실제 수업 일수 계산 (오늘까지 기준 또는 전체 달 기준?)
-                  // 선생님이 현재까지의 성실도를 보기 원하므로 오늘까지의 수업일수 기준으로 계산
-                  int totalLessonDaysCount = 0;
-                  // 오늘까지만 계산할지, 한 달 전체를 볼지 결정. 보통 '출석율'은 현재까지 진행된 수업 대비를 보여줌.
-                  final targetDay = now.day;
-
-                  for (int day = 1; day <= targetDay; day++) {
-                    final date = DateTime(now.year, now.month, day);
-                    // 정기 수업일이고, 공휴일이 아니며, 학원 휴강일이 아닌 경우
-                    if (widget.academy.lessonDays.contains(date.weekday) &&
-                        !HolidayHelper.isHoliday(date) &&
-                        !scheduleProvider.isDateHoliday(date)) {
-                      totalLessonDaysCount++;
-                    }
-                  }
-
-                  if (totalLessonDaysCount == 0) {
-                    return const Center(
-                      child: Text(
-                        '-%',
-                        style: TextStyle(fontSize: 11, color: Colors.grey),
-                      ),
-                    );
-                  }
-
-                  final presentCount = monthlyRecords.where((r) {
-                    return r.timestamp.year == now.year &&
-                        r.timestamp.month == now.month &&
-                        (r.type == AttendanceType.present ||
-                            r.type == AttendanceType.late);
-                  }).length;
-
-                  final rate = (presentCount / totalLessonDaysCount * 100)
-                      .toInt();
-
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        '출석율',
-                        style: TextStyle(fontSize: 8, color: Colors.grey),
-                      ),
-                      Text(
-                        '$rate%',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: rate >= 90
-                              ? Colors.blue.shade700
-                              : (rate >= 70
-                                    ? Colors.orange.shade700
-                                    : Colors.red.shade700),
+                child: Builder(
+                  builder: (context) {
+                    final monthlyRecords = attendanceProvider
+                        .getRecordsForStudent(widget.student.id);
+                    if (widget.totalLessonDays == 0) {
+                      return const Center(
+                        child: Text(
+                          '-%',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
                         ),
-                      ),
-                    ],
-                  );
-                }(),
+                      );
+                    }
+
+                    final now = DateTime.now();
+                    final presentCount = monthlyRecords.where((r) {
+                      return r.timestamp.year == now.year &&
+                          r.timestamp.month == now.month &&
+                          (r.type == AttendanceType.present ||
+                              r.type == AttendanceType.late);
+                    }).length;
+
+                    final rate = (presentCount / widget.totalLessonDays * 100)
+                        .toInt();
+
+                    return Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          '출석율',
+                          style: TextStyle(fontSize: 8, color: Colors.grey),
+                        ),
+                        Text(
+                          '$rate%',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: rate >= 90
+                                ? Colors.blue.shade700
+                                : (rate >= 70
+                                      ? Colors.orange.shade700
+                                      : Colors.red.shade700),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
 
               // 6. [관리버튼] 영역 (160)

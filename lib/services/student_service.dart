@@ -159,23 +159,61 @@ class StudentService {
     await batch.commit();
   }
 
-  /// 기존 데이터 정규화 (isDeleted 필드가 없는 데이터에 false 추가)
-  Future<void> normalizeStudents() async {
-    final snapshot = await _firestore.collection(_collection).get();
+  /// 기존 데이터 이력 기반 마이그레이션 (EnrollmentHistory, SessionHistory 초기화)
+  Future<int> migrateHistoryData(
+    String academyId, {
+    required String ownerId,
+  }) async {
+    final snapshot = await _firestore
+        .collection(_collection)
+        .where('academyId', isEqualTo: academyId)
+        .where('ownerId', isEqualTo: ownerId)
+        .get();
     final batch = _firestore.batch();
     int count = 0;
 
     for (var doc in snapshot.docs) {
       final data = doc.data();
-      if (!data.containsKey('isDeleted')) {
-        batch.update(doc.reference, {'isDeleted': false});
+      final eHistory = data['enrollmentHistory'] as List?;
+
+      // 이력이 없거나 비어있는 경우에만 초기화 (누락 방지)
+      if (eHistory == null || eHistory.isEmpty) {
+        // 기존 데이터를 기반으로 초기 이력 생성
+        final createdAt =
+            (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime(2024, 1, 1);
+        final isDeleted = data['isDeleted'] as bool? ?? false;
+        final deletedAt = (data['deletedAt'] as Timestamp?)?.toDate();
+
+        final enrollment = [
+          {
+            'startDate': Timestamp.fromDate(createdAt),
+            'endDate': isDeleted
+                ? (deletedAt != null ? Timestamp.fromDate(deletedAt) : null)
+                : null,
+          },
+        ];
+
+        final currentSession = data['session'] as int? ?? 0;
+        final sessions = [
+          {
+            'effectiveDate': Timestamp.fromDate(createdAt),
+            'sessionId': currentSession,
+          },
+        ];
+
+        batch.update(doc.reference, {
+          'enrollmentHistory': enrollment,
+          'sessionHistory': sessions,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
         count++;
       }
     }
 
     if (count > 0) {
       await batch.commit();
-      debugPrint('정규화 완료: $count 명의 학생 데이터 수정됨');
+      debugPrint('이력 마이그레이션 완료: $count 명의 학생 데이터 최신화됨');
     }
+    return count;
   }
 }

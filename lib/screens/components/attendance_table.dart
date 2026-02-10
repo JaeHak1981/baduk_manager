@@ -55,18 +55,16 @@ class AttendanceTable extends StatelessWidget {
           children: [
             Expanded(child: _buildDataTable(context, leftColumn, 0)),
             const VerticalDivider(width: 1),
+            const SizedBox(width: 8),
             Expanded(child: _buildDataTable(context, rightColumn, halfLength)),
           ],
         ),
       );
     }
 
-    return SingleChildScrollView(
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: _buildDataTable(context, students, 0),
-      ),
+      child: _buildDataTable(context, students, 0),
     );
   }
 
@@ -77,153 +75,201 @@ class AttendanceTable extends StatelessWidget {
   ) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const double noWidth = 25;
-        const double nameWidth = 60; // 이름 너비 복원
-        const double attendanceWidth = 40; // 출결 영역 너비
-        const double batchWidth = 65; // 일괄 버튼 너비
-        const double spacing = 8; // 간격 복원
-        const double remarkPadding = 12; // 출격-비고 사이 여백 추가
-        final double totalFixed =
-            noWidth +
-            nameWidth +
-            attendanceWidth +
-            batchWidth +
-            (spacing * 4) +
-            16 +
-            remarkPadding; // 16은 margin
-        final double remarkWidth = (constraints.maxWidth - totalFixed).clamp(
-          100.0,
-          500.0,
-        );
+        const double noWidth = 30;
+        const double nameWidth = 80;
+        const double attendanceWidth = 50;
+        const double batchWidth = 60;
 
-        return DataTable(
-          columnSpacing: spacing,
-          horizontalMargin: 8,
-          dataRowMinHeight: 44,
-          dataRowMaxHeight: 44,
-          headingRowHeight: 36,
-          headingTextStyle: AppTheme.heading2.copyWith(fontSize: 12),
-          columns: [
-            const DataColumn(
-              label: SizedBox(width: noWidth, child: Text('No.')),
-            ),
-            const DataColumn(
-              label: SizedBox(width: nameWidth, child: Text('이름')),
-            ),
-            const DataColumn(
-              label: SizedBox(
-                width: attendanceWidth,
-                child: Center(child: Text('출결')),
+        // 웹 버전에서 maxWidth가 Infinite일 경우를 대비한 방어 로직
+        final double availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+
+        final double remarkWidth =
+            (availableWidth -
+                    (noWidth + nameWidth + attendanceWidth + batchWidth + 40))
+                .clamp(100.0, 1200.0);
+
+        return Column(
+          children: [
+            // Header
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: noWidth,
+                    child: Text(
+                      'No.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(
+                    width: nameWidth,
+                    child: Text(
+                      '이름',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(
+                    width: attendanceWidth,
+                    child: Center(
+                      child: Text(
+                        '출결',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(
+                    width: batchWidth,
+                    child: Center(
+                      child: Text(
+                        '일괄',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Expanded(
+                    child: Text(
+                      '비고',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const DataColumn(
-              label: SizedBox(
-                width: batchWidth,
-                child: Center(child: Text('일괄')),
-              ),
-            ),
-            DataColumn(
-              label: Padding(
-                padding: const EdgeInsets.only(left: remarkPadding),
-                child: SizedBox(width: remarkWidth, child: const Text('비고')),
+            // Body
+            Expanded(
+              child: ListView.builder(
+                itemCount: chunk.length,
+                itemExtent: 52, // 고정 높이로 성능 최적화
+                itemBuilder: (context, index) {
+                  final student = chunk[index];
+                  final record = attendanceMap[student.id];
+                  final globalIndex = startOffset + index + 1;
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Colors.grey.shade200),
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: noWidth,
+                          child: Text(
+                            '$globalIndex',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: nameWidth,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                student.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              if (student.getStatusLabelAt(selectedDate) !=
+                                  null)
+                                Text(
+                                  student.getStatusLabelAt(selectedDate)!,
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.orange,
+                                    fontWeight: FontWeight.bold,
+                                    height: 1.0,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(
+                          width: attendanceWidth,
+                          child: Center(
+                            child: AttendanceCircularToggle(
+                              provider: attendanceProvider,
+                              studentId: student.id,
+                              academyId: student.academyId,
+                              ownerId: ownerId,
+                              date: selectedDate,
+                              record: record,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: batchWidth,
+                          child: Center(
+                            child: IconButton(
+                              icon: const Icon(
+                                Icons.edit_calendar,
+                                size: 20,
+                                color: Colors.blue,
+                              ),
+                              onPressed: () async {
+                                await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => BatchAttendanceDialog(
+                                    student: student,
+                                    academyId: academyId,
+                                    ownerId: ownerId,
+                                    initialDate: selectedDate,
+                                    lessonDays: lessonDays,
+                                  ),
+                                );
+                              },
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: RemarkCell(
+                            provider: attendanceProvider,
+                            studentId: student.id,
+                            academyId: student.academyId,
+                            ownerId: ownerId,
+                            date: selectedDate,
+                            initialNote: record?.note ?? "",
+                            width: remarkWidth,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
           ],
-          rows: List.generate(chunk.length, (index) {
-            final student = chunk[index];
-            final record = attendanceMap[student.id];
-            final globalIndex = startOffset + index + 1;
-
-            return DataRow(
-              cells: [
-                DataCell(
-                  Text(
-                    '$globalIndex',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                  ),
-                ),
-                DataCell(
-                  SizedBox(
-                    width: nameWidth,
-                    child: Text(
-                      student.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
-                DataCell(
-                  SizedBox(
-                    width: attendanceWidth,
-                    child: Center(
-                      child: AttendanceCircularToggle(
-                        provider: attendanceProvider,
-                        studentId: student.id,
-                        academyId: student.academyId,
-                        ownerId: ownerId,
-                        date: selectedDate,
-                        record: record,
-                      ),
-                    ),
-                  ),
-                ),
-                DataCell(
-                  SizedBox(
-                    width: batchWidth,
-                    child: Center(
-                      child: TextButton(
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(60, 30),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: () async {
-                          final result = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => BatchAttendanceDialog(
-                              student: student,
-                              academyId: academyId,
-                              ownerId: ownerId,
-                              initialDate: selectedDate,
-                              lessonDays: lessonDays,
-                            ),
-                          );
-                          if (result == true && context.mounted) {
-                            // 리로드 필요 시 처리
-                          }
-                        },
-                        child: const Text(
-                          '일괄',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                DataCell(
-                  Padding(
-                    padding: const EdgeInsets.only(left: remarkPadding),
-                    child: RemarkCell(
-                      provider: attendanceProvider,
-                      studentId: student.id,
-                      academyId: student.academyId,
-                      ownerId: ownerId,
-                      date: selectedDate,
-                      initialNote: record?.note ?? "",
-                      width: remarkWidth,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }),
         );
       },
     );

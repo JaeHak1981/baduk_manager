@@ -10,6 +10,9 @@ class StudentProvider extends BaseProvider {
   List<StudentModel> _students = [];
   bool _showDeleted = false; // 종료생 보기 여부
 
+  // 마이그레이션 중복 실행 방지를 위한 캐시
+  static final Set<String> _migratedAcademies = {};
+
   List<StudentModel> get students => _showDeleted
       ? _students.where((s) => s.isDeleted).toList()
       : _students.where((s) => !s.isDeleted).toList();
@@ -26,6 +29,16 @@ class StudentProvider extends BaseProvider {
   /// 특정 기관의 학생 목록 로드
   Future<void> loadStudents(String academyId, {String? ownerId}) async {
     await runAsync(() async {
+      // 1. 기존 데이터 마이그레이션 체크 및 실행 (세션당 학원별 1회만)
+      if (!_migratedAcademies.contains(academyId)) {
+        await _studentService.migrateHistoryData(
+          academyId,
+          ownerId: ownerId ?? '',
+        );
+        _migratedAcademies.add(academyId);
+      }
+
+      // 2. 학생 목록 로드
       _students = await _studentService.getStudentsByAcademy(
         academyId,
         ownerId: ownerId,

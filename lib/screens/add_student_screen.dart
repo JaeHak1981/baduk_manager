@@ -70,10 +70,11 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     try {
       final messenger = ScaffoldMessenger.of(context);
       final navigator = Navigator.of(context);
+      final now = DateTime.now();
       if (widget.student != null) {
         // 수정 모드
-        final updatedStudent = widget.student!.copyWith(
-          ownerId: widget.academy.ownerId, // 소유자 ID 유지
+        var updatedStudent = widget.student!.copyWith(
+          ownerId: widget.academy.ownerId,
           name: _nameController.text.trim(),
           birthDate: _birthDateController.text.trim().isEmpty
               ? null
@@ -82,7 +83,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
               ? null
               : _phoneController.text.trim(),
           level: _selectedLevel,
-          session: _selectedSession,
+          session: _selectedSession, // Legacy 필드도 일단 유지
           grade: int.tryParse(_gradeController.text),
           classNumber: _classController.text.trim().isEmpty
               ? null
@@ -93,12 +94,27 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
           note: _noteController.text.trim().isEmpty
               ? null
               : _noteController.text.trim(),
+          updatedAt: now,
         );
+
+        // 만약 세션이 변경되었고 이력이 비어있다면 (마이그레이션 전 데이터 등)
+        // 현재 시점의 이력을 하나 추가해줌 (정합성 유지)
+        if (updatedStudent.sessionHistory.isEmpty && _selectedSession != null) {
+          updatedStudent = updatedStudent.copyWith(
+            sessionHistory: [
+              SessionHistory(effectiveDate: now, sessionId: _selectedSession!),
+            ],
+          );
+        }
+
         await provider.updateStudent(updatedStudent);
       } else {
         // 등록 모드
+        final createdAt = now;
+        final initialSession = _selectedSession ?? 0;
+
         final newStudent = StudentModel(
-          id: '', // Firestore에서 자동 생성
+          id: '',
           academyId: widget.academy.id,
           ownerId: widget.academy.ownerId,
           name: _nameController.text.trim(),
@@ -112,7 +128,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
           note: _noteController.text.trim().isEmpty
               ? null
               : _noteController.text.trim(),
-          session: _selectedSession,
+          session: initialSession,
           grade: int.tryParse(_gradeController.text),
           classNumber: _classController.text.trim().isEmpty
               ? null
@@ -120,7 +136,12 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
           studentNumber: _studentNumberController.text.trim().isEmpty
               ? null
               : _studentNumberController.text.trim(),
-          createdAt: DateTime.now(),
+          createdAt: createdAt,
+          // 신규 학생은 초기 이력을 즉시 생성
+          enrollmentHistory: [EnrollmentPeriod(startDate: createdAt)],
+          sessionHistory: [
+            SessionHistory(effectiveDate: createdAt, sessionId: initialSession),
+          ],
         );
 
         await provider.addStudent(newStudent);
@@ -199,6 +220,166 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
           ),
         );
       }
+    }
+  }
+
+  /// 부 이동 예약 다이얼로그
+  Future<void> _showSessionReservation() async {
+    final s = widget.student;
+    if (s == null) return;
+
+    DateTime effectiveDate = DateTime.now().add(const Duration(days: 1));
+    int targetSession = _selectedSession ?? 1;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('부 이동 예약'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('이동할 부와 적용 날짜를 선택하세요.'),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<int>(
+                value: targetSession,
+                decoration: const InputDecoration(
+                  labelText: '이동할 부',
+                  border: OutlineInputBorder(),
+                ),
+                items: List.generate(widget.academy.totalSessions, (i) => i + 1)
+                    .map(
+                      (val) =>
+                          DropdownMenuItem(value: val, child: Text('$val부')),
+                    )
+                    .toList(),
+                onChanged: (val) {
+                  if (val != null) setDialogState(() => targetSession = val);
+                },
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                title: const Text('적용 시작일'),
+                subtitle: Text(
+                  '${effectiveDate.year}-${effectiveDate.month}-${effectiveDate.day}',
+                ),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: effectiveDate,
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null)
+                    setDialogState(() => effectiveDate = picked);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('예약 등록'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true) {
+      final newHistory = List<SessionHistory>.from(s.sessionHistory);
+      newHistory.add(
+        SessionHistory(effectiveDate: effectiveDate, sessionId: targetSession),
+      );
+
+      final updated = s.copyWith(sessionHistory: newHistory);
+      await context.read<StudentProvider>().updateStudent(updated);
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
+  /// 퇴원 예약 다이얼로그
+  Future<void> _showRetireReservation() async {
+    final s = widget.student;
+    if (s == null) return;
+
+    DateTime retireDate = DateTime.now();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('퇴원 예약'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('수강 종료(퇴원) 날짜를 선택하세요.\n해당 날짜까지는 명단에 포함됩니다.'),
+              const SizedBox(height: 16),
+              ListTile(
+                title: const Text('퇴원 예정일'),
+                subtitle: Text(
+                  '${retireDate.year}-${retireDate.month}-${retireDate.day}',
+                ),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: retireDate,
+                    firstDate: DateTime.now().subtract(
+                      const Duration(days: 30),
+                    ),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) setDialogState(() => retireDate = picked);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('퇴원 예정 등록'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true) {
+      final history = List<EnrollmentPeriod>.from(s.enrollmentHistory);
+      if (history.isEmpty) {
+        // 이력이 없으면 신규로 하나 만들어줌 (마이그레이션 대응)
+        history.add(
+          EnrollmentPeriod(startDate: s.createdAt, endDate: retireDate),
+        );
+      } else {
+        // 가장 최근 이력의 종료일을 설정
+        final last = history.last;
+        history[history.length - 1] = EnrollmentPeriod(
+          startDate: last.startDate,
+          endDate: retireDate,
+        );
+      }
+
+      final updated = s.copyWith(
+        enrollmentHistory: history,
+        updatedAt: DateTime.now(),
+      );
+      await context.read<StudentProvider>().updateStudent(updated);
+      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -379,6 +560,52 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
                 ),
                 maxLines: 2,
               ),
+              if (widget.student != null) ...[
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 8),
+                const Text(
+                  '예약 및 이력 관리',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Colors.blue,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _showSessionReservation,
+                        icon: const Icon(Icons.schedule_send),
+                        label: const Text('부 이동 예약'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _showRetireReservation,
+                        icon: const Icon(Icons.person_off_outlined),
+                        label: const Text('퇴원 예약'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          foregroundColor: Colors.red,
+                          side: const BorderSide(color: Colors.red),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '* 예약 등록 시 미래 시점의 출결 및 교재 주문 명단에 자동 반영됩니다.',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
               const SizedBox(height: 16),
               // 버튼에 가려지지 않도록 하단부 여백 확보
               SizedBox(height: AppDimensions.getFormBottomInset(context)),

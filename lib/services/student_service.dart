@@ -111,14 +111,38 @@ class StudentService {
     await batch.commit();
   }
 
-  /// 학생 일괄 삭제 (Soft Delete)
+  /// 학생 일괄 삭제 (Soft Delete & 이력 종료)
   Future<void> deleteStudents(List<String> studentIds) async {
     final batch = _firestore.batch();
+    final now = DateTime.now();
+
     for (var id in studentIds) {
-      batch.update(_firestore.collection(_collection).doc(id), {
-        'isDeleted': true,
-        'deletedAt': FieldValue.serverTimestamp(),
-      });
+      final docRef = _firestore.collection(_collection).doc(id);
+      final snapshot = await docRef.get();
+
+      if (snapshot.exists) {
+        final data = snapshot.data()!;
+        final historyData = data['enrollmentHistory'] as List? ?? [];
+        final List<EnrollmentPeriod> history = historyData
+            .map((e) => EnrollmentPeriod.fromMap(e as Map<String, dynamic>))
+            .toList();
+
+        // 마지막 이력이 열려있다면 오늘로 닫아줌
+        if (history.isNotEmpty && history.last.endDate == null) {
+          final last = history.last;
+          history[history.length - 1] = EnrollmentPeriod(
+            startDate: last.startDate,
+            endDate: now,
+          );
+        }
+
+        batch.update(docRef, {
+          'isDeleted': true,
+          'deletedAt': Timestamp.fromDate(now),
+          'enrollmentHistory': history.map((e) => e.toFirestore()).toList(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
     }
     await batch.commit();
   }
@@ -146,6 +170,14 @@ class StudentService {
           .toList();
 
       if (startDate != null) {
+        // [MODIFIED] 이전 이력이 열려있다면 새 시작일 전날로 닫아줌 (데이터 정합성)
+        if (history.isNotEmpty && history.last.endDate == null) {
+          final last = history.last;
+          history[history.length - 1] = EnrollmentPeriod(
+            startDate: last.startDate,
+            endDate: startDate.subtract(const Duration(days: 1)),
+          );
+        }
         history.add(EnrollmentPeriod(startDate: startDate));
       } else if (endDate != null) {
         if (history.isEmpty) {

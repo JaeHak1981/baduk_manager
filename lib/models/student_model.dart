@@ -309,37 +309,70 @@ class StudentModel {
   String get reservationDetail {
     final now = DateTime.now().startOfDay;
 
-    // 1. 퇴원 예약 체크 (현재 이후의 종료일이 있는 경우)
+    // 1. 퇴원 예약 체크 (가장 가까운 미래의 종료일 찾기)
+    DateTime? nearestRetire;
     for (var period in enrollmentHistory) {
       if (period.endDate != null) {
         final end = period.endDate!.startOfDay;
         if (!end.isBefore(now)) {
-          return '${end.month}/${end.day} 퇴원';
+          if (nearestRetire == null || end.isBefore(nearestRetire)) {
+            nearestRetire = end;
+          }
         }
       }
     }
 
-    // 2. 미래 재등록 및 부 이동 예약 체크 (현재 이후의 시작일이 있는 경우)
+    // 2. 미래 이벤트(재등록/부이동) 체크
+    DateTime? nearestMove;
+    int? targetSession;
+    String moveType = '재등록';
+
+    // 2-1. 수강 시작일 기준 검색
     for (var period in enrollmentHistory) {
       final start = period.startDate.startOfDay;
       if (start.isAfter(now)) {
-        // 해당 시작일에 예정된 부(Session) 검색
-        int? targetSession;
-        for (var sess in sessionHistory) {
-          if (sess.effectiveDate.isSameDay(period.startDate)) {
-            targetSession = sess.sessionId;
-            break;
+        if (nearestMove == null || start.isBefore(nearestMove)) {
+          nearestMove = start;
+          moveType = '재등록';
+
+          // 해당 날짜에 배정된 부 찾기
+          for (var sess in sessionHistory) {
+            if (sess.effectiveDate.isSameDay(start)) {
+              targetSession = sess.sessionId;
+              break;
+            }
           }
         }
-
-        final sessionLabel = targetSession != null
-            ? (targetSession == 0 ? '(미배정)' : '(${targetSession}부)')
-            : '';
-        return '${start.month}/${start.day}$sessionLabel 재등록';
       }
     }
 
-    // 3. 현재 상태 체크 (오늘 수강 중인지)
+    // 2-2. 부 이동 이력 기준 검색 (수강 기간 내에서의 부 변경 포함)
+    for (var sess in sessionHistory) {
+      final effective = sess.effectiveDate.startOfDay;
+      if (effective.isAfter(now)) {
+        // 이미 더 빠른 수강 시작일 예약이 있다면 무시
+        if (nearestMove == null || effective.isBefore(nearestMove)) {
+          nearestMove = effective;
+          targetSession = sess.sessionId;
+          moveType = '부 이동';
+        }
+      }
+    }
+
+    // 3. 우선순위 결정 (가장 가까운 날짜)
+    if (nearestRetire != null &&
+        (nearestMove == null || nearestRetire.isBefore(nearestMove))) {
+      return '${nearestRetire.month}/${nearestRetire.day} 퇴원';
+    }
+
+    if (nearestMove != null) {
+      final sessionLabel = targetSession != null
+          ? (targetSession == 0 ? '(미배정)' : '(${targetSession}부)')
+          : '';
+      return '${nearestMove.month}/${nearestMove.day}$sessionLabel $moveType';
+    }
+
+    // 4. 현재 수강 중 여부 판단
     if (!isDeleted) {
       for (var period in enrollmentHistory) {
         final start = period.startDate.startOfDay;

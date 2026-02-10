@@ -37,6 +37,8 @@ class NotificationService {
 
   String _getStatusString(AttendanceType type) {
     switch (type) {
+      case AttendanceType.none:
+        return '미지정';
       case AttendanceType.present:
         return '출석';
       case AttendanceType.absent:

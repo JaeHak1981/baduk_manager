@@ -3,6 +3,7 @@ import '../utils/date_extensions.dart';
 
 /// 출결 상태 구분
 enum AttendanceType {
+  none, // 미지정 (초기상태 또는 메모만 있는 경우)
   present, // 출석
   absent, // 결석
   late, // 지각
@@ -52,7 +53,7 @@ class AttendanceRecord {
       academyId: data['academyId'] as String,
       ownerId: data['ownerId'] as String? ?? '',
       timestamp: (data['timestamp'] as Timestamp).toDate(),
-      type: AttendanceType.values.byName(data['type'] as String? ?? 'present'),
+      type: AttendanceType.values.byName(data['type'] as String? ?? 'none'),
       note: data['note'] as String?,
     );
   }

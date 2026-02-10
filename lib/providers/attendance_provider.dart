@@ -116,19 +116,28 @@ class AttendanceProvider extends BaseProvider {
     } else {
       // 추가/수정 처리
       _pendingDeletions.remove(docKey);
-      _pendingChanges[docKey] = record;
+
+      final existing = _monthlyRecords.where((r) => r.id == docKey).firstOrNull;
+
+      // 비고 머지 로직: 새로운 record의 note가 null이면 기존 것을 쓰고,
+      // null이 아니면(빈 문자열 포함) 새로운 것을 씁니다.
+      final mergedRecord = existing != null
+          ? record.copyWith(note: record.note ?? existing.note)
+          : record;
+
+      _pendingChanges[docKey] = mergedRecord;
 
       bool found = false;
       final List<AttendanceRecord> newList = _monthlyRecords.map((r) {
         if (r.id == docKey) {
           found = true;
-          return record.copyWith(note: r.note);
+          return mergedRecord;
         }
         return r;
       }).toList();
 
       if (!found) {
-        newList.add(record);
+        newList.add(mergedRecord);
       }
       _monthlyRecords = newList;
     }
@@ -175,12 +184,12 @@ class AttendanceProvider extends BaseProvider {
     final existing = _monthlyRecords.where((r) => r.id == docKey).firstOrNull;
 
     AttendanceType? nextType;
-    if (existing == null) {
+    if (existing == null || existing.type == AttendanceType.none) {
       nextType = AttendanceType.present;
     } else if (existing.type == AttendanceType.present) {
       nextType = AttendanceType.absent;
     } else if (existing.type == AttendanceType.absent) {
-      nextType = null; // 초기화 처리
+      nextType = null; // 초기화(삭제) 처리
     } else {
       nextType = AttendanceType.present;
     }
@@ -213,7 +222,8 @@ class AttendanceProvider extends BaseProvider {
       academyId: academyId,
       ownerId: ownerId,
       timestamp: targetDate,
-      type: existing?.type ?? AttendanceType.present,
+      // 기존 기록이 있으면 타입 유지, 없으면 none(미지정)으로 시작
+      type: existing?.type ?? AttendanceType.none,
       note: note,
     );
 

@@ -569,25 +569,30 @@ class _StudentListScreenState extends State<StudentListScreen> {
   }
 
   Widget _buildStickyHeader(bool isWide) {
+    // 미배정 필터가 선택되었거나 퇴원생 모드일 때 출석 숨김
+    final hideAttendance =
+        _selectedFilterSession == 0 ||
+        context.read<StudentProvider>().showDeleted;
+
     if (isWide) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
-            Expanded(child: _buildListHeader()),
+            Expanded(child: _buildListHeader(hideAttendance: hideAttendance)),
             const SizedBox(width: 16),
-            Expanded(child: _buildListHeader()),
+            Expanded(child: _buildListHeader(hideAttendance: hideAttendance)),
           ],
         ),
       );
     }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: _buildListHeader(),
+      child: _buildListHeader(hideAttendance: hideAttendance),
     );
   }
 
-  Widget _buildListHeader() {
+  Widget _buildListHeader({bool hideAttendance = false}) {
     const textStyle = TextStyle(
       fontSize: 11,
       fontWeight: FontWeight.bold,
@@ -595,7 +600,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
     );
 
     return Container(
-      height: 40, // [MODIFIED] 36 -> 40
+      height: 40,
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
         border: Border(
@@ -615,20 +620,18 @@ class _StudentListScreenState extends State<StudentListScreen> {
           ),
           const SizedBox(width: 90, child: Text('성명', style: textStyle)),
           const SizedBox(width: 50, child: Text('학년', style: textStyle)),
-          const SizedBox(width: 50, child: Text('급수', style: textStyle)), // 추가
-          const SizedBox(
-            width: 110, // [MODIFIED] 80 -> 110 (상세 정보 확보)
-            child: Text('예약 현황', style: textStyle),
-          ),
+          const SizedBox(width: 50, child: Text('급수', style: textStyle)),
+          const SizedBox(width: 110, child: Text('예약 현황', style: textStyle)),
           const Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
               child: Text('진도 현황', style: textStyle),
             ),
           ),
-          const SizedBox(width: 65, child: Text('출석', style: textStyle)),
+          if (!hideAttendance)
+            const SizedBox(width: 65, child: Text('출석', style: textStyle)),
           const SizedBox(
-            width: 150, // [MODIFIED] 140 -> 150 (버튼 텍스트 가독성 확보)
+            width: 150,
             child: Text('관리', style: textStyle, textAlign: TextAlign.center),
           ),
         ],
@@ -639,6 +642,9 @@ class _StudentListScreenState extends State<StudentListScreen> {
   Widget _buildTwoColumnListView(List<StudentModel> filteredStudents) {
     final halfLength = (filteredStudents.length / 2).ceil();
     final totalLessonDays = _calculateTotalLessonDays();
+    final hideAttendance =
+        _selectedFilterSession == 0 ||
+        context.read<StudentProvider>().showDeleted;
 
     return ListView.builder(
       padding: EdgeInsets.fromLTRB(
@@ -667,6 +673,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                 onToggleSelection: () =>
                     _toggleStudentSelection(filteredStudents[leftIndex].id),
                 totalLessonDays: totalLessonDays,
+                hideAttendance: hideAttendance,
               ),
             ),
             const SizedBox(width: 16),
@@ -684,6 +691,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                         filteredStudents[rightIndex].id,
                       ),
                       totalLessonDays: totalLessonDays,
+                      hideAttendance: hideAttendance,
                     )
                   : const SizedBox(),
             ),
@@ -695,6 +703,10 @@ class _StudentListScreenState extends State<StudentListScreen> {
 
   Widget _buildSingleColumnListView(List<StudentModel> filteredStudents) {
     final totalLessonDays = _calculateTotalLessonDays();
+    final hideAttendance =
+        _selectedFilterSession == 0 ||
+        context.read<StudentProvider>().showDeleted;
+
     return ListView.builder(
       padding: EdgeInsets.fromLTRB(
         16,
@@ -713,6 +725,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
           isSelected: _selectedStudentIds.contains(student.id),
           onToggleSelection: () => _toggleStudentSelection(student.id),
           totalLessonDays: totalLessonDays,
+          hideAttendance: hideAttendance,
         );
       },
     );
@@ -1205,8 +1218,8 @@ class _StudentProgressCard extends StatefulWidget {
   final bool isSelectionMode;
   final bool isSelected;
   final VoidCallback onToggleSelection;
-
   final int totalLessonDays;
+  final bool hideAttendance;
 
   const _StudentProgressCard({
     required this.index,
@@ -1216,6 +1229,7 @@ class _StudentProgressCard extends StatefulWidget {
     this.isSelected = false,
     required this.onToggleSelection,
     required this.totalLessonDays,
+    this.hideAttendance = false,
   });
 
   @override
@@ -1433,57 +1447,58 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                 ),
               ),
 
-              // 5. [출석율] 영역 (65)
-              SizedBox(
-                width: 65,
-                child: Builder(
-                  builder: (context) {
-                    final monthlyRecords = attendanceProvider
-                        .getRecordsForStudent(widget.student.id);
-                    if (widget.totalLessonDays == 0) {
-                      return const Center(
-                        child: Text(
-                          '-%',
-                          style: TextStyle(fontSize: 11, color: Colors.grey),
-                        ),
-                      );
-                    }
-
-                    final now = DateTime.now();
-                    final presentCount = monthlyRecords.where((r) {
-                      return r.timestamp.year == now.year &&
-                          r.timestamp.month == now.month &&
-                          (r.type == AttendanceType.present ||
-                              r.type == AttendanceType.late);
-                    }).length;
-
-                    final rate = (presentCount / widget.totalLessonDays * 100)
-                        .toInt();
-
-                    return Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          '출석율',
-                          style: TextStyle(fontSize: 8, color: Colors.grey),
-                        ),
-                        Text(
-                          '$rate%',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: rate >= 90
-                                ? Colors.blue.shade700
-                                : (rate >= 70
-                                      ? Colors.orange.shade700
-                                      : Colors.red.shade700),
+              // 5. [출석율] 영역 (65) - 미배정 모드에서는 숨김
+              if (!widget.hideAttendance)
+                SizedBox(
+                  width: 65,
+                  child: Builder(
+                    builder: (context) {
+                      final monthlyRecords = attendanceProvider
+                          .getRecordsForStudent(widget.student.id);
+                      if (widget.totalLessonDays == 0) {
+                        return const Center(
+                          child: Text(
+                            '-%',
+                            style: TextStyle(fontSize: 11, color: Colors.grey),
                           ),
-                        ),
-                      ],
-                    );
-                  },
+                        );
+                      }
+
+                      final now = DateTime.now();
+                      final presentCount = monthlyRecords.where((r) {
+                        return r.timestamp.year == now.year &&
+                            r.timestamp.month == now.month &&
+                            (r.type == AttendanceType.present ||
+                                r.type == AttendanceType.late);
+                      }).length;
+
+                      final rate = (presentCount / widget.totalLessonDays * 100)
+                          .toInt();
+
+                      return Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            '출석율',
+                            style: TextStyle(fontSize: 8, color: Colors.grey),
+                          ),
+                          Text(
+                            '$rate%',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: rate >= 90
+                                  ? Colors.blue.shade700
+                                  : (rate >= 70
+                                        ? Colors.orange.shade700
+                                        : Colors.red.shade700),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
-              ),
 
               // 6. [관리버튼] 영역 (150)
               SizedBox(

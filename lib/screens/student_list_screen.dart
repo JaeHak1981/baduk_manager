@@ -574,25 +574,45 @@ class _StudentListScreenState extends State<StudentListScreen> {
         _selectedFilterSession == 0 ||
         context.read<StudentProvider>().showDeleted;
 
+    // 특정 부(1부, 2부 등) 필터 시 예약 현황 숨김
+    final hideReservation =
+        _selectedFilterSession != null && _selectedFilterSession! > 0;
+
     if (isWide) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
-            Expanded(child: _buildListHeader(hideAttendance: hideAttendance)),
+            Expanded(
+              child: _buildListHeader(
+                hideAttendance: hideAttendance,
+                hideReservation: hideReservation,
+              ),
+            ),
             const SizedBox(width: 16),
-            Expanded(child: _buildListHeader(hideAttendance: hideAttendance)),
+            Expanded(
+              child: _buildListHeader(
+                hideAttendance: hideAttendance,
+                hideReservation: hideReservation,
+              ),
+            ),
           ],
         ),
       );
     }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: _buildListHeader(hideAttendance: hideAttendance),
+      child: _buildListHeader(
+        hideAttendance: hideAttendance,
+        hideReservation: hideReservation,
+      ),
     );
   }
 
-  Widget _buildListHeader({bool hideAttendance = false}) {
+  Widget _buildListHeader({
+    bool hideAttendance = false,
+    bool hideReservation = false,
+  }) {
     const textStyle = TextStyle(
       fontSize: 11,
       fontWeight: FontWeight.bold,
@@ -621,7 +641,8 @@ class _StudentListScreenState extends State<StudentListScreen> {
           const SizedBox(width: 90, child: Text('성명', style: textStyle)),
           const SizedBox(width: 50, child: Text('학년', style: textStyle)),
           const SizedBox(width: 50, child: Text('급수', style: textStyle)),
-          const SizedBox(width: 110, child: Text('예약 현황', style: textStyle)),
+          if (!hideReservation)
+            const SizedBox(width: 110, child: Text('예약 현황', style: textStyle)),
           const Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
@@ -645,6 +666,8 @@ class _StudentListScreenState extends State<StudentListScreen> {
     final hideAttendance =
         _selectedFilterSession == 0 ||
         context.read<StudentProvider>().showDeleted;
+    final hideReservation =
+        _selectedFilterSession != null && _selectedFilterSession! > 0;
 
     return ListView.builder(
       padding: EdgeInsets.fromLTRB(
@@ -674,6 +697,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                     _toggleStudentSelection(filteredStudents[leftIndex].id),
                 totalLessonDays: totalLessonDays,
                 hideAttendance: hideAttendance,
+                hideReservation: hideReservation,
               ),
             ),
             const SizedBox(width: 16),
@@ -692,6 +716,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
                       ),
                       totalLessonDays: totalLessonDays,
                       hideAttendance: hideAttendance,
+                      hideReservation: hideReservation,
                     )
                   : const SizedBox(),
             ),
@@ -706,6 +731,8 @@ class _StudentListScreenState extends State<StudentListScreen> {
     final hideAttendance =
         _selectedFilterSession == 0 ||
         context.read<StudentProvider>().showDeleted;
+    final hideReservation =
+        _selectedFilterSession != null && _selectedFilterSession! > 0;
 
     return ListView.builder(
       padding: EdgeInsets.fromLTRB(
@@ -726,6 +753,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
           onToggleSelection: () => _toggleStudentSelection(student.id),
           totalLessonDays: totalLessonDays,
           hideAttendance: hideAttendance,
+          hideReservation: hideReservation,
         );
       },
     );
@@ -1220,6 +1248,7 @@ class _StudentProgressCard extends StatefulWidget {
   final VoidCallback onToggleSelection;
   final int totalLessonDays;
   final bool hideAttendance;
+  final bool hideReservation;
 
   const _StudentProgressCard({
     required this.index,
@@ -1230,6 +1259,7 @@ class _StudentProgressCard extends StatefulWidget {
     required this.onToggleSelection,
     required this.totalLessonDays,
     this.hideAttendance = false,
+    this.hideReservation = false,
   });
 
   @override
@@ -1396,39 +1426,39 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                 ),
               ),
 
-              // 3.5. [예약 현황] 영역 (110)
-              SizedBox(
-                width: 110,
-                child: widget.student.reservationDetail != '예약 없음'
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: Colors.blue.shade100),
-                        ),
-                        child: Text(
-                          widget.student.reservationDetail,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.blue,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      )
-                    : Text(
-                        widget.student.reservationDetail, // '예약 없음' 표시
+              // 3.5. [예약 현황] 영역 (110) - 특정 부 필터 시 숨김
+              if (!widget.hideReservation)
+                SizedBox(
+                  width: 110,
+                  child: () {
+                    final detail = widget.student.reservationDetail;
+                    // '수강 중'과 '미배정'은 빈칸으로 처리
+                    if (detail == '수강 중' || detail == '미배정') {
+                      return const SizedBox.shrink();
+                    }
+                    // 실제 예약이 있는 경우만 표시
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.blue.shade100),
+                      ),
+                      child: Text(
+                        detail,
                         style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
+                          fontSize: 10,
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
                         ),
                         textAlign: TextAlign.center,
                       ),
-              ),
+                    );
+                  }(),
+                ),
 
               // 4. [진도현황] 영역 (Expanded)
               Expanded(

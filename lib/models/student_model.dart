@@ -322,10 +322,10 @@ class StudentModel {
       }
     }
 
-    // 2. 미래 이벤트(재등록/부이동) 체크
+    // 2. 미래 이벤트(시작/이동) 체크
     DateTime? nearestMove;
     int? targetSession;
-    String moveType = '재등록';
+    String moveType = '시작';
 
     // 2-1. 수강 시작일 기준 검색
     for (var period in enrollmentHistory) {
@@ -333,15 +333,7 @@ class StudentModel {
       if (start.isAfter(now)) {
         if (nearestMove == null || start.isBefore(nearestMove)) {
           nearestMove = start;
-          moveType = '재등록';
-
-          // 해당 날짜에 배정된 부 찾기
-          for (var sess in sessionHistory) {
-            if (sess.effectiveDate.isSameDay(start)) {
-              targetSession = sess.sessionId;
-              break;
-            }
-          }
+          moveType = '시작';
         }
       }
     }
@@ -354,14 +346,21 @@ class StudentModel {
         if (nearestMove == null || effective.isBefore(nearestMove)) {
           nearestMove = effective;
           targetSession = sess.sessionId;
-          moveType = '부 이동';
+          moveType = '이동';
         }
       }
     }
 
     // 3. 우선순위 결정 (가장 가까운 날짜)
+    // 퇴원일 바로 다음날 시작이 예약되어 있다면 시작 문구를 우선 노출 (3/2 퇴원 -> 3/3 시작 현상 방지)
+    final bool isConsecutive =
+        nearestRetire != null &&
+        nearestMove != null &&
+        nearestMove.difference(nearestRetire).inDays <= 1;
+
     if (nearestRetire != null &&
-        (nearestMove == null || nearestRetire.isBefore(nearestMove))) {
+        (nearestMove == null ||
+            (nearestRetire.isBefore(nearestMove) && !isConsecutive))) {
       return '${nearestRetire.month}/${nearestRetire.day} 퇴원';
     }
 

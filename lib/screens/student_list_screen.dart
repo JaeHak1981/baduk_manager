@@ -1407,39 +1407,33 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
               // 2. [이름] 영역 (90)
               SizedBox(
                 width: 90,
-                child: widget.hideReservation && hasReservation
-                    ? RichText(
-                        text: TextSpan(
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                          children: [
-                            TextSpan(text: widget.student.name),
-                            TextSpan(
-                              text: ' [$reservationDetail]',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.normal,
-                                color: isRetirement
-                                    ? Colors.red.shade700
-                                    : Colors.amber.shade900,
-                              ),
-                            ),
-                          ],
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      )
-                    : Text(
-                        widget.student.name,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.student.name,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (widget.hideReservation && hasReservation)
+                      Text(
+                        '[$reservationDetail]',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.normal,
+                          color: isRetirement
+                              ? Colors.red.shade700
+                              : Colors.amber.shade900,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
+                  ],
+                ),
               ),
 
               // 3. [학년] 영역 (50)

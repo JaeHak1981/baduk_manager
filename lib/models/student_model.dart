@@ -209,11 +209,20 @@ class StudentModel {
   bool isEnrolledAt(DateTime date) {
     final target = date.startOfDay;
 
-    // 이력이 없는 경우 (마이그레이션 전) 기존 로직(isDeleted) 참고
+    // 이력이 없는 경우 (마이그레이션 전 또는 신규 등록 중 오류)
     if (enrollmentHistory.isEmpty) {
       if (isDeleted && deletedAt != null) {
         return target.isBefore(deletedAt!.startOfDay);
       }
+
+      // [보완] 수업 배정 이력(sessionHistory)이 있다면 첫 수업 시작일을 기준으로 판단
+      if (sessionHistory.isNotEmpty) {
+        final firstSessionStart = sessionHistory.first.effectiveDate.startOfDay;
+        if (firstSessionStart.isAfter(target)) {
+          return false; // 아직 첫 수업 시작 전임
+        }
+      }
+
       // 생성일이 조회일보다 이후면 아직 등록 전임
       return !createdAt.startOfDay.isAfter(target);
     }
@@ -245,6 +254,15 @@ class StudentModel {
       if (isDeleted && deletedAt != null) {
         return !deletedAt!.startOfDay.isBefore(startOfMonth);
       }
+
+      // [보완] 수업 배정 이력(sessionHistory)이 있다면 첫 수업 시작일을 기준으로 판단
+      if (sessionHistory.isNotEmpty) {
+        final firstSessionStart = sessionHistory.first.effectiveDate.startOfDay;
+        if (firstSessionStart.isAfter(targetRangeEnd)) {
+          return false; // 아직 첫 수업 시작 전임
+        }
+      }
+
       // 생성일이 조회 기간 종료일보다 이후면 아직 등록 전임
       return !createdAt.startOfDay.isAfter(targetRangeEnd);
     }

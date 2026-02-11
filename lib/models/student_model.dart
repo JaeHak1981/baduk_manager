@@ -214,7 +214,8 @@ class StudentModel {
       if (isDeleted && deletedAt != null) {
         return target.isBefore(deletedAt!.startOfDay);
       }
-      return true; // 삭제 안 됐으면 수강 중으로 간주
+      // 생성일이 조회일보다 이후면 아직 등록 전임
+      return !createdAt.startOfDay.isAfter(target);
     }
 
     for (var period in enrollmentHistory) {
@@ -244,7 +245,8 @@ class StudentModel {
       if (isDeleted && deletedAt != null) {
         return !deletedAt!.startOfDay.isBefore(startOfMonth);
       }
-      return true;
+      // 생성일이 조회 기간 종료일보다 이후면 아직 등록 전임
+      return !createdAt.startOfDay.isAfter(targetRangeEnd);
     }
 
     for (var period in enrollmentHistory) {

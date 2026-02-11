@@ -217,9 +217,17 @@ class AttendanceScreenState extends State<AttendanceScreen>
                         backgroundColor: Colors.blueAccent,
                         onPressed: _isDownloading
                             ? null
-                            : () => _showDownloadSelectionDialog(
-                                studentProvider.students,
-                              ),
+                            : () {
+                                final enrolled = studentProvider.students
+                                    .where(
+                                      (s) => s.isEnrolledInMonth(
+                                        _currentYear,
+                                        _currentMonth,
+                                      ),
+                                    )
+                                    .toList();
+                                _showDownloadSelectionDialog(enrolled);
+                              },
                       ),
                       const SizedBox(width: 8),
                       ActionChip(

@@ -223,6 +223,7 @@ class AttendanceTable extends StatelessWidget {
                               academyId: student.academyId,
                               ownerId: ownerId,
                               date: selectedDate,
+                              student: student,
                               record: record,
                             ),
                           ),

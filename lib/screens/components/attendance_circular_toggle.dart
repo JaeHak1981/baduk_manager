@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/attendance_model.dart';
+import '../../models/student_model.dart';
 import '../../providers/attendance_provider.dart';
 import '../../config/app_theme.dart';
 
@@ -11,6 +12,7 @@ class AttendanceCircularToggle extends StatelessWidget {
   final String academyId;
   final String ownerId;
   final DateTime date;
+  final StudentModel? student;
   final AttendanceRecord? record;
 
   const AttendanceCircularToggle({
@@ -20,11 +22,35 @@ class AttendanceCircularToggle extends StatelessWidget {
     required this.academyId,
     required this.ownerId,
     required this.date,
+    this.student,
     this.record,
   });
 
   @override
   Widget build(BuildContext context) {
+    // 수강생 정보 확인 (이력 확인용)
+    final bool isEnrolled = student?.isEnrolledAt(date) ?? true;
+
+    if (!isEnrolled) {
+      return Tooltip(
+        message: '수강 기간이 아닙니다',
+        child: Container(
+          width: 35,
+          height: 35,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Center(
+            child: Text(
+              '-',
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          ),
+        ),
+      );
+    }
+
     bool isPresent = record?.type == AttendanceType.present;
     bool isAbsent = record?.type == AttendanceType.absent;
 

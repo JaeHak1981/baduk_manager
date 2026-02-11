@@ -834,9 +834,19 @@ class AttendanceScreenState extends State<AttendanceScreen>
   }
 
   Future<void> _downloadAsExcel(List<dynamic> students) async {
-    if (students.isEmpty) {
+    // 1. 해당 월에 수강 중인 학생만 필터링 (명단 정확성 확보)
+    final enrolledStudents = students
+        .cast<StudentModel>()
+        .where((s) => s.isEnrolledInMonth(_currentYear, _currentMonth))
+        .toList();
+
+    if (enrolledStudents.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('해당 월에 수강 중인 학생이 없습니다.')));
       return;
     }
+
     setState(() => _isDownloading = true);
     try {
       final provider = context.read<AttendanceProvider>();
@@ -882,7 +892,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
         cell.cellStyle = headerStyle;
       }
 
-      final sorted = List.from(students)
+      final sorted = List<StudentModel>.from(enrolledStudents)
         ..sort((a, b) => (a.session ?? 0).compareTo(b.session ?? 0));
       int currentRow = 1;
       int? lastSession;
@@ -891,8 +901,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
         bold: true,
       );
 
-      for (var s in sorted) {
-        final student = s as StudentModel;
+      for (var student in sorted) {
         if (lastSession != student.session) {
           if (lastSession != null) {
             currentRow++;

@@ -380,6 +380,96 @@ class _StudentListScreenState extends State<StudentListScreen> {
     }
   }
 
+  /// 일괄 수강 시작일 변경 핸들러
+  Future<void> _handleBulkEnrollDateUpdate() async {
+    if (_selectedStudentIds.isEmpty) return;
+
+    DateTime startDate = DateTime.now();
+    bool replaceAll = false; // [NEW] 체크박스 상태 변수
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('수강 시작일 일괄 변경'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('선택한 ${_selectedStudentIds.length}명의 수강 시작일을 일괄 변경하시겠습니까?'),
+              const SizedBox(height: 16),
+              ListTile(
+                title: const Text('변경된 수강 시작일'),
+                subtitle: Text(
+                  '${startDate.year}-${startDate.month}-${startDate.day}',
+                ),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: startDate,
+                    firstDate: DateTime(2023),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) {
+                    setDialogState(() => startDate = picked);
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              // [NEW] 최초 입학일 정정 체크박스
+              CheckboxListTile(
+                value: replaceAll,
+                onChanged: (val) =>
+                    setDialogState(() => replaceAll = val ?? false),
+                title: const Text('최초 입학일로 정정', style: TextStyle(fontSize: 13)),
+                subtitle: const Text(
+                  '이전 달의 모든 수강 기록을 삭제합니다.',
+                  style: TextStyle(fontSize: 11),
+                ),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                dense: true,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '※ 변경 시점부터 과거 출석부에서 해당 학생이 자동으로 제외됩니다.',
+                style: TextStyle(fontSize: 11, color: Colors.blue),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('변경 적용'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final success = await context
+          .read<StudentProvider>()
+          .bulkUpdateEnrollmentHistory(
+            _selectedStudentIds.toList(),
+            academyId: widget.academy.id,
+            ownerId: widget.academy.ownerId,
+            startDate: startDate,
+            replaceAll: replaceAll, // [NEW] 플래그 전달
+          );
+      if (mounted && success) {
+        setState(() {
+          _isSelectionMode = false;
+          _selectedStudentIds.clear();
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -445,6 +535,12 @@ class _StudentListScreenState extends State<StudentListScreen> {
                       icon: const Icon(Icons.drive_file_move_outline),
                       tooltip: '선택한 학생 이동',
                       onPressed: _handleBulkMove,
+                    ),
+                    // 수강 시작일 변경 버튼 추가
+                    IconButton(
+                      icon: const Icon(Icons.event_available),
+                      tooltip: '일괄 수강 시작일 변경',
+                      onPressed: _handleBulkEnrollDateUpdate,
                     ),
                     // 재등록 버튼
                     IconButton(
@@ -634,23 +730,24 @@ class _StudentListScreenState extends State<StudentListScreen> {
             width: 40,
             child: Center(child: Text('번호', style: textStyle)),
           ),
-          const SizedBox(
-            width: 60,
+          const Expanded(
+            flex: 2,
             child: Center(child: Text('부', style: textStyle)),
           ),
-          const SizedBox(width: 90, child: Text('성명', style: textStyle)),
-          const SizedBox(width: 50, child: Text('학년', style: textStyle)),
-          const SizedBox(width: 50, child: Text('급수', style: textStyle)),
+          const Expanded(flex: 3, child: Text('성명', style: textStyle)),
+          const Expanded(flex: 2, child: Text('학년', style: textStyle)),
+          const Expanded(flex: 2, child: Text('급수', style: textStyle)),
           if (!hideReservation)
-            const SizedBox(width: 110, child: Text('예약 현황', style: textStyle)),
+            const Expanded(flex: 4, child: Text('예약 현황', style: textStyle)),
           const Expanded(
+            flex: 7,
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
               child: Text('진도 현황', style: textStyle),
             ),
           ),
           if (!hideAttendance)
-            const SizedBox(width: 65, child: Text('출석', style: textStyle)),
+            const Expanded(flex: 2, child: Text('출석', style: textStyle)),
           const SizedBox(
             width: 150,
             child: Text('관리', style: textStyle, textAlign: TextAlign.center),
@@ -1356,9 +1453,9 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                       ),
               ),
 
-              // 1. [부] 영역 (60)
-              SizedBox(
-                width: 60,
+              // 1. [부] 영역 (Expanded flex 2)
+              Expanded(
+                flex: 2,
                 child: Center(
                   child:
                       widget.student.session != null &&
@@ -1404,9 +1501,9 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                 ),
               ),
 
-              // 2. [이름] 영역 (90)
-              SizedBox(
-                width: 90,
+              // 2. [이름] 영역 (Expanded flex 3)
+              Expanded(
+                flex: 3,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1436,9 +1533,9 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                 ),
               ),
 
-              // 3. [학년] 영역 (50)
-              SizedBox(
-                width: 50,
+              // 3. [학년] 영역 (Expanded flex 2)
+              Expanded(
+                flex: 2,
                 child: Text(
                   widget.student.grade != null
                       ? '${widget.student.grade}학년'
@@ -1447,9 +1544,9 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                 ),
               ),
 
-              // 3.1. [급수] 영역 (50) - 추가
-              SizedBox(
-                width: 50,
+              // 3.1. [급수] 영역 (Expanded flex 2)
+              Expanded(
+                flex: 2,
                 child: Text(
                   widget.student.levelDisplayName,
                   style: TextStyle(
@@ -1464,10 +1561,10 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                 ),
               ),
 
-              // 3.5. [예약 현황] 영역 (110) - 특정 부 필터 시 숨김
+              // 3.5. [예약 현황] 영역 (Expanded flex 4) - 특정 부 필터 시 숨김
               if (!widget.hideReservation)
-                SizedBox(
-                  width: 110,
+                Expanded(
+                  flex: 4,
                   child: () {
                     final detail = widget.student.reservationDetail;
                     // '수강 중'과 '미배정'은 빈칸으로 처리
@@ -1493,13 +1590,15 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                           fontWeight: FontWeight.bold,
                         ),
                         textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     );
                   }(),
                 ),
 
-              // 4. [진도현황] 영역 (Expanded)
+              // 4. [진도현황] 영역 (Expanded flex 7)
               Expanded(
+                flex: 7,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: progressList.isNotEmpty
@@ -1515,10 +1614,10 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                 ),
               ),
 
-              // 5. [출석율] 영역 (65) - 미배정 모드에서는 숨김
+              // 5. [출석율] 영역 (Expanded flex 2) - 미배정 모드에서는 숨김
               if (!widget.hideAttendance)
-                SizedBox(
-                  width: 65,
+                Expanded(
+                  flex: 2,
                   child: Builder(
                     builder: (context) {
                       final monthlyRecords = attendanceProvider

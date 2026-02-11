@@ -153,6 +153,7 @@ class StudentService {
     DateTime? startDate,
     DateTime? endDate,
     int? sessionId,
+    bool replaceAll = false, // [NEW] 기존 이력을 무시하고 덮어쓸지 여부
   }) async {
     final batch = _firestore.batch();
 
@@ -170,15 +171,30 @@ class StudentService {
           .toList();
 
       if (startDate != null) {
-        // [MODIFIED] 이전 이력이 열려있다면 새 시작일 전날로 닫아줌 (데이터 정합성)
-        if (history.isNotEmpty && history.last.endDate == null) {
-          final last = history.last;
-          history[history.length - 1] = EnrollmentPeriod(
-            startDate: last.startDate,
-            endDate: startDate.subtract(const Duration(days: 1)),
-          );
+        if (replaceAll) {
+          // [NEW] 기존 이력을 모두 지우고 새 시작일로 초기화 (최초 등록 보정용)
+          history.clear();
+          history.add(EnrollmentPeriod(startDate: startDate));
+        } else {
+          // [MODIFIED] 이전 이력이 열려있다면 새 시작일 전날로 닫아줌 (데이터 정합성)
+          if (history.isNotEmpty && history.last.endDate == null) {
+            final last = history.last;
+            // 새 시작일이 기존 시작일보다 빠르거나 같으면 기존 것을 덮어씀 (무의미한 1일 미만 이력 발생 방지)
+            if (!last.startDate.isBefore(startDate)) {
+              history[history.length - 1] = EnrollmentPeriod(
+                startDate: startDate,
+              );
+            } else {
+              history[history.length - 1] = EnrollmentPeriod(
+                startDate: last.startDate,
+                endDate: startDate.subtract(const Duration(days: 1)),
+              );
+              history.add(EnrollmentPeriod(startDate: startDate));
+            }
+          } else {
+            history.add(EnrollmentPeriod(startDate: startDate));
+          }
         }
-        history.add(EnrollmentPeriod(startDate: startDate));
       } else if (endDate != null) {
         if (history.isEmpty) {
           final createdAt = (data['createdAt'] as Timestamp).toDate();
@@ -192,7 +208,7 @@ class StudentService {
         }
       }
 
-      // 2. 부 이동 이력(sessionHistory) 업데이트 (시작일이 있고 세션이 선택된 경우)
+      // 2. 부 이동 이력(sessionHistory) 업데이트
       final sessionHistoryData = data['sessionHistory'] as List? ?? [];
       final List<SessionHistory> sessionHistory = sessionHistoryData
           .map((e) => SessionHistory.fromMap(e as Map<String, dynamic>))
@@ -205,14 +221,19 @@ class StudentService {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      if (startDate != null && sessionId != null) {
+      if (startDate != null && (sessionId != null || replaceAll)) {
+        if (replaceAll) {
+          // [NEW] 시작일 정정 시 부 이력도 해당 날짜로 초기화
+          sessionHistory.clear();
+        }
+        final targetSession = sessionId ?? data['session'] as int? ?? 0;
         sessionHistory.add(
-          SessionHistory(effectiveDate: startDate, sessionId: sessionId),
+          SessionHistory(effectiveDate: startDate, sessionId: targetSession),
         );
         updates['sessionHistory'] = sessionHistory
             .map((e) => e.toFirestore())
             .toList();
-        updates['session'] = sessionId; // Legacy 필드 보정
+        updates['session'] = targetSession;
       }
 
       batch.update(docRef, updates);

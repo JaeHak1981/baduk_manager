@@ -224,6 +224,7 @@ class StudentProvider extends BaseProvider {
     DateTime? startDate,
     DateTime? endDate,
     int? sessionId,
+    bool replaceAll = false,
   }) async {
     return await runAsync(() async {
           try {
@@ -232,6 +233,7 @@ class StudentProvider extends BaseProvider {
               startDate: startDate,
               endDate: endDate,
               sessionId: sessionId,
+              replaceAll: replaceAll,
             );
             await loadStudents(academyId, ownerId: ownerId);
             AppErrorHandler.showSnackBar(

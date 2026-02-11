@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/academy_model.dart';
+import '../../models/student_model.dart';
 import '../../models/attendance_model.dart';
 import '../../providers/attendance_provider.dart';
 import '../../utils/holiday_helper.dart';
@@ -115,8 +116,12 @@ class _StatisticsDialogState extends State<StatisticsDialog> {
     // 대상 학생 ID 집합 (현재 활성 학생 + 기록이 있는 학생)
     final Set<String> targetStudentIds = {};
 
-    // 1. 현재 리스트에 있는 학생들은 기본적으로 포함
-    final activeStudentIds = widget.students.map((s) => s.id as String).toSet();
+    // 1. 현재 리스트에 있는 학생들 중 조회 기간에 수강 중인 학생만 포함
+    final enrolledStudents = (widget.students as List<StudentModel>)
+        .where((s) => s.isEnrolledInMonth(start.year, start.month))
+        .toList();
+
+    final activeStudentIds = enrolledStudents.map((s) => s.id).toSet();
     targetStudentIds.addAll(activeStudentIds);
 
     // 2. 기록 집계

@@ -91,7 +91,13 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
 
     final allStudents = studentProvider.allStudents;
     final students = allStudents
-        .where((s) => s.isEnrolledAt(_targetMonth))
+        .where(
+          (s) => s.isEnrolledInMonth(
+            _targetMonth.year,
+            _targetMonth.month,
+            includeNextMonth: true,
+          ),
+        )
         .toList();
     if (students.isEmpty) return;
 
@@ -164,9 +170,15 @@ class _TextbookOrderScreenState extends State<TextbookOrderScreen> {
     List<StudentModel> allStudents,
     AcademyModel latestAcademy,
   ) {
-    // 1. 대상 월 기준 수강생 필터링 (이력 기반)
+    // 1. 대상 월 기준 수강생 필터링 (이력 기반, 주문 화면은 익월 예정자 포함)
     List<StudentModel> filtered = allStudents
-        .where((s) => s.isEnrolledAt(_targetMonth))
+        .where(
+          (s) => s.isEnrolledInMonth(
+            _targetMonth.year,
+            _targetMonth.month,
+            includeNextMonth: true,
+          ),
+        )
         .toList();
 
     // 2. 부(Session) 필터링

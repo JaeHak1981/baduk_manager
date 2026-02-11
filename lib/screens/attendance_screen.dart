@@ -176,6 +176,8 @@ class AttendanceScreenState extends State<AttendanceScreen>
                     totalSessions: widget.academy.totalSessions,
                     selectedSession: _selectedSession,
                     students: studentProvider.students,
+                    year: _currentYear,
+                    month: _currentMonth,
                     onSessionSelected: (session) =>
                         setState(() => _selectedSession = session),
                     hasPendingChanges: attendanceProvider.hasPendingChanges,
@@ -620,7 +622,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
                 child: _buildCircularToggleCell(
                   context,
                   attendanceProvider,
-                  student.id,
+                  student,
                   ownerId,
                   date,
                   record,
@@ -765,11 +767,34 @@ class AttendanceScreenState extends State<AttendanceScreen>
   Widget _buildCircularToggleCell(
     BuildContext context,
     AttendanceProvider provider,
-    String studentId,
+    StudentModel student,
     String ownerId,
     DateTime date,
     AttendanceRecord? record,
   ) {
+    // 수강 기간 확인
+    final bool isEnrolled = student.isEnrolledAt(date);
+
+    if (!isEnrolled) {
+      return Tooltip(
+        message: '수강 기간이 아닙니다',
+        child: Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Center(
+            child: Text(
+              '-',
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          ),
+        ),
+      );
+    }
+
     bool isPresent = record?.type == AttendanceType.present;
     bool isAbsent = record?.type == AttendanceType.absent;
     Widget child = isPresent
@@ -790,7 +815,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
         HapticFeedback.lightImpact();
         setState(() => _localStateCounter++);
         provider.toggleStatus(
-          studentId: studentId,
+          studentId: student.id,
           academyId: widget.academy.id,
           ownerId: ownerId,
           date: date,
@@ -1030,10 +1055,20 @@ class AttendanceScreenState extends State<AttendanceScreen>
   }
 
   List<StudentModel> getVisibleStudents(List<StudentModel> all) {
+    // 1. 해당 월에 수강 중인 학생만 필터링
+    final enrolledStudents = all
+        .where((s) => s.isEnrolledInMonth(_currentYear, _currentMonth))
+        .toList();
+
     if (_selectedSession == null) {
-      return all;
+      return enrolledStudents;
     }
-    return all.where((s) => (s.session ?? 0) == _selectedSession).toList();
+
+    // 2. 부(Session) 이력 연동 필터링 (해당 월 1일 기준 부 정보 사용)
+    final targetDate = DateTime(_currentYear, _currentMonth, 1);
+    return enrolledStudents
+        .where((s) => (s.getSessionAt(targetDate) ?? 0) == _selectedSession)
+        .toList();
   }
 
   void toggleSelectionMode() {

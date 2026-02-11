@@ -230,6 +230,39 @@ class StudentModel {
     return false;
   }
 
+  /// 특정 연/월에 이 학생이 수강 중인지 확인
+  /// [includeNextMonth] true면 다음 달 입학 예정인 경우도 수강 중으로 간주 (주문 화면용)
+  bool isEnrolledInMonth(int year, int month, {bool includeNextMonth = false}) {
+    final startOfMonth = DateTime(year, month, 1).startOfDay;
+    final endOfMonth = DateTime(year, month + 1, 0).startOfDay;
+    final targetRangeEnd = includeNextMonth
+        ? DateTime(year, month + 2, 0).startOfDay
+        : endOfMonth;
+
+    // 이력이 없는 경우 (마이그레이션 전) 기존 로직 참고
+    if (enrollmentHistory.isEmpty) {
+      if (isDeleted && deletedAt != null) {
+        return !deletedAt!.startOfDay.isBefore(startOfMonth);
+      }
+      return true;
+    }
+
+    for (var period in enrollmentHistory) {
+      final start = period.startDate.startOfDay;
+      final end = period.endDate?.startOfDay;
+
+      // 수강 기간과 조회 기간(해당 월)이 겹치는지 확인
+      // 1. 수강 시작일이 조회 기간 종료일보다 이전이거나 같고
+      // 2. 수강 종료일이 없거나, 수강 종료일이 조회 기간 시작일보다 이후이거나 같음
+      if (!start.isAfter(targetRangeEnd)) {
+        if (end == null || !end.isBefore(startOfMonth)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /// 특정 날짜에 이 학생이 속한 부(Session)를 반환 (Fallback 로직 포함)
   int? getSessionAt(DateTime date) {
     final target = date.startOfDay;

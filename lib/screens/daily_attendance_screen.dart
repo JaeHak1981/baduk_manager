@@ -321,6 +321,8 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                       totalSessions: widget.academy.totalSessions,
                       selectedSession: _selectedSession,
                       students: studentProvider.students,
+                      year: _selectedDate.year,
+                      month: _selectedDate.month,
                       onSessionSelected: (session) => setState(() {
                         // 필터 초기화: 이미 선택된 부를 다시 누르면 전체보기(null)로 전환
                         if (_selectedSession == session) {

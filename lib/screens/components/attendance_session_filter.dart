@@ -6,6 +6,8 @@ class AttendanceSessionFilter extends StatelessWidget {
   final int totalSessions;
   final int? selectedSession;
   final List<StudentModel> students;
+  final int year;
+  final int month;
   final Function(int? session) onSessionSelected;
   final VoidCallback onSave;
   final bool hasPendingChanges;
@@ -16,6 +18,8 @@ class AttendanceSessionFilter extends StatelessWidget {
     required this.totalSessions,
     required this.selectedSession,
     required this.students,
+    required this.year,
+    required this.month,
     required this.onSessionSelected,
     required this.onSave,
     required this.hasPendingChanges,
@@ -34,23 +38,25 @@ class AttendanceSessionFilter extends StatelessWidget {
               child: Row(
                 children: [
                   (() {
-                    // 활성 및 배정된 학생들만 카운트 대상으로 정의
-                    final validStudents = students.where((s) {
-                      return !s.isDeleted &&
-                          s.session != null &&
-                          s.session != 0;
+                    // 해당 연/월에 수강 중인 학생만 카운트 대상으로 정의
+                    final targetDate = DateTime(year, month, 1);
+                    final enrolledStudents = students.where((s) {
+                      return s.isEnrolledInMonth(year, month);
                     }).toList();
 
                     return Row(
                       children: [
                         ChoiceChip(
-                          label: Text('전체(${validStudents.length})'),
+                          label: Text('전체(${enrolledStudents.length})'),
                           selected: selectedSession == null,
                           onSelected: (_) => onSessionSelected(null),
                         ),
                         ...List.generate(totalSessions, (i) => i + 1).map((s) {
-                          final count = validStudents
-                              .where((st) => st.session == s)
+                          // 해당 시점(targetDate)의 부 이력 기준으로 카운트
+                          final count = enrolledStudents
+                              .where(
+                                (st) => (st.getSessionAt(targetDate) ?? 0) == s,
+                              )
                               .length;
                           return Padding(
                             padding: const EdgeInsets.only(left: 8),

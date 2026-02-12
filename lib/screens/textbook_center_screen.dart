@@ -10,11 +10,13 @@ import 'add_textbook_screen.dart';
 /// 교재 센터 화면 (기관별 교재 목록 조회 및 권수별 할당)
 class TextbookCenterScreen extends StatefulWidget {
   final AcademyModel academy;
-  final String? studentId; // 특정 학생에게 할당할 경우 전달
+  final List<String>? studentIds; // 다수 학생에게 일괄 할당할 경우 전달
+  final String? studentId; // 기존 단일 학생 할당 호환성 유지
 
   const TextbookCenterScreen({
     super.key,
     required this.academy,
+    this.studentIds,
     this.studentId,
   });
 
@@ -37,7 +39,11 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('교재 관리 센터'),
+        title: Text(
+          widget.studentIds != null && widget.studentIds!.length > 1
+              ? '교재 일괄 할당 (${widget.studentIds!.length}명)'
+              : '교재 관리 센터',
+        ),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: Consumer<ProgressProvider>(
@@ -104,7 +110,17 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text('총 ${textbook.totalVolumes}권'),
-                        trailing: widget.studentId != null
+                        onTap:
+                            (widget.studentId != null ||
+                                    widget.studentIds != null) &&
+                                !provider.isAssigning
+                            ? () => _pickVolumeAndAssign(context, textbook)
+                            : (isCustom
+                                  ? () => _navigateToEdit(context, textbook)
+                                  : null),
+                        trailing:
+                            (widget.studentId != null ||
+                                widget.studentIds != null)
                             ? ElevatedButton(
                                 onPressed: provider.isAssigning
                                     ? null
@@ -112,9 +128,7 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
                                         context,
                                         textbook,
                                       ),
-                                child:
-                                    provider.isAssigning &&
-                                        widget.studentId != null
+                                child: provider.isAssigning
                                     ? const SizedBox(
                                         width: 20,
                                         height: 20,
@@ -165,7 +179,8 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
           );
         },
       ),
-      floatingActionButton: widget.studentId == null
+      floatingActionButton:
+          (widget.studentId == null && widget.studentIds == null)
           ? FloatingActionButton.extended(
               onPressed: () => _navigateToRegister(context),
               label: const Text('새 교재 등록'),
@@ -340,22 +355,36 @@ class _TextbookCenterScreenState extends State<TextbookCenterScreen> {
     );
 
     if (result != null && mounted) {
-      // 이전에 발생했을 수 있는 에러 메시지 초기화
-      context.read<ProgressProvider>().clearErrorMessage();
-
-      final success = await context.read<ProgressProvider>().assignVolume(
-        studentId: widget.studentId!,
-        academyId: widget.academy.id,
-        ownerId: widget.academy.ownerId,
-        textbook: textbook,
-        volumeNumber: result,
-      );
+      final success = widget.studentIds != null
+          ? await context.read<ProgressProvider>().batchAssignVolume(
+              studentIds: widget.studentIds!,
+              academyId: widget.academy.id,
+              ownerId: widget.academy.ownerId,
+              textbook: textbook,
+              volumeNumber: result,
+            )
+          : await context.read<ProgressProvider>().assignVolume(
+              studentId: widget.studentId!,
+              academyId: widget.academy.id,
+              ownerId: widget.academy.ownerId,
+              textbook: textbook,
+              volumeNumber: result,
+            );
 
       if (mounted) {
         if (success) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('$result권이 할당되었습니다')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                widget.studentIds != null
+                    ? '${widget.studentIds!.length}명에게 ${result}권이 할당되었습니다'
+                    : '$result권이 할당되었습니다',
+              ),
+            ),
+          );
+          if (widget.studentIds != null) {
+            Navigator.pop(context); // 일괄 할당 후에는 목록으로 돌아감
+          }
         } else {
           final errorMsg =
               context.read<ProgressProvider>().errorMessage ?? '할당에 실패했습니다.';

@@ -270,6 +270,80 @@ class ProgressProvider with ChangeNotifier {
     }
   }
 
+  /// 다수 학생에게 일괄 교재 할당
+  Future<bool> batchAssignVolume({
+    required List<String> studentIds,
+    required String academyId,
+    required String ownerId,
+    required TextbookModel textbook,
+    required int volumeNumber,
+  }) async {
+    if (studentIds.isEmpty) return true;
+
+    _isAssigning = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      for (final studentId in studentIds) {
+        // 1. 중복 체크
+        final existingProgress = _studentProgressMap[studentId]
+            ?.where(
+              (p) =>
+                  p.textbookId == textbook.id && p.volumeNumber == volumeNumber,
+            )
+            .toList();
+
+        if (existingProgress != null && existingProgress.isNotEmpty) {
+          await _progressService.updateVolumeAndResetStatus(
+            existingProgress.first.id,
+            volumeNumber,
+          );
+        } else {
+          // 2. 이전 권수 완료 처리
+          await _progressService.completePreviousVolumes(
+            studentId,
+            textbook.id,
+            volumeNumber,
+            ownerId: ownerId,
+          );
+
+          // 3. 신규 할당
+          final progress = StudentProgressModel(
+            id: '',
+            studentId: studentId,
+            academyId: academyId,
+            ownerId: ownerId,
+            textbookId: textbook.id,
+            textbookName: textbook.name,
+            volumeNumber: volumeNumber,
+            totalVolumes: textbook.totalVolumes,
+            startDate: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+
+          final newId = await _progressService.startProgress(progress);
+
+          // 로컬 데이터 즉시 갱신
+          final newProgress = progress.copyWith(id: newId);
+          _studentProgressMap[studentId] ??= [];
+          _studentProgressMap[studentId]!.insert(0, newProgress);
+          _studentProgressMap[studentId]!.sort(
+            (a, b) => b.updatedAt.compareTo(a.updatedAt),
+          );
+        }
+      }
+      return true;
+    } catch (e) {
+      print('DEBUG: batchAssignVolume 실패: $e');
+      _errorMessage = '일괄 교재 할당에 실패했습니다: $e';
+      return false;
+    } finally {
+      _isAssigning = false;
+      notifyListeners();
+    }
+  }
+
   /// 진도 상태 업데이트 (완료 여부)
   Future<bool> updateVolumeStatus(
     String progressId,
@@ -305,6 +379,40 @@ class ProgressProvider with ChangeNotifier {
     } catch (e) {
       print('DEBUG: updateVolumeStatus 실패: $e');
       _errorMessage = '진도 업데이트 실패: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// 진도 권수 직접 업데이트
+  Future<bool> updateVolume({
+    required String progressId,
+    required String studentId,
+    required int newVolume,
+    String? ownerId,
+  }) async {
+    try {
+      await _progressService.updateVolume(progressId, newVolume);
+
+      // 로컬 데이터 즉시 업데이트
+      if (_studentProgressMap.containsKey(studentId)) {
+        final list = _studentProgressMap[studentId]!;
+        final index = list.indexWhere((p) => p.id == progressId);
+        if (index != -1) {
+          list[index] = list[index].copyWith(
+            volumeNumber: newVolume,
+            updatedAt: DateTime.now(),
+          );
+        }
+      }
+      notifyListeners();
+
+      // 서버 동기화 확인
+      await loadStudentProgress(studentId, ownerId: ownerId);
+      return true;
+    } catch (e) {
+      print('DEBUG: updateVolume 실패: $e');
+      _errorMessage = '권수 업데이트 실패: $e';
       notifyListeners();
       return false;
     }

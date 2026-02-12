@@ -57,7 +57,7 @@ class MyApp extends StatelessWidget {
       ],
 
       child: MaterialApp(
-        title: '원생 관리',
+        title: '에듀바둑',
         debugShowCheckedModeBanner: false,
         scaffoldMessengerKey: AppErrorHandler.scaffoldMessengerKey,
         scrollBehavior: const MaterialScrollBehavior().copyWith(

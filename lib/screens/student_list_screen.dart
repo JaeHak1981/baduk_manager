@@ -112,6 +112,43 @@ class _StudentListScreenState extends State<StudentListScreen> {
     });
   }
 
+  void _handleBulkTextbookAssign() {
+    if (!_isSelectionMode) {
+      setState(() {
+        _isSelectionMode = true;
+        _selectedStudentIds.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('교재를 지급할 학생들을 목록에서 선택해 주세요')),
+      );
+      return;
+    }
+
+    if (_selectedStudentIds.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('교재를 지급할 학생을 먼저 선택해 주세요')));
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TextbookCenterScreen(
+          academy: widget.academy,
+          studentIds: _selectedStudentIds.toList(),
+        ),
+      ),
+    ).then((_) {
+      if (mounted) {
+        setState(() {
+          _isSelectionMode = false;
+          _selectedStudentIds.clear();
+        });
+      }
+    });
+  }
+
   void _toggleSelectionMode() {
     setState(() {
       _isSelectionMode = !_isSelectionMode;
@@ -547,6 +584,19 @@ class _StudentListScreenState extends State<StudentListScreen> {
             icon: const Icon(Icons.file_upload_outlined), // 내보내기 아이콘
             tooltip: '학생 명단 내보내기',
             onPressed: _showExportOptionsDialog,
+          ),
+          // 교재 일괄 지급 버튼 상시 노출
+          TextButton(
+            onPressed: _handleBulkTextbookAssign,
+            style: TextButton.styleFrom(
+              foregroundColor: _isSelectionMode
+                  ? Colors.red.shade900
+                  : Colors.indigo.shade900,
+            ),
+            child: const Text(
+              '교재일괄지급',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           if (!_isSelectionMode) ...[
             IconButton(
@@ -1480,6 +1530,106 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
     );
   }
 
+  void _showProgressManagementDialog(
+    BuildContext context,
+    StudentProgressModel progress,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${widget.student.name} - 진도 관리'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '교재: ${progress.textbookName}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '현재 진도: ${progress.volumeNumber}권 / 총 ${progress.totalVolumes}권',
+            ),
+            const Divider(height: 24),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined, color: Colors.blue),
+              title: const Text('권수 직접 수정'),
+              onTap: () async {
+                Navigator.pop(context);
+                final result = await showDialog<int>(
+                  context: context,
+                  builder: (context) => _VolumeChangeDialog(
+                    currentVolume: progress.volumeNumber,
+                    totalVolumes: progress.totalVolumes,
+                  ),
+                );
+                if (result != null && context.mounted) {
+                  await context.read<ProgressProvider>().updateVolume(
+                    progressId: progress.id,
+                    studentId: widget.student.id,
+                    newVolume: result,
+                    ownerId: widget.academy.ownerId,
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.history, color: Colors.orange),
+              title: const Text('학습 전체 기록 보기'),
+              onTap: () {
+                Navigator.pop(context);
+                _navigateToStudentHistory(context, widget.student);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text('이 진도 기록 삭제'),
+              onTap: () async {
+                Navigator.pop(context);
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('기록 삭제'),
+                    content: Text(
+                      '${progress.textbookName} ${progress.volumeNumber}권 기록을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('취소'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text(
+                          '삭제',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm == true && context.mounted) {
+                  await context.read<ProgressProvider>().removeProgress(
+                    progress.id,
+                    widget.student.id,
+                    ownerId: widget.academy.ownerId,
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('닫기'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final progressProvider = context.watch<ProgressProvider>();
@@ -1753,12 +1903,27 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: progressList.isNotEmpty
-                          ? Text(
-                              isSmall
-                                  ? '${progressList.first.textbookName.substring(0, (progressList.first.textbookName.length > 4 ? 4 : progressList.first.textbookName.length))}.. ${progressList.first.progressPercentage.toInt()}%'
-                                  : '${progressList.first.textbookName} ${progressList.first.volumeNumber}권 (${progressList.first.progressPercentage.toInt()}%)',
-                              style: const TextStyle(fontSize: 10),
-                              overflow: TextOverflow.ellipsis,
+                          ? InkWell(
+                              onTap: () => _showProgressManagementDialog(
+                                context,
+                                progressList.first,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                child: Text(
+                                  isSmall
+                                      ? '${progressList.first.textbookName.substring(0, (progressList.first.textbookName.length > 4 ? 4 : progressList.first.textbookName.length))}.. ${progressList.first.progressPercentage.toInt()}%'
+                                      : '${progressList.first.textbookName} ${progressList.first.volumeNumber}권 (${progressList.first.progressPercentage.toInt()}%)',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.blue,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             )
                           : const Text(
                               '-',
@@ -2046,5 +2211,69 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
       // TextbookCenterScreen에서 이미 assignVolume을 통해 Provider 상태를 갱신하고
       // notifyListeners()를 호출했으므로, 자동으로 반영됩니다.
     });
+  }
+}
+
+/// 권수 변경용 다이얼로그
+class _VolumeChangeDialog extends StatefulWidget {
+  final int currentVolume;
+  final int totalVolumes;
+
+  const _VolumeChangeDialog({
+    required this.currentVolume,
+    required this.totalVolumes,
+  });
+
+  @override
+  State<_VolumeChangeDialog> createState() => _VolumeChangeDialogState();
+}
+
+class _VolumeChangeDialogState extends State<_VolumeChangeDialog> {
+  late int _selectedVolume;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedVolume = widget.currentVolume;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('권수 수정'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('변경할 권수를 선택해 주세요.'),
+          const SizedBox(height: 20),
+          DropdownButton<int>(
+            value: _selectedVolume,
+            isExpanded: true,
+            items: List.generate(
+              widget.totalVolumes,
+              (index) => DropdownMenuItem(
+                value: index + 1,
+                child: Text('${index + 1}권'),
+              ),
+            ),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _selectedVolume = value);
+              }
+            },
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('취소'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, _selectedVolume),
+          child: const Text('수정'),
+        ),
+      ],
+    );
   }
 }

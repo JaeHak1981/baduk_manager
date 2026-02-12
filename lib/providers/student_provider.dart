@@ -134,10 +134,15 @@ class StudentProvider extends BaseProvider {
     int targetSession, {
     required String academyId,
     required String ownerId,
+    DateTime? effectiveDate,
   }) async {
     return await runAsync(() async {
           try {
-            await _studentService.moveStudents(studentIds, targetSession);
+            await _studentService.moveStudents(
+              studentIds,
+              targetSession,
+              effectiveDate: effectiveDate,
+            );
             await loadStudents(academyId, ownerId: ownerId);
             final sessionName = targetSession == 0 ? "미배정" : "$targetSession부";
             AppErrorHandler.showSnackBar(
@@ -160,13 +165,26 @@ class StudentProvider extends BaseProvider {
     List<String>? toDelete,
     required String academyId,
     required String ownerId,
+    bool isPermanent = false,
+    Map<String, Map<String, dynamic>>? textbookAssignments, // [NEW]
   }) async {
+    // [SAFETY] 영구 삭제(isPermanent) 시에는 실제로 '삭제됨(isDeleted)' 상태인 학생만 처리하도록 필터링
+    List<String>? safeToDelete = toDelete;
+    if (isPermanent && toDelete != null) {
+      safeToDelete = _students
+          .where((s) => s.isDeleted && toDelete.contains(s.id))
+          .map((s) => s.id)
+          .toList();
+    }
+
     return await runAsync(() async {
           try {
             await _studentService.batchProcessStudents(
               toUpdate: toUpdate,
               toAdd: toAdd,
-              toDelete: toDelete,
+              toDelete: safeToDelete,
+              isPermanent: isPermanent,
+              textbookAssignments: textbookAssignments,
             );
             await loadStudents(academyId, ownerId: ownerId);
             AppErrorHandler.showSnackBar('일괄 처리가 완료되었습니다.', isError: false);
@@ -243,6 +261,38 @@ class StudentProvider extends BaseProvider {
             return true;
           } catch (e) {
             AppErrorHandler.handle(e, customMessage: '일괄 업데이트에 실패했습니다.');
+            return false;
+          }
+        }) ??
+        false;
+  }
+
+  /// 기존 데이터 이력 기반 동기화 (기능 복구 및 정합성 보정)
+  Future<bool> syncHistoryData({
+    required String academyId,
+    required String ownerId,
+  }) async {
+    return await runAsync(() async {
+          try {
+            final count = await _studentService.migrateHistoryData(
+              academyId,
+              ownerId: ownerId,
+            );
+            if (count > 0) {
+              await loadStudents(academyId, ownerId: ownerId);
+              AppErrorHandler.showSnackBar(
+                '$count명의 학생 데이터가 동기화되었습니다.',
+                isError: false,
+              );
+            } else {
+              AppErrorHandler.showSnackBar(
+                '모든 데이터가 이미 최신 상태입니다.',
+                isError: false,
+              );
+            }
+            return true;
+          } catch (e) {
+            AppErrorHandler.handle(e, customMessage: '데이터 동기화에 실패했습니다.');
             return false;
           }
         }) ??

@@ -68,6 +68,7 @@ class ExcelUtils {
   static void exportStudentListForUpdate({
     required List<StudentModel> students,
     required String academyName,
+    Map<String, StudentProgressModel?>? studentProgressMap, // [NEW] 학생별 현재 진도 맵
   }) {
     var excel = Excel.createExcel();
     Sheet sheet = excel['Sheet1'];
@@ -82,6 +83,8 @@ class ExcelUtils {
       TextCellValue('보호자 연락처'),
       TextCellValue('부'),
       TextCellValue('메모'),
+      TextCellValue('현재 교재'), // [NEW]
+      TextCellValue('권호'), // [NEW]
     ];
     sheet.appendRow(header);
 
@@ -95,6 +98,8 @@ class ExcelUtils {
         TextCellValue(s.parentPhone ?? ''),
         TextCellValue(s.session?.toString() ?? ''),
         TextCellValue(s.note ?? ''),
+        TextCellValue(studentProgressMap?[s.id]?.textbookName ?? ''), // [NEW]
+        IntCellValue(studentProgressMap?[s.id]?.volumeNumber ?? 0), // [NEW]
       ]);
     }
 

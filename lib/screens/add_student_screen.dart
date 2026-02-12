@@ -5,6 +5,7 @@ import '../models/academy_model.dart';
 import '../models/student_model.dart';
 import '../providers/student_provider.dart';
 import '../constants/ui_constants.dart';
+import '../utils/date_extensions.dart';
 
 /// 학생 등록/수정 화면
 class AddStudentScreen extends StatefulWidget {
@@ -99,9 +100,63 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
           updatedAt: now,
         );
 
-        // 만약 세션이 변경되었고 이력이 비어있다면 (마이그레이션 전 데이터 등)
-        // 현재 시점의 이력을 하나 추가해줌 (정합성 유지)
-        if (updatedStudent.sessionHistory.isEmpty && _selectedSession != null) {
+        // [MODIFIED] 수강 신청일(시작일) 변경 처리
+        final oldStart = widget.student!.enrollmentHistory.isNotEmpty
+            ? widget.student!.enrollmentHistory.first.startDate
+            : widget.student!.createdAt;
+
+        if (!_startDate.isSameDay(oldStart)) {
+          final newEnrollment = List<EnrollmentPeriod>.from(
+            updatedStudent.enrollmentHistory,
+          );
+          if (newEnrollment.isEmpty) {
+            newEnrollment.add(EnrollmentPeriod(startDate: _startDate));
+          } else {
+            newEnrollment[0] = newEnrollment[0].copyWith(startDate: _startDate);
+          }
+          updatedStudent = updatedStudent.copyWith(
+            enrollmentHistory: newEnrollment,
+          );
+
+          // 시작일이 변경되면 최초 세션 이력 날짜도 맞춰줌 (첫 등록인 경우)
+          if (updatedStudent.sessionHistory.length == 1) {
+            final newSessionHistory = [
+              SessionHistory(
+                effectiveDate: _startDate,
+                sessionId: updatedStudent.sessionHistory.first.sessionId,
+              ),
+            ];
+            updatedStudent = updatedStudent.copyWith(
+              sessionHistory: newSessionHistory,
+            );
+          }
+        }
+
+        // 세션 변경 이력 처리 (정합성 유지)
+        if (_selectedSession != widget.student!.session) {
+          final newHistory = List<SessionHistory>.from(
+            updatedStudent.sessionHistory,
+          );
+          // 같은 날짜의 이력이 이미 있다면 업데이트, 없으면 추가
+          final sameDayIdx = newHistory.indexWhere(
+            (h) => h.effectiveDate.isSameDay(now),
+          );
+          if (sameDayIdx != -1) {
+            newHistory[sameDayIdx] = SessionHistory(
+              effectiveDate: now,
+              sessionId: _selectedSession ?? 0,
+            );
+          } else {
+            newHistory.add(
+              SessionHistory(
+                effectiveDate: now,
+                sessionId: _selectedSession ?? 0,
+              ),
+            );
+          }
+          updatedStudent = updatedStudent.copyWith(sessionHistory: newHistory);
+        } else if (updatedStudent.sessionHistory.isEmpty &&
+            _selectedSession != null) {
           updatedStudent = updatedStudent.copyWith(
             sessionHistory: [
               SessionHistory(effectiveDate: now, sessionId: _selectedSession!),

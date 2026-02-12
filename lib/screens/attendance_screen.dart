@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../providers/schedule_provider.dart';
 import '../utils/holiday_helper.dart';
 import '../utils/file_download_helper.dart';
+import '../utils/date_extensions.dart';
 import '../constants/ui_constants.dart';
 import 'components/statistics_dialog.dart';
 import 'components/attendance_calendar.dart';
@@ -178,6 +179,11 @@ class AttendanceScreenState extends State<AttendanceScreen>
                     students: studentProvider.students,
                     year: _currentYear,
                     month: _currentMonth,
+                    targetDate:
+                        (_currentYear == DateTime.now().year &&
+                            _currentMonth == DateTime.now().month)
+                        ? DateTime.now().startOfDay
+                        : DateTime(_currentYear, _currentMonth + 1, 0),
                     onSessionSelected: (session) =>
                         setState(() => _selectedSession = session),
                     hasPendingChanges: attendanceProvider.hasPendingChanges,
@@ -1081,8 +1087,12 @@ class AttendanceScreenState extends State<AttendanceScreen>
       return enrolledStudents;
     }
 
-    // 2. 부(Session) 이력 연동 필터링 (해당 월 1일 기준 부 정보 사용)
-    final targetDate = DateTime(_currentYear, _currentMonth, 1);
+    // 2. 부(Session) 이력 연동 필터링 (동적 기준일 사용)
+    final now = DateTime.now();
+    final targetDate = (_currentYear == now.year && _currentMonth == now.month)
+        ? now.startOfDay
+        : DateTime(_currentYear, _currentMonth + 1, 0); // 해당 월의 마지막 날
+
     return enrolledStudents
         .where((s) => (s.getSessionAt(targetDate) ?? 0) == _selectedSession)
         .toList();
@@ -1154,6 +1164,7 @@ class AttendanceScreenState extends State<AttendanceScreen>
         target,
         academyId: widget.academy.id,
         ownerId: owner,
+        effectiveDate: DateTime(_currentYear, _currentMonth, 1),
       );
       if (success && mounted) {
         setState(() {

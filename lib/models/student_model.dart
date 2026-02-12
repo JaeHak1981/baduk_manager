@@ -8,6 +8,13 @@ class EnrollmentPeriod {
 
   EnrollmentPeriod({required this.startDate, this.endDate});
 
+  EnrollmentPeriod copyWith({DateTime? startDate, DateTime? endDate}) {
+    return EnrollmentPeriod(
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+    );
+  }
+
   Map<String, dynamic> toFirestore() {
     return {
       'startDate': Timestamp.fromDate(startDate),
@@ -32,6 +39,13 @@ class SessionHistory {
 
   SessionHistory({required this.effectiveDate, required this.sessionId});
 
+  SessionHistory copyWith({DateTime? effectiveDate, int? sessionId}) {
+    return SessionHistory(
+      effectiveDate: effectiveDate ?? this.effectiveDate,
+      sessionId: sessionId ?? this.sessionId,
+    );
+  }
+
   Map<String, dynamic> toFirestore() {
     return {
       'effectiveDate': Timestamp.fromDate(effectiveDate),
@@ -42,7 +56,7 @@ class SessionHistory {
   factory SessionHistory.fromMap(Map<String, dynamic> map) {
     return SessionHistory(
       effectiveDate: (map['effectiveDate'] as Timestamp).toDate(),
-      sessionId: map['sessionId'] as int,
+      sessionId: (map['sessionId'] as num).toInt(),
     );
   }
 }
@@ -145,10 +159,10 @@ class StudentModel {
       parentPhone: data['parentPhone'] as String?,
       level: data['level'] as int? ?? 30,
       note: data['note'] as String?,
-      session: data['session'] as int?,
+      session: (data['session'] as num?)?.toInt(),
       sessionHistory: sHistory,
       enrollmentHistory: eHistory,
-      grade: data['grade'] as int?,
+      grade: (data['grade'] as num?)?.toInt(),
       classNumber: data['classNumber'] as String?,
       studentNumber: data['studentNumber'] as String?,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
@@ -287,9 +301,34 @@ class StudentModel {
   int? getSessionAt(DateTime date) {
     final target = date.startOfDay;
 
+    // 1. 수강 시작일 및 유효 기간 확인
+    // enrollmentHistory가 있으면 그 기간 내에 있는지 확인, 없으면 createdAt 기준 판단
+    if (enrollmentHistory.isNotEmpty) {
+      bool isEnrolled = false;
+      for (var period in enrollmentHistory) {
+        final start = period.startDate.startOfDay;
+        final end = period.endDate?.startOfDay;
+
+        // 타겟 날짜가 특정 수강 기간 내에 있는지 확인
+        if (!target.isBefore(start) && (end == null || !target.isAfter(end))) {
+          isEnrolled = true;
+          break;
+        }
+      }
+
+      // 어느 수강 기간에도 속하지 않는다면 (입학 전 또는 퇴원 상태) 미등록(0) 반환
+      if (!isEnrolled) return 0;
+    } else {
+      // 수강 이력이 전혀 없는 경우 createdAt 기준으로 판단 (최초 1회 방어 코드)
+      if (target.isBefore(createdAt.startOfDay)) {
+        return 0;
+      }
+    }
+
+    // 2. 이력 탐색
     if (sessionHistory.isEmpty) return session;
 
-    // 해당 날짜 이전 기록 중 가장 최근의 유효한 기록 찾기 (Fallback)
+    // 해당 날짜 이전 기록 중 가장 최근의 유효한 기록 찾기
     SessionHistory? latestMatch;
     for (var history in sessionHistory) {
       if (!target.isBefore(history.effectiveDate.startOfDay)) {
@@ -297,6 +336,36 @@ class StudentModel {
             history.effectiveDate.isAfter(latestMatch.effectiveDate)) {
           latestMatch = history;
         }
+      }
+    }
+
+    // 3. 폴백(Fallback) 및 정합성 보정 로직
+    // 찾은 기록(latestMatch)이 0(미배정)인데 현재 세션(session)은 배정되어 있다면,
+    // 현재 시점(오늘)과 가깝거나 이력이 하나뿐인 경우에만 현재 세션을 신뢰함
+    if (latestMatch == null ||
+        (latestMatch.sessionId == 0 && (session ?? 0) != 0)) {
+      // [CRITICAL FIX] 타겟 날짜가 명백히 '모든 수강/세션 이력의 첫 시점'보다 이전이라면 무조건 0 반환
+      DateTime? absoluteFirst;
+
+      if (enrollmentHistory.isNotEmpty) {
+        absoluteFirst = enrollmentHistory.first.startDate.startOfDay;
+      }
+
+      if (sessionHistory.isNotEmpty) {
+        final firstSess = sessionHistory.first.effectiveDate.startOfDay;
+        if (absoluteFirst == null || firstSess.isBefore(absoluteFirst)) {
+          absoluteFirst = firstSess;
+        }
+      }
+
+      // 만약 조회 날짜(오늘 등)가 시스템이 알고 있는 학생의 첫 활동일보다 전이라면 미등록(0)
+      if (absoluteFirst != null && target.isBefore(absoluteFirst)) {
+        return 0;
+      }
+
+      if (sessionHistory.length <= 1 ||
+          !target.isBefore(DateTime.now().startOfDay)) {
+        return session;
       }
     }
 
@@ -419,7 +488,7 @@ class StudentModel {
 
     if (nearestMove != null) {
       final sessionLabel = targetSession != null
-          ? (targetSession == 0 ? '(미배정)' : '(${targetSession}부)')
+          ? (targetSession == 0 ? '(미배정)' : '($targetSession부)')
           : '';
       return '${nearestMove.month}/${nearestMove.day}$sessionLabel $moveType';
     }

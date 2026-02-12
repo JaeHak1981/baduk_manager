@@ -8,6 +8,7 @@ class AttendanceSessionFilter extends StatelessWidget {
   final List<StudentModel> students;
   final int year;
   final int month;
+  final DateTime? targetDate;
   final Function(int? session) onSessionSelected;
   final VoidCallback onSave;
   final bool hasPendingChanges;
@@ -20,6 +21,7 @@ class AttendanceSessionFilter extends StatelessWidget {
     required this.students,
     required this.year,
     required this.month,
+    this.targetDate,
     required this.onSessionSelected,
     required this.onSave,
     required this.hasPendingChanges,
@@ -39,7 +41,7 @@ class AttendanceSessionFilter extends StatelessWidget {
                 children: [
                   (() {
                     // 해당 연/월에 수강 중인 학생만 카운트 대상으로 정의
-                    final targetDate = DateTime(year, month, 1);
+                    final filterDate = targetDate ?? DateTime(year, month, 1);
                     final enrolledStudents = students.where((s) {
                       return s.isEnrolledInMonth(year, month);
                     }).toList();
@@ -51,11 +53,26 @@ class AttendanceSessionFilter extends StatelessWidget {
                           selected: selectedSession == null,
                           onSelected: (_) => onSessionSelected(null),
                         ),
+                        (() {
+                          final unassignedCount = enrolledStudents
+                              .where(
+                                (st) => (st.getSessionAt(filterDate) ?? 0) == 0,
+                              )
+                              .length;
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: ChoiceChip(
+                              label: Text('미배정($unassignedCount)'),
+                              selected: selectedSession == 0,
+                              onSelected: (_) => onSessionSelected(0),
+                            ),
+                          );
+                        })(),
                         ...List.generate(totalSessions, (i) => i + 1).map((s) {
-                          // 해당 시점(targetDate)의 부 이력 기준으로 카운트
+                          // 해당 시점(filterDate)의 부 이력 기준으로 카운트
                           final count = enrolledStudents
                               .where(
-                                (st) => (st.getSessionAt(targetDate) ?? 0) == s,
+                                (st) => (st.getSessionAt(filterDate) ?? 0) == s,
                               )
                               .length;
                           return Padding(

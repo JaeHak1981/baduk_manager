@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/student_model.dart';
+import '../utils/date_extensions.dart';
 
 /// 학생 관리 서비스
 class StudentService {
@@ -74,12 +75,18 @@ class StudentService {
   }
 
   /// 학생 일괄 업데이트 및 삭제 처리 [NEW]
-  Future<void> batchProcessStudents({
+  Future<void> _batchProcessStudents(
+    WriteBatch batch, {
     List<StudentModel>? toUpdate,
     List<StudentModel>? toAdd,
     List<String>? toDelete,
+    bool isPermanent = false,
+    Map<String, Map<String, dynamic>>?
+    textbookAssignments, // [NEW] { studentName_grade_class: {textbookName, volumeNumber, ownerId} }
   }) async {
-    final batch = _firestore.batch();
+    // 미리 교재 목록 로드 (이름 기반 매칭용)
+    // 이 부분은 서비스 외부에서 처리해서 넘겨받는 것이 더 효율적일 수 있으나,
+    // 우선은 내부에서 최소한의 쿼리로 처리합니다.
 
     // 1. 수정 대상 처리
     if (toUpdate != null) {
@@ -88,26 +95,81 @@ class StudentService {
           _firestore.collection(_collection).doc(s.id),
           s.copyWith(updatedAt: DateTime.now()).toFirestore(),
         );
+
+        // 교재 할당 처리 (기존 학생)
+        if (textbookAssignments != null &&
+            textbookAssignments.containsKey(s.id)) {
+          // 이 부분은 기존 진도 데이터 확인이 필요하므로 트랜잭션 수준에서 처리하거나
+          // 아래에서 별도로 처리하는 것이 안전합니다.
+          // 여기서는 '신규 등록' 시의 교재 할당에 집중하고,
+          // 수정 시에는 별도의 로직을 타거나 우선순위를 낮춥니다.
+        }
       }
     }
 
     // 2. 추가 대상 처리
     if (toAdd != null) {
       for (var s in toAdd) {
-        batch.set(_firestore.collection(_collection).doc(), s.toFirestore());
+        final studentDoc = _firestore.collection(_collection).doc();
+        batch.set(studentDoc, s.toFirestore());
+
+        // 교재 할당 처리 (신규 학생) - Map 키로 학생 이름 등을 사용
+        final key = "${s.name}_${s.grade}_${s.classNumber}";
+        if (textbookAssignments != null &&
+            textbookAssignments.containsKey(key)) {
+          final assignment = textbookAssignments[key]!;
+          final progressDoc = _firestore.collection('studentProgress').doc();
+
+          batch.set(progressDoc, {
+            'studentId': studentDoc.id,
+            'academyId': s.academyId,
+            'ownerId': s.ownerId,
+            'textbookId': assignment['textbookId'],
+            'textbookName': assignment['textbookName'],
+            'volumeNumber': assignment['volumeNumber'],
+            'totalVolumes': assignment['totalVolumes'],
+            'isCompleted': false,
+            'startDate': Timestamp.now(),
+            'updatedAt': Timestamp.now(),
+            'isDeleted': false,
+          });
+        }
       }
     }
 
     // 3. 삭제(수강종료) 대상 처리
     if (toDelete != null) {
       for (var id in toDelete) {
-        batch.update(_firestore.collection(_collection).doc(id), {
-          'isDeleted': true,
-          'deletedAt': FieldValue.serverTimestamp(),
-        });
+        final docRef = _firestore.collection(_collection).doc(id);
+        if (isPermanent) {
+          batch.delete(docRef);
+        } else {
+          batch.update(docRef, {
+            'isDeleted': true,
+            'deletedAt': FieldValue.serverTimestamp(),
+          });
+        }
       }
     }
+  }
 
+  /// 학생 일괄 업데이트 및 삭제 처리
+  Future<void> batchProcessStudents({
+    List<StudentModel>? toUpdate,
+    List<StudentModel>? toAdd,
+    List<String>? toDelete,
+    bool isPermanent = false,
+    Map<String, Map<String, dynamic>>? textbookAssignments, // [NEW]
+  }) async {
+    final batch = _firestore.batch();
+    await _batchProcessStudents(
+      batch,
+      toUpdate: toUpdate,
+      toAdd: toAdd,
+      toDelete: toDelete,
+      isPermanent: isPermanent,
+      textbookAssignments: textbookAssignments,
+    );
     await batch.commit();
   }
 
@@ -274,11 +336,48 @@ class StudentService {
   }
 
   /// 학생 일괄 이동 (부 이동)
-  Future<void> moveStudents(List<String> studentIds, int targetSession) async {
+  Future<void> moveStudents(
+    List<String> studentIds,
+    int targetSession, {
+    DateTime? effectiveDate,
+  }) async {
     final batch = _firestore.batch();
+    final now = DateTime.now();
+    final effective = (effectiveDate ?? now).startOfDay;
+
     for (var id in studentIds) {
-      batch.update(_firestore.collection(_collection).doc(id), {
+      final docRef = _firestore.collection(_collection).doc(id);
+      final snapshot = await docRef.get();
+      if (!snapshot.exists) continue;
+
+      final data = snapshot.data()!;
+      final historyData = data['sessionHistory'] as List? ?? [];
+      final history = historyData
+          .map((e) => SessionHistory.fromMap(e as Map<String, dynamic>))
+          .toList();
+
+      // 동일한 일자에 이미 기록이 있다면 업데이트, 없으면 추가
+      final existingIndex = history.indexWhere(
+        (h) => h.effectiveDate.startOfDay.isAtSameMomentAs(effective),
+      );
+
+      if (existingIndex >= 0) {
+        history[existingIndex] = SessionHistory(
+          effectiveDate: effective,
+          sessionId: targetSession,
+        );
+      } else {
+        history.add(
+          SessionHistory(effectiveDate: effective, sessionId: targetSession),
+        );
+      }
+
+      // 날짜 순으로 정렬 유지
+      history.sort((a, b) => a.effectiveDate.compareTo(b.effectiveDate));
+
+      batch.update(docRef, {
         'session': targetSession,
+        'sessionHistory': history.map((e) => e.toFirestore()).toList(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
     }
@@ -318,27 +417,45 @@ class StudentService {
       final data = doc.data();
       final eHistory = data['enrollmentHistory'] as List?;
 
-      // 이력이 없거나 비어있는 경우에만 초기화 (누락 방지)
+      final currentSession = data['session'] as int? ?? 0;
+      final sessionHistoryData = data['sessionHistory'] as List? ?? [];
+
+      // 1. 수강 이력이 아예 없는 경우 초기화
       if (eHistory == null || eHistory.isEmpty) {
-        // 기존 데이터를 기반으로 초기 이력 생성
         final createdAt =
             (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime(2024, 1, 1);
         final isDeleted = data['isDeleted'] as bool? ?? false;
         final deletedAt = (data['deletedAt'] as Timestamp?)?.toDate();
 
+        // [CRITICAL FIX] 세션 이력이 있다면 무조건 그 중 가장 빠른 날짜를 수강 시작일로 사용
+        DateTime enrollmentStart = createdAt;
+        if (sessionHistoryData.isNotEmpty) {
+          final sortedSessions = List.from(sessionHistoryData);
+          sortedSessions.sort(
+            (a, b) => (a['effectiveDate'] as Timestamp).compareTo(
+              b['effectiveDate'] as Timestamp,
+            ),
+          );
+
+          final firstSessionDate =
+              (sortedSessions.first['effectiveDate'] as Timestamp).toDate();
+
+          // 세션 이력에 존재하는 날짜(미래 시작일 등)를 신뢰함
+          enrollmentStart = firstSessionDate;
+        }
+
         final enrollment = [
           {
-            'startDate': Timestamp.fromDate(createdAt),
+            'startDate': Timestamp.fromDate(enrollmentStart),
             'endDate': isDeleted
                 ? (deletedAt != null ? Timestamp.fromDate(deletedAt) : null)
                 : null,
           },
         ];
 
-        final currentSession = data['session'] as int? ?? 0;
         final sessions = [
           {
-            'effectiveDate': Timestamp.fromDate(createdAt),
+            'effectiveDate': Timestamp.fromDate(enrollmentStart),
             'sessionId': currentSession,
           },
         ];
@@ -349,6 +466,104 @@ class StudentService {
           'updatedAt': FieldValue.serverTimestamp(),
         });
         count++;
+      }
+      // 2. 이력이 이미 있는 경우, 현재 시점(오늘) 기준의 정확한 부 정보를 'session' 필드에 캐싱
+      else {
+        var student = StudentModel.fromFirestore(doc);
+
+        // [CLEANUP] 이전 마이그레이션 실수 및 중복 데이터 보정
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+        if (createdAt != null) {
+          DateTime? futureStart;
+
+          // 세션 이력 중 가장 빠른 미래 날짜 탐색
+          final sortedSess = List<SessionHistory>.from(student.sessionHistory);
+          sortedSess.sort((a, b) => a.effectiveDate.compareTo(b.effectiveDate));
+          for (var s in sortedSess) {
+            if (s.effectiveDate.isAfter(createdAt)) {
+              futureStart = s.effectiveDate;
+              break;
+            }
+          }
+
+          if (futureStart != null) {
+            // 수강 이력이 오늘 날짜로 잘못 잡혀 있다면 교정/삭제
+            var newEnroll = List<EnrollmentPeriod>.from(
+              student.enrollmentHistory,
+            );
+            bool modified = false;
+            final bogusIdx = newEnroll.indexWhere(
+              (e) => e.startDate.isSameDay(createdAt),
+            );
+
+            if (bogusIdx != -1) {
+              if (newEnroll.length == 1) {
+                newEnroll[0] = newEnroll[0].copyWith(startDate: futureStart);
+              } else {
+                newEnroll.removeAt(bogusIdx);
+              }
+              modified = true;
+            }
+
+            if (modified) {
+              batch.update(doc.reference, {
+                'enrollmentHistory': newEnroll
+                    .map((e) => e.toFirestore())
+                    .toList(),
+                'updatedAt': FieldValue.serverTimestamp(),
+              });
+              count++;
+              student = student.copyWith(enrollmentHistory: newEnroll);
+            }
+          }
+        }
+
+        final correctSession = student.getSessionAt(DateTime.now()) ?? 0;
+        bool needsUpdate = (currentSession != correctSession);
+
+        if (!needsUpdate && sessionHistoryData.isNotEmpty) {
+          final lastSessionData =
+              sessionHistoryData.last as Map<String, dynamic>;
+          final lastSessionId =
+              (lastSessionData['sessionId'] as num?)?.toInt() ?? 0;
+          if (lastSessionId != currentSession && currentSession != 0) {
+            needsUpdate = true;
+          }
+        }
+
+        if (needsUpdate) {
+          final now = DateTime.now();
+          final updatedSessions = List.from(sessionHistoryData);
+
+          // 오늘 날짜 기준의 실제 세션이 이력의 마지막과 다르면 업데이트/추가
+          final today = DateTime(now.year, now.month, now.day);
+          bool foundToday = false;
+          for (int i = 0; i < updatedSessions.length; i++) {
+            final date = (updatedSessions[i]['effectiveDate'] as Timestamp)
+                .toDate();
+            if (date.year == today.year &&
+                date.month == today.month &&
+                date.day == today.day) {
+              updatedSessions[i]['sessionId'] = correctSession;
+              foundToday = true;
+              break;
+            }
+          }
+
+          if (!foundToday && correctSession != 0) {
+            updatedSessions.add({
+              'effectiveDate': Timestamp.fromDate(now),
+              'sessionId': correctSession,
+            });
+          }
+
+          batch.update(doc.reference, {
+            'session': correctSession, // 캐싱: 최상위 필드 업데이트
+            'sessionHistory': updatedSessions,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          count++;
+        }
       }
     }
 

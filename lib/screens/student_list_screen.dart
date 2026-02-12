@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/academy_model.dart';
 import '../models/student_model.dart';
+import '../models/student_progress_model.dart';
 
 import '../providers/student_provider.dart';
 import '../providers/progress_provider.dart';
@@ -133,13 +134,15 @@ class _StudentListScreenState extends State<StudentListScreen> {
 
     // 2. 부(세션) 필터링
     if (_selectedFilterSession == null) return activeStudents;
+
+    final now = DateTime.now().startOfDay;
     if (_selectedFilterSession == 0) {
       return activeStudents
-          .where((s) => s.session == null || s.session == 0)
+          .where((s) => (s.getSessionAt(now) ?? 0) == 0)
           .toList();
     }
     return activeStudents
-        .where((s) => s.session == _selectedFilterSession)
+        .where((s) => s.getSessionAt(now) == _selectedFilterSession)
         .toList();
   }
 
@@ -159,6 +162,36 @@ class _StudentListScreenState extends State<StudentListScreen> {
         _selectedStudentIds.addAll(filteredStudents.map((s) => s.id));
       }
     });
+  }
+
+  Future<void> _handleSyncData() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('데이터 동기화'),
+        content: const Text(
+          '학생들의 현재 부 배정 정보와 이력 데이터를 대조하여 누락된 기록을 보정합니다.\n계속하시겠습니까?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('동기화 시작'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await context.read<StudentProvider>().syncHistoryData(
+        academyId: widget.academy.id,
+        ownerId: widget.academy.ownerId,
+      );
+      _loadData();
+    }
   }
 
   Future<void> _handleBulkDelete() async {
@@ -186,13 +219,13 @@ class _StudentListScreenState extends State<StudentListScreen> {
     );
 
     if (confirmed == true && mounted) {
-      final success = await context
-          .read<StudentProvider>()
-          .batchProcessStudents(
-            toDelete: _selectedStudentIds.toList(),
-            academyId: widget.academy.id,
-            ownerId: widget.academy.ownerId,
-          );
+      final provider = context.read<StudentProvider>();
+      final success = await provider.batchProcessStudents(
+        toDelete: _selectedStudentIds.toList(),
+        academyId: widget.academy.id,
+        ownerId: widget.academy.ownerId,
+        isPermanent: provider.showDeleted,
+      );
       if (mounted && success) {
         ScaffoldMessenger.of(
           context,
@@ -514,12 +547,30 @@ class _StudentListScreenState extends State<StudentListScreen> {
             tooltip: '학생 명단 내보내기',
             onPressed: _showExportOptionsDialog,
           ),
-          if (!_isSelectionMode)
+          if (!_isSelectionMode) ...[
             IconButton(
               icon: const Icon(Icons.check_box_outlined),
               tooltip: '다중 선택',
               onPressed: _toggleSelectionMode,
             ),
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'sync') _handleSyncData();
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'sync',
+                  child: Row(
+                    children: [
+                      Icon(Icons.sync, size: 20),
+                      SizedBox(width: 8),
+                      Text('데이터 동기화'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (_isSelectionMode) ...[
             Consumer<StudentProvider>(
               builder: (context, provider, _) {
@@ -715,45 +766,59 @@ class _StudentListScreenState extends State<StudentListScreen> {
       color: Colors.grey,
     );
 
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.shade200, width: 1),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        children: [
-          const SizedBox(
-            width: 40,
-            child: Center(child: Text('번호', style: textStyle)),
-          ),
-          const Expanded(
-            flex: 2,
-            child: Center(child: Text('부', style: textStyle)),
-          ),
-          const Expanded(flex: 3, child: Text('성명', style: textStyle)),
-          const Expanded(flex: 2, child: Text('학년', style: textStyle)),
-          const Expanded(flex: 2, child: Text('급수', style: textStyle)),
-          if (!hideReservation)
-            const Expanded(flex: 4, child: Text('예약 현황', style: textStyle)),
-          const Expanded(
-            flex: 7,
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Text('진도 현황', style: textStyle),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isSmall = constraints.maxWidth < 600;
+        final bool isVerySmall = constraints.maxWidth < 450;
+
+        return Container(
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.shade200, width: 1),
             ),
           ),
-          if (!hideAttendance)
-            const Expanded(flex: 2, child: Text('출석', style: textStyle)),
-          const SizedBox(
-            width: 150,
-            child: Text('관리', style: textStyle, textAlign: TextAlign.center),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 35,
+                child: Center(child: Text('번호', style: textStyle)),
+              ),
+              if (!isVerySmall)
+                const Expanded(
+                  flex: 2,
+                  child: Center(child: Text('부', style: textStyle)),
+                ),
+              const Expanded(flex: 3, child: Text('성명', style: textStyle)),
+              if (!isSmall) ...[
+                const Expanded(flex: 2, child: Text('학년', style: textStyle)),
+                const Expanded(flex: 2, child: Text('급수', style: textStyle)),
+              ],
+              if (!hideReservation && !isVerySmall)
+                const Expanded(flex: 4, child: Text('예약 현황', style: textStyle)),
+              const Expanded(
+                flex: 6,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Text('진도 현황', style: textStyle),
+                ),
+              ),
+              if (!hideAttendance && !isSmall)
+                const Expanded(flex: 2, child: Text('출석', style: textStyle)),
+              SizedBox(
+                width: isVerySmall ? 80 : 130,
+                child: const Text(
+                  '관리',
+                  style: textStyle,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -883,6 +948,11 @@ class _StudentListScreenState extends State<StudentListScreen> {
                   selected: showDeletedOnly,
                   onSelected: (selected) {
                     studentProvider.toggleShowDeleted();
+                    // 전환 시 선택 상태 초기화 (안전을 위해)
+                    setState(() {
+                      _selectedStudentIds.clear();
+                      _isSelectionMode = false;
+                    });
                     _loadData();
                   },
                   selectedColor: Colors.red.shade100,
@@ -903,19 +973,27 @@ class _StudentListScreenState extends State<StudentListScreen> {
                     selected: _selectedFilterSession == null,
                     onSelected: (selected) {
                       if (selected) {
-                        setState(() => _selectedFilterSession = null);
+                        setState(() {
+                          _selectedFilterSession = null;
+                          _selectedStudentIds.clear();
+                          _isSelectionMode = false;
+                        });
                       }
                     },
                   ),
                   const SizedBox(width: 8),
                   ChoiceChip(
                     label: Text(
-                      '미등록 (${activeStudents.where((s) => s.session == null || s.session == 0).length}명)',
+                      '미등록 (${activeStudents.where((s) => (s.getSessionAt(DateTime.now().startOfDay) ?? 0) == 0).length}명)',
                     ),
                     selected: _selectedFilterSession == 0,
                     onSelected: (selected) {
                       if (selected) {
-                        setState(() => _selectedFilterSession = 0);
+                        setState(() {
+                          _selectedFilterSession = 0;
+                          _selectedStudentIds.clear();
+                          _isSelectionMode = false;
+                        });
                       }
                     },
                   ),
@@ -925,7 +1003,12 @@ class _StudentListScreenState extends State<StudentListScreen> {
                     (i) => i + 1,
                   ).map((s) {
                     final count = activeStudents
-                        .where((st) => st.session == s)
+                        .where(
+                          (st) =>
+                              (st.getSessionAt(DateTime.now().startOfDay) ??
+                                  0) ==
+                              s,
+                        )
                         .length;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -934,7 +1017,11 @@ class _StudentListScreenState extends State<StudentListScreen> {
                         selected: _selectedFilterSession == s,
                         onSelected: (selected) {
                           if (selected) {
-                            setState(() => _selectedFilterSession = s);
+                            setState(() {
+                              _selectedFilterSession = s;
+                              _selectedStudentIds.clear();
+                              _isSelectionMode = false;
+                            });
                           }
                         },
                       ),
@@ -1217,9 +1304,24 @@ class _StudentListScreenState extends State<StudentListScreen> {
                 subtitle: const Text('학년, 반, 번호 등을 한 번에 수정할 때 사용하세요.'),
                 onTap: () {
                   Navigator.pop(context);
+                  final students = context.read<StudentProvider>().students;
+                  final progressProvider = context.read<ProgressProvider>();
+
+                  // 학생별 가장 최근 진도 정보를 Map으로 구성
+                  final Map<String, StudentProgressModel?> progressMap = {
+                    for (var s in students)
+                      s.id:
+                          progressProvider
+                              .getProgressForStudent(s.id)
+                              .isNotEmpty
+                          ? progressProvider.getProgressForStudent(s.id).first
+                          : null,
+                  };
+
                   ExcelUtils.exportStudentListForUpdate(
-                    students: context.read<StudentProvider>().students,
+                    students: students,
                     academyName: widget.academy.name,
+                    studentProgressMap: progressMap,
                   );
                 },
               ),
@@ -1407,443 +1509,526 @@ class _StudentProgressCardState extends State<_StudentProgressCard> {
       backgroundColor = Colors.white;
     }
 
-    return Container(
-      height: 52,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.shade100, width: 1),
-        ),
-      ),
-      child: InkWell(
-        onTap: () {
-          if (widget.isSelectionMode) {
-            widget.onToggleSelection();
-          } else {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => AddStudentScreen(
-                  academy: widget.academy,
-                  student: widget.student,
-                ),
-              ),
-            );
-          }
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: [
-              // 0. 선택/번호 영역 (40)
-              SizedBox(
-                width: 40,
-                child: widget.isSelectionMode
-                    ? Checkbox(
-                        value: widget.isSelected,
-                        onChanged: (_) => widget.onToggleSelection(),
-                      )
-                    : Text(
-                        '${widget.index}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey.shade400,
-                        ),
-                      ),
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isSmall = constraints.maxWidth < 600;
+        final bool isVerySmall = constraints.maxWidth < 450;
 
-              // 1. [부] 영역 (Expanded flex 2)
-              Expanded(
-                flex: 2,
-                child: Center(
-                  child:
-                      widget.student.session != null &&
-                          widget.student.session != 0
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade50,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: Colors.orange.shade200),
-                          ),
-                          child: Text(
-                            '${widget.student.session}부',
+        return Container(
+          height: 52,
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.shade100, width: 1),
+            ),
+          ),
+          child: InkWell(
+            onTap: () {
+              if (widget.isSelectionMode) {
+                widget.onToggleSelection();
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AddStudentScreen(
+                      academy: widget.academy,
+                      student: widget.student,
+                    ),
+                  ),
+                );
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  // 0. 선택/번호 영역 (35)
+                  SizedBox(
+                    width: 35,
+                    child: widget.isSelectionMode
+                        ? Checkbox(
+                            value: widget.isSelected,
+                            onChanged: (_) => widget.onToggleSelection(),
+                          )
+                        : Text(
+                            '${widget.index}',
+                            textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.orange.shade900,
+                              color: Colors.grey.shade400,
                             ),
                           ),
-                        )
-                      : Container(
+                  ),
+
+                  // 1. [부] 영역
+                  if (!isVerySmall)
+                    Expanded(
+                      flex: 2,
+                      child: Center(
+                        child: () {
+                          final currentSessionId = widget.student.getSessionAt(
+                            DateTime.now(),
+                          );
+                          return currentSessionId != null &&
+                                  currentSessionId != 0
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: Colors.orange.shade200,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '$currentSessionId부',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orange.shade900,
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 3,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: Colors.grey.shade200,
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    '미배정',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                );
+                        }(),
+                      ),
+                    ),
+
+                  // 2. [이름] 영역
+                  Expanded(
+                    flex: 3,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                widget.student.name,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (widget.student.enrollmentHistory.isNotEmpty &&
+                                widget.student.enrollmentHistory.first.startDate
+                                    .isAfter(DateTime.now())) ...[
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: Colors.blue.shade200,
+                                  ),
+                                ),
+                                child: Text(
+                                  '입학 예정: ${widget.student.enrollmentHistory.first.startDate.month}/${widget.student.enrollmentHistory.first.startDate.day}',
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue.shade800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if ((widget.hideReservation || isVerySmall) &&
+                            hasReservation)
+                          Text(
+                            isRetirement ? '[퇴원]' : '[$reservationDetail]',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.normal,
+                              color: isRetirement
+                                  ? Colors.red.shade700
+                                  : Colors.amber.shade900,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  // 3. [학년/급수] 영역 - 작은 화면에서 숨김
+                  if (!isSmall) ...[
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        widget.student.grade != null
+                            ? '${widget.student.grade}학년'
+                            : '-',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        widget.student.levelDisplayName,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: widget.student.level == 0
+                              ? Colors.grey
+                              : Colors.blue.shade800,
+                          fontWeight: widget.student.level == 0
+                              ? FontWeight.normal
+                              : FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  // 3.5. [예약 현황] 영역 - 매우 작은 화면에서 숨김
+                  if (!widget.hideReservation && !isVerySmall)
+                    Expanded(
+                      flex: 4,
+                      child: () {
+                        final detail = widget.student.reservationDetail;
+                        if (detail == '수강 중' || detail == '미배정') {
+                          return const SizedBox.shrink();
+                        }
+                        return Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 4,
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
+                            color: Colors.blue.shade50,
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: Colors.grey.shade200),
+                            border: Border.all(color: Colors.blue.shade100),
                           ),
-                          child: const Text(
-                            '미배정',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ),
-                ),
-              ),
-
-              // 2. [이름] 영역 (Expanded flex 3)
-              Expanded(
-                flex: 3,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.student.name,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (widget.hideReservation && hasReservation)
-                      Text(
-                        '[$reservationDetail]',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.normal,
-                          color: isRetirement
-                              ? Colors.red.shade700
-                              : Colors.amber.shade900,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                  ],
-                ),
-              ),
-
-              // 3. [학년] 영역 (Expanded flex 2)
-              Expanded(
-                flex: 2,
-                child: Text(
-                  widget.student.grade != null
-                      ? '${widget.student.grade}학년'
-                      : '-',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                ),
-              ),
-
-              // 3.1. [급수] 영역 (Expanded flex 2)
-              Expanded(
-                flex: 2,
-                child: Text(
-                  widget.student.levelDisplayName,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: widget.student.level == 0
-                        ? Colors.grey
-                        : Colors.blue.shade800,
-                    fontWeight: widget.student.level == 0
-                        ? FontWeight.normal
-                        : FontWeight.bold,
-                  ),
-                ),
-              ),
-
-              // 3.5. [예약 현황] 영역 (Expanded flex 4) - 특정 부 필터 시 숨김
-              if (!widget.hideReservation)
-                Expanded(
-                  flex: 4,
-                  child: () {
-                    final detail = widget.student.reservationDetail;
-                    // '수강 중'과 '미배정'은 빈칸으로 처리
-                    if (detail == '수강 중' || detail == '미배정') {
-                      return const SizedBox.shrink();
-                    }
-                    // 실제 예약이 있는 경우만 표시
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.blue.shade100),
-                      ),
-                      child: Text(
-                        detail,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Colors.blue,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }(),
-                ),
-
-              // 4. [진도현황] 영역 (Expanded flex 7)
-              Expanded(
-                flex: 7,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: progressList.isNotEmpty
-                      ? Text(
-                          '${progressList.first.textbookName} ${progressList.first.volumeNumber}권 (${progressList.first.progressPercentage.toInt()}%)',
-                          style: const TextStyle(fontSize: 11),
-                          overflow: TextOverflow.ellipsis,
-                        )
-                      : const Text(
-                          '-',
-                          style: TextStyle(fontSize: 11, color: Colors.grey),
-                        ),
-                ),
-              ),
-
-              // 5. [출석율] 영역 (Expanded flex 2) - 미배정 모드에서는 숨김
-              if (!widget.hideAttendance)
-                Expanded(
-                  flex: 2,
-                  child: Builder(
-                    builder: (context) {
-                      final monthlyRecords = attendanceProvider
-                          .getRecordsForStudent(widget.student.id);
-                      if (widget.totalLessonDays == 0) {
-                        return const Center(
                           child: Text(
-                            '-%',
-                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                            detail,
+                            style: const TextStyle(
+                              fontSize: 9,
+                              color: Colors.blue,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         );
-                      }
-
-                      final now = DateTime.now();
-                      final presentCount = monthlyRecords.where((r) {
-                        return r.timestamp.year == now.year &&
-                            r.timestamp.month == now.month &&
-                            (r.type == AttendanceType.present ||
-                                r.type == AttendanceType.late);
-                      }).length;
-
-                      final rate = (presentCount / widget.totalLessonDays * 100)
-                          .toInt();
-
-                      return Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text(
-                            '출석율',
-                            style: TextStyle(fontSize: 8, color: Colors.grey),
-                          ),
-                          Text(
-                            '$rate%',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: rate >= 90
-                                  ? Colors.blue.shade700
-                                  : (rate >= 70
-                                        ? Colors.orange.shade700
-                                        : Colors.red.shade700),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-
-              // 6. [관리버튼] 영역 (150)
-              SizedBox(
-                width: 150,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () =>
-                          _navigateToStudentHistory(context, widget.student),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                        ), // [MODIFIED] 4 -> 8
-                        minimumSize: const Size(
-                          0,
-                          40,
-                        ), // [MODIFIED] Added vertical touch area
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text(
-                        '학습정보',
-                        style: TextStyle(fontSize: 12),
-                      ), // [MODIFIED] 11 -> 12
+                      }(),
                     ),
-                    const SizedBox(width: 4), // [MODIFIED] 2 -> 4
-                    TextButton(
-                      onPressed: () => _navigateToAssignTextbook(context),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                        ), // [MODIFIED] 4 -> 8
-                        minimumSize: const Size(
-                          0,
-                          40,
-                        ), // [MODIFIED] Added vertical touch area
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text(
-                        '교재할당',
-                        style: TextStyle(fontSize: 12),
-                      ), // [MODIFIED] 11 -> 12
-                    ),
-                    if (widget.student.isDeleted) ...[
-                      const SizedBox(width: 2),
-                      TextButton(
-                        onPressed: () async {
-                          DateTime startDate = DateTime.now();
-                          int? selectedSession; // 추가
 
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => StatefulBuilder(
-                              builder: (context, setDialogState) => AlertDialog(
-                                title: const Text('재원생 재등록'),
-                                content: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      '[${widget.student.name}] 학생을 재원생 목록으로 다시 등록하시겠습니까?',
-                                    ),
-                                    const SizedBox(height: 16),
-                                    ListTile(
-                                      title: const Text('재등록 시작일'),
-                                      subtitle: Text(
-                                        '${startDate.year}-${startDate.month}-${startDate.day}',
-                                      ),
-                                      trailing: const Icon(
-                                        Icons.calendar_today,
-                                      ),
-                                      onTap: () async {
-                                        final picked = await showDatePicker(
-                                          context: context,
-                                          initialDate: startDate,
-                                          firstDate: DateTime.now().subtract(
-                                            const Duration(days: 30),
-                                          ),
-                                          lastDate: DateTime.now().add(
-                                            const Duration(days: 365),
-                                          ),
-                                        );
-                                        if (picked != null) {
-                                          setDialogState(
-                                            () => startDate = picked,
-                                          );
-                                        }
-                                      },
-                                    ),
-                                    const Divider(),
-                                    const Padding(
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 8,
-                                      ),
-                                      child: Text(
-                                        '배정할 부 선택',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    Wrap(
-                                      spacing: 8,
-                                      runSpacing: 4,
-                                      children: [
-                                        ChoiceChip(
-                                          label: const Text('미배정'),
-                                          selected: selectedSession == 0,
-                                          onSelected: (selected) {
-                                            if (selected) {
-                                              setDialogState(
-                                                () => selectedSession = 0,
-                                              );
-                                            }
-                                          },
-                                        ),
-                                        ...List.generate(
-                                          widget.academy.totalSessions,
-                                          (i) => i + 1,
-                                        ).map((s) {
-                                          return ChoiceChip(
-                                            label: Text('$s부'),
-                                            selected: selectedSession == s,
-                                            onSelected: (selected) {
-                                              if (selected) {
-                                                setDialogState(
-                                                  () => selectedSession = s,
-                                                );
-                                              }
-                                            },
-                                          );
-                                        }),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text('취소'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    child: const Text('재등록'),
-                                  ),
-                                ],
+                  // 4. [진도현황] 영역
+                  Expanded(
+                    flex: 6,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: progressList.isNotEmpty
+                          ? Text(
+                              isSmall
+                                  ? '${progressList.first.textbookName.substring(0, (progressList.first.textbookName.length > 4 ? 4 : progressList.first.textbookName.length))}.. ${progressList.first.progressPercentage.toInt()}%'
+                                  : '${progressList.first.textbookName} ${progressList.first.volumeNumber}권 (${progressList.first.progressPercentage.toInt()}%)',
+                              style: const TextStyle(fontSize: 10),
+                              overflow: TextOverflow.ellipsis,
+                            )
+                          : const Text(
+                              '-',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey,
                               ),
                             ),
-                          );
-                          if (confirm == true && mounted) {
-                            final provider = context.read<StudentProvider>();
-                            await provider.reEnrollStudent(
-                              widget.student.id,
-                              academyId: widget.student.academyId,
-                              ownerId: widget.student.ownerId,
-                              startDate: startDate,
-                              sessionId: selectedSession, // 전달
+                    ),
+                  ),
+
+                  // 5. [출석율] 영역 - 작은 화면에서 숨김
+                  if (!widget.hideAttendance && !isSmall)
+                    Expanded(
+                      flex: 2,
+                      child: Builder(
+                        builder: (context) {
+                          final monthlyRecords = attendanceProvider
+                              .getRecordsForStudent(widget.student.id);
+                          if (widget.totalLessonDays == 0) {
+                            return const Center(
+                              child: Text(
+                                '-%',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey,
+                                ),
+                              ),
                             );
                           }
+
+                          final now = DateTime.now();
+                          final presentCount = monthlyRecords.where((r) {
+                            return r.timestamp.year == now.year &&
+                                r.timestamp.month == now.month &&
+                                (r.type == AttendanceType.present ||
+                                    r.type == AttendanceType.late);
+                          }).length;
+
+                          final rate =
+                              (presentCount / widget.totalLessonDays * 100)
+                                  .toInt();
+
+                          return Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                '출석',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              Text(
+                                '$rate%',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: rate >= 90
+                                      ? Colors.blue.shade700
+                                      : (rate >= 70
+                                            ? Colors.orange.shade700
+                                            : Colors.red.shade700),
+                                ),
+                              ),
+                            ],
+                          );
                         },
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          foregroundColor: Colors.green,
-                        ),
-                        child: const Text('복구', style: TextStyle(fontSize: 11)),
                       ),
-                    ],
-                  ],
+                    ),
+
+                  // 6. [관리버튼] 영역
+                  SizedBox(
+                    width: isVerySmall ? 80 : 130,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (isVerySmall)
+                          IconButton(
+                            icon: const Icon(Icons.info_outline, size: 20),
+                            onPressed: () => _navigateToStudentHistory(
+                              context,
+                              widget.student,
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            tooltip: '학습정보',
+                          )
+                        else
+                          TextButton(
+                            onPressed: () => _navigateToStudentHistory(
+                              context,
+                              widget.student,
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              minimumSize: const Size(0, 36),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text(
+                              '학습',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                          ),
+                        if (isVerySmall)
+                          IconButton(
+                            icon: const Icon(
+                              Icons.menu_book_outlined,
+                              size: 20,
+                            ),
+                            onPressed: () => _navigateToAssignTextbook(context),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            tooltip: '교재할당',
+                          )
+                        else
+                          TextButton(
+                            onPressed: () => _navigateToAssignTextbook(context),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              minimumSize: const Size(0, 36),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text(
+                              '교재',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                          ),
+                        if (widget.student.isDeleted) ...[
+                          if (isVerySmall)
+                            IconButton(
+                              icon: const Icon(
+                                Icons.restore,
+                                size: 20,
+                                color: Colors.green,
+                              ),
+                              onPressed: () => _handleRestore(context),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              tooltip: '복구',
+                            )
+                          else
+                            TextButton(
+                              onPressed: () => _handleRestore(context),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                minimumSize: const Size(0, 36),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                foregroundColor: Colors.green,
+                              ),
+                              child: const Text(
+                                '복구',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleRestore(BuildContext context) async {
+    DateTime startDate = DateTime.now();
+    int? selectedSession;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('재원생 재등록'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('[${widget.student.name}] 학생을 재원생 목록으로 다시 등록하시겠습니까?'),
+              const SizedBox(height: 16),
+              ListTile(
+                title: const Text('재등록 시작일'),
+                subtitle: Text(
+                  '${startDate.year}-${startDate.month}-${startDate.day}',
                 ),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: startDate,
+                    firstDate: DateTime.now().subtract(
+                      const Duration(days: 30),
+                    ),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) {
+                    setDialogState(() => startDate = picked);
+                  }
+                },
+              ),
+              const Divider(),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  '배정할 부 선택',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  ChoiceChip(
+                    label: const Text('미배정'),
+                    selected: selectedSession == 0,
+                    onSelected: (selected) {
+                      if (selected) {
+                        setDialogState(() => selectedSession = 0);
+                      }
+                    },
+                  ),
+                  ...List.generate(
+                    widget.academy.totalSessions,
+                    (i) => i + 1,
+                  ).map((s) {
+                    return ChoiceChip(
+                      label: Text('$s부'),
+                      selected: selectedSession == s,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setDialogState(() => selectedSession = s);
+                        }
+                      },
+                    );
+                  }),
+                ],
               ),
             ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('재등록'),
+            ),
+          ],
         ),
       ),
     );
+    if (confirm == true && mounted) {
+      if (!mounted) return;
+      final provider = context.read<StudentProvider>();
+      await provider.reEnrollStudent(
+        widget.student.id,
+        academyId: widget.student.academyId,
+        ownerId: widget.student.ownerId,
+        startDate: startDate,
+        sessionId: selectedSession,
+      );
+    }
   }
 
   void _navigateToAssignTextbook(BuildContext context) {

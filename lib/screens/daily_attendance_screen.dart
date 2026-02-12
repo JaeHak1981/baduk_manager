@@ -138,15 +138,10 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
         .where((s) => s.isEnrolledAt(_selectedDate))
         .toList();
 
-    // 2. 미배정 학생(선택된 날짜 기준 부가 null 또는 0) 제외
-    final assignedStudents = enrolledStudents.where((s) {
-      final sessionAt = s.getSessionAt(_selectedDate);
-      return sessionAt != null && sessionAt != 0;
-    }).toList();
-
-    // 3. 특정 부 선택 필터링
-    if (_selectedSession == null) return assignedStudents;
-    return assignedStudents
+    // 2. 특정 부 선택 필터링
+    // [MODIFIED] 월별 출석부와 정합성을 위해, 전체보기(null) 시에는 미배정 학생도 포함하여 보여줌
+    if (_selectedSession == null) return enrolledStudents;
+    return enrolledStudents
         .where((s) => s.getSessionAt(_selectedDate) == _selectedSession)
         .toList();
   }
@@ -209,6 +204,7 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
       targetSession!,
       academyId: widget.academy.id,
       ownerId: currentOwnerId,
+      effectiveDate: _selectedDate,
     );
 
     if (success && context.mounted) {
@@ -323,6 +319,7 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                       students: studentProvider.students,
                       year: _selectedDate.year,
                       month: _selectedDate.month,
+                      targetDate: _selectedDate,
                       onSessionSelected: (session) => setState(() {
                         // 필터 초기화: 이미 선택된 부를 다시 누르면 전체보기(null)로 전환
                         if (_selectedSession == session) {
@@ -355,7 +352,7 @@ class DailyAttendanceScreenState extends State<DailyAttendanceScreen>
                       }
 
                       final filteredStudents = getFilteredStudents(
-                        studentProvider.allStudents,
+                        studentProvider.students,
                       );
 
                       // 오늘 날짜의 출결 데이터만 필터링
